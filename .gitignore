@@ -1,0 +1,13 @@
+*~
+*.swp
+
+# Numpy archive files (usually gridworlds)
+*.npz
+
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# PyCharm Project Settings 
+.idea/
