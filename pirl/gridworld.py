@@ -5,7 +5,7 @@ import numpy as np
 from pirl.tabular_mdp_env import TabularMdpEnv
 
 def _create_transition(walls, noise):
-    width, _height = walls.shape
+    width, height = walls.shape
     walls = walls.flatten()
 
     nS = walls.shape[0]
@@ -15,6 +15,8 @@ def _create_transition(walls, noise):
     def move(start, dir):
         oldx, oldy = start % width, start // width
         newx, newy = Direction.move_in_direction((oldx, oldy), dir)
+        newx = max(0, min(newx, width - 1))
+        newy = max(0, min(newy, height - 1))
         return start if walls[newy][newx] else (newx * width + newy)
 
     for idx, cfg in enumerate(walls):
@@ -65,10 +67,6 @@ class GridworldMdp(TabularMdpEnv):
         # Check dimensions
         assert walls.shape == reward.shape
         assert walls.shape == initial_state.shape
-
-        # Check border
-        assert np.all(walls[:, [0, -1]] == 'X'), 'Borders must be walls'
-        assert np.all(walls[[0, -1], :] == 'X'), 'Borders must be walls'
 
         # Setup state
         self.walls = walls  # used only for rendering
