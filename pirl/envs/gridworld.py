@@ -4,7 +4,7 @@ import sys
 import numpy as np
 from gym import utils
 
-from pirl.tabular_mdp_env import TabularMdpEnv
+from pirl.envs.tabular_mdp_env import TabularMdpEnv
 
 def _create_transition(walls, noise):
     width, height = walls.shape
