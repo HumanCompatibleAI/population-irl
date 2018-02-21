@@ -33,9 +33,9 @@ def _create_transition(walls, noise):
                 if dir == Direction.STAY:
                     transition[idx, a, idx] = 1
                 else:
-                    transition[idx, a, move(idx, dir)] = 1 - 2 * noise
+                    transition[idx, a, move(idx, dir)] = 1 - noise
                     for noise_dir in Direction.get_adjacent_directions(dir):
-                        transition[idx, a, move(idx, noise_dir)] += noise
+                        transition[idx, a, move(idx, noise_dir)] += noise / 2
 
     return transition
 
@@ -54,7 +54,7 @@ def _create_initial_state(grid):
     return initial_state / initial_state.sum()
 
 
-class GridworldMdp(TabularMdpEnv):
+class GridWorldMdp(TabularMdpEnv):
     """A grid world where the objective is to navigate to one of many rewards.
 
     Specifies all of the static information that an agent has access to when
@@ -66,7 +66,16 @@ class GridworldMdp(TabularMdpEnv):
     paths). It can also take the STAY action, in which case it does not receive
     the living reward.
     """
-    def __init__(self, walls, reward, initial_state, terminal, noise):
+    def __init__(self, walls, reward, initial_state, terminal, noise=0.2):
+        """Create an N*M grid world of the specified structure.
+
+        Args:
+            - walls(N*M bool matrix): specifies cells with walls
+            - reward(N*M float matrix): reward obtained when entering cell.
+            - initial_state(N*M float matrix): probability distribution.
+            - terminal(N*M bool matrix): does entering cell end episode?
+            - noise(float): probability intended action does not take place.
+        """
         # Check dimensions
         assert walls.shape == reward.shape
         assert walls.shape == initial_state.shape
@@ -79,14 +88,23 @@ class GridworldMdp(TabularMdpEnv):
         terminal = terminal.flatten()
         super().__init__(transition, reward, initial_state, terminal)
 
-    def get_reward(self, state, action):
-        """Get reward for state, action transition."""
-        result = 0
-        if state in self.rewards:
-            result += self.rewards[state]
-        if action != Direction.STAY:
-            result += self.living_reward
-        return result
+    @staticmethod
+    def from_string(grid, noise=0.2, default_reward=0.0):
+        """Create an N*M grid world from an N-length array of M-length arrays
+           of characters or floats (M-length string also permissible).
+
+        Each cell should be one of:
+            - 'X': a wall.
+            - 'A': an initial state, with reward default_reward.
+            - ' ': a cell, with reward default_reward.
+            - a numeric character ('1', '4', etc) or something castable to a
+              a float (5, 4.2, etc), specifying the given reward.
+        """
+        walls = np.array(grid) == 'X'
+        reward = _create_reward(grid, default_reward)
+        initial_state = _create_initial_state(grid)
+        terminal = np.zeros_like(walls, dtype=bool)
+        return GridWorldMdp(walls, reward, initial_state, terminal, noise)
 
     def render(self, mode='human'):
         #TODO: PNG/X11 rendering?
