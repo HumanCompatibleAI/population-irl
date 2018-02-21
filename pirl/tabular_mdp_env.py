@@ -10,7 +10,7 @@ def discrete_sample(prob, rng):
 
 def _check_probability(x, axis, tol=1e-6):
     assert np.all(x >= 0)
-    assert np.all((x.sum(axis) - 1).abs() < tol)
+    assert np.all(abs(x.sum(axis) - 1) < tol)
 
 class TabularMdpEnv(Env):
     #TODO: Do I want to set reward_range?
@@ -30,21 +30,21 @@ class TabularMdpEnv(Env):
         """
         super().__init__()
 
-        self.transition = np.array(transition)
-        self.reward = np.array(reward)
-        self.initial_state = np.array(initial_state)
-        self.terminal = np.array(terminal)
+        self._transition = np.array(transition)
+        self._reward = np.array(reward)
+        self._initial_state = np.array(initial_state)
+        self._terminal = np.array(terminal)
 
         # Check dimensions
-        S, A, S2 = self.transition.shape
+        S, A, S2 = self._transition.shape
         assert S == S2
         assert reward.shape == (S, )
         assert initial_state.shape == (S, )
         assert terminal.shape == (S, )
 
         # Check probability distributions
-        _check_probability(self.transition, 2)
-        _check_probability(self.initial_state, 0)
+        _check_probability(self._transition, 2)
+        _check_probability(self._initial_state, 0)
 
         # State/action space
         self.observation_space = spaces.Discrete(S)
@@ -59,24 +59,32 @@ class TabularMdpEnv(Env):
          return [seed]
 
     def reset(self):
-        self.state = discrete_sample(self.initial_state, self.rng)
+        self._state = discrete_sample(self._initial_state, self.rng)
 
     def step(self, action):
-        p = self.transition[self.state, action, :]
-        self.state = discrete_sample(p, self.rng)
-        r = self.reward[self.state]
-        finished = self.terminal[self.state]
-        info = {"prob": p[self.state]}
-        return (self.state, r, finished, info)
+        p = self._transition[self._state, action, :]
+        self._state = discrete_sample(p, self.rng)
+        r = self._reward[self._state]
+        finished = self._terminal[self._state]
+        info = {"prob": p[self._state]}
+        return (self._state, r, finished, info)
+
+    @property
+    def state(self):
+        return self._state
 
     @property
     def transition(self):
-        return self.transition
+        return self._transition
 
     @property
     def reward(self):
-        return self.reward
+        return self._reward
 
     @property
     def initial_state(self):
-        return self.initial_state
+        return self._initial_state
+
+    @property
+    def terminal(self):
+        return self._terminal
