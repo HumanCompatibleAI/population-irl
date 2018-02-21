@@ -1,6 +1,8 @@
 from io import StringIO
+import sys
 
 import numpy as np
+from gym import utils
 
 from pirl.tabular_mdp_env import TabularMdpEnv
 
@@ -10,18 +12,19 @@ def _create_transition(walls, noise):
 
     nS = walls.shape[0]
     nA = len(Direction.ALL_DIRECTIONS)
-    transition = np.zeros(nS, nA, nS)
+    transition = np.zeros((nS, nA, nS))
 
     def move(start, dir):
         oldx, oldy = start % width, start // width
         newx, newy = Direction.move_in_direction((oldx, oldy), dir)
         newx = max(0, min(newx, width - 1))
         newy = max(0, min(newy, height - 1))
-        return start if walls[newy][newx] else (newx * width + newy)
+        idx = newy * width + newx
+        return start if walls[idx] else idx
 
-    for idx, cfg in enumerate(walls):
+    for idx, wall in enumerate(walls):
         for a, dir in enumerate(Direction.ALL_DIRECTIONS):
-            if cfg == 'X':  # wall
+            if wall:  # wall
                 # Can never get into a wall, but TabularMdpEnv
                 # insists transition be a probability distribution,
                 # so make it an absorbing state.
@@ -74,7 +77,7 @@ class GridworldMdp(TabularMdpEnv):
         reward = reward.flatten()
         initial_state = initial_state.flatten()
         terminal = terminal.flatten()
-        super().__init__(self, transition, reward, initial_state, terminal)
+        super().__init__(transition, reward, initial_state, terminal)
 
     def get_reward(self, state, action):
         """Get reward for state, action transition."""
@@ -86,6 +89,7 @@ class GridworldMdp(TabularMdpEnv):
         return result
 
     def render(self, mode='human'):
+        #TODO: PNG/X11 rendering?
         """Returns a string representation of this grid world.
 
         The returned string has a line for every row, and each space is exactly
@@ -97,25 +101,34 @@ class GridworldMdp(TabularMdpEnv):
         """
         outfile = StringIO() if mode == 'ansi' else sys.stdout
 
+        walls = self.walls
+        initial_state = self.initial_state.reshape(walls.shape)
+        reward = self.reward.reshape(walls.shape)
+        width, height = walls.shape
+
+        current_x, current_y = self.state % width, self.state // width
         def get_char(x, y):
-            if self.walls[y][x]:
-                return 'X'
-            elif (x, y) in self.rewards:
-                reward = self.rewards[(x, y)]
-                # Convert to an int if it would not lose information
-                reward = int(reward) if int(reward) == reward else reward
-                posneg_char = 'R' if reward >= 0 else 'N'
-                reward_str = str(reward)
-                return reward_str if len(reward_str) == 1 else posneg_char
-            elif (x, y) == self.get_start_state():
-                return 'A'
+            if walls[y, x]:
+                res = 'X'
+            elif initial_state[y, x] > 0:
+                #TODO: show where we actually started?
+                res = 'A'
             else:
-                return ' '
+                # TODO: handle default reward more elegantly
+                r = reward[y, x]
+                # Convert to an int if it would not lose information
+                r = int(r) if int(r) == r else r
+                posneg_char = 'R' if r >= 0 else 'N'
+                reward_str = str(r)
+                res = reward_str if len(reward_str) == 1 else posneg_char
+            if (x, y) == (current_x, current_y):
+                res = utils.colorize(res, 'red', highlight=True)
+            return res
 
         def get_row_str(y):
-            return ''.join([get_char(x, y) for x in range(self.width)])
+            return ''.join([get_char(x, y) for x in range(width)])
 
-        outfile.write('\n'.join([get_row_str(y) for y in range(self.height)]))
+        outfile.write('\n'.join([get_row_str(y) for y in range(height)]))
 
         if mode == 'ansi':
             return outfile
