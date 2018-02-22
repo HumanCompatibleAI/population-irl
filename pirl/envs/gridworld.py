@@ -46,10 +46,10 @@ def _create_reward(grid, default_reward):
         else:
             return float(cfg)
     rewards = [[convert(cfg) for cfg in row] for row in grid]
-    return np.array(rewards).flatten()
+    return np.array(rewards)
 
 def _create_initial_state(grid):
-    cfg = np.array(grid, dtype='object').flatten()
+    cfg = np.array(grid, dtype='object')
     initial_state = cfg == 'A'
     return initial_state / initial_state.sum()
 
@@ -100,7 +100,8 @@ class GridWorldMdp(TabularMdpEnv):
             - a numeric character ('1', '4', etc) or something castable to a
               a float (5, 4.2, etc), specifying the given reward.
         """
-        walls = np.array(grid) == 'X'
+        grid = [list(x) for x in grid]
+        walls = np.array(grid, dtype='U1') == 'X'
         reward = _create_reward(grid, default_reward)
         initial_state = _create_initial_state(grid)
         terminal = np.zeros_like(walls, dtype=bool)
