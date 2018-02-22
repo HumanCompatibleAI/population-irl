@@ -60,6 +60,7 @@ class TabularMdpEnv(Env):
 
     def reset(self):
         self._state = discrete_sample(self._initial_state, self.rng)
+        return self._state
 
     def step(self, action):
         p = self._transition[self._state, action, :]
