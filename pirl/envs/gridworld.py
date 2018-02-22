@@ -121,7 +121,7 @@ class GridWorldMdp(TabularMdpEnv):
         outfile = StringIO() if mode == 'ansi' else sys.stdout
 
         walls = self.walls
-        initial_state = self.initial_state.reshape(walls.shape)
+        initial_state = self.initial_states.reshape(walls.shape)
         reward = self.reward.reshape(walls.shape)
         width, height = walls.shape
 

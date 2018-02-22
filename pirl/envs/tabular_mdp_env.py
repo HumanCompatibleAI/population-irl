@@ -32,7 +32,7 @@ class TabularMdpEnv(Env):
 
         self._transition = np.array(transition)
         self._reward = np.array(reward)
-        self._initial_state = np.array(initial_state)
+        self._initial_states = np.array(initial_state)
         self._terminal = np.array(terminal)
 
         # Check dimensions
@@ -44,7 +44,7 @@ class TabularMdpEnv(Env):
 
         # Check probability distributions
         _check_probability(self._transition, 2)
-        _check_probability(self._initial_state, 0)
+        _check_probability(self._initial_states, 0)
 
         # State/action space
         self.observation_space = spaces.Discrete(S)
@@ -59,7 +59,7 @@ class TabularMdpEnv(Env):
          return [seed]
 
     def reset(self):
-        self._state = discrete_sample(self._initial_state, self.rng)
+        self._state = discrete_sample(self._initial_states, self.rng)
         return self._state
 
     def step(self, action):
@@ -83,8 +83,8 @@ class TabularMdpEnv(Env):
         return self._reward
 
     @property
-    def initial_state(self):
-        return self._initial_state
+    def initial_states(self):
+        return self._initial_states
 
     @property
     def terminal(self):
