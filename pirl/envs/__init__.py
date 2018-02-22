@@ -3,6 +3,7 @@ from pirl.envs.gridworld import GridWorldMdp
 
 from gym.envs.registration import register
 
+# Only intended for testing code, entirely unrealistic
 register(
     id='pirl/GridWorld-Simple-v0',
     entry_point='pirl.envs:GridWorldMdp.from_string',
@@ -13,6 +14,6 @@ register(
                  ' 1X ',
                  'A X9'],
         'default_reward': 0.1,
-        'noise': 0,
+        'noise': 0.2,
     },
 )
