@@ -30,9 +30,10 @@ def value_iteration(env, discount=0.99, max_error=1e-3, max_iterations=1000):
         delta = np.linalg.norm(new_V - V, float('inf'))
         if delta < terminate_at:
             break
+        V = new_V
 
     pi = Q.argmax(1)
-    return pi, Q, delta
+    return pi, Q, V, delta
 
 #SOMEDAY: policy iteration, asynchronous value iteration
 #SOMEDAY: PyTorch/TensorFlow-ize?
