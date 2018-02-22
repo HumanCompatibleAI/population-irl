@@ -10,13 +10,12 @@ CLI app that takes a given environment and RL algorithm and:
 import argparse
 from datetime import datetime
 import logging
+import pickle
 import tempfile
 import os
 
-import numpy as np
 import gym
 
-from pirl import envs
 from pirl import agents
 
 logger = logging.getLogger('pirl.log_trajectories')
@@ -102,14 +101,12 @@ if __name__ == '__main__':
                 args.num_trajectories)
     # TODO: parallelize?
     trajectories = [sample(env, policy) for _i in range(args.num_trajectories)]
-    states, actions = zip(*trajectories)
-    states = np.array(states)
-    actions = np.array(actions)
 
     timestamp = datetime.now().strftime(ISO_TIMESTAMP)
-    out_dir = '{}-{}-{}.npz'.format(timestamp,
+    out_dir = '{}-{}-{}.pkl'.format(timestamp,
                                     args.env.replace('/', ':'),
                                     args.algo)
     path = os.path.join(args.out_dir, out_dir)
     logger.info('Done -- saving to %s', path)
-    np.savez(path, states=states, actions=actions)
+    with open(path, 'wb') as f:
+        pickle.dump(trajectories, f)
