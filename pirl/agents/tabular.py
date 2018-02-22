@@ -1,7 +1,6 @@
 import numpy as np
 
-def value_iteration(tabular_mdp, discount=0.99,
-                    max_error=1e-3, max_iterations=1000):
+def value_iteration(env, discount=0.99, max_error=1e-3, max_iterations=1000):
     """Performs value iteration on a finite-state MDP.
 
     Args:
@@ -16,7 +15,8 @@ def value_iteration(tabular_mdp, discount=0.99,
           The user should check if this is less than terminate_at to be
           sure of convergence (in case it terminates before max_iterations).
     """
-    T = tabular_mdp.transition
+    tabular_mdp = env.unwrapped
+    T = tabular_mdp.unwrapped.transition
     nS, nA, _ = T.shape
     R = tabular_mdp.reward.reshape(nS, 1)
 
