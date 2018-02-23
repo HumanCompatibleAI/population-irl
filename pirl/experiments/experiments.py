@@ -132,4 +132,8 @@ def run_experiment(experiment, seed):
         ground_truth[env_name] = compute_value(env, policies[env_name])
     expected_value['ground_truth'] = ground_truth
 
-    return trajectories, rewards, expected_value
+    return {
+        'trajectories': trajectories,
+        'reward': rewards,
+        'expected_value': expected_value,
+    }
