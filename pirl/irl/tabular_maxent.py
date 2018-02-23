@@ -7,8 +7,12 @@ described in the paper:
 """
 
 import numpy as np
+import torch
+from torch.autograd import Variable
 
 from pirl.utils import getattr_unwrapped
+
+#TODO: fully torchize?
 
 def visitation_counts(nS, trajectories, discount):
     """Compute empirical state-action feature counts from trajectories."""
@@ -24,8 +28,6 @@ def visitation_counts(nS, trajectories, discount):
         num_steps += length
     return counts / num_steps
 
-
-#TODO: horizon
 def policy_counts(horizon, transition, initial_states, reward):
     """Corresponds to Algorithm 1 of Ziebart et al (2008)."""
     # Backwards pass
@@ -45,7 +47,7 @@ def policy_counts(horizon, transition, initial_states, reward):
     return np.sum(counts, axis=1) / (horizon + 1)
 
 
-def maxent_irl(mdp, trajectories, discount):
+def maxent_irl(mdp, trajectories, discount, learning_rate=1e-2, num_iter=100):
     """
     Args:
         - mdp(TabularMdpEnv): MDP trajectories were drawn from.
@@ -57,6 +59,8 @@ def maxent_irl(mdp, trajectories, discount):
             final state).
         - discount(float): between 0 and 1.
             Should match that of the agent generating the trajectories.
+        - learning_rate(float): for Adam optimizer.
+        - num_iter(int): number of iterations of optimization process.
 
     Returns:
         list: estimated reward for each state in the MDP.
@@ -64,18 +68,18 @@ def maxent_irl(mdp, trajectories, discount):
     transition = getattr_unwrapped(mdp, 'transition')
     initial_states = getattr_unwrapped(mdp, 'initial_states')
     nS, _, _ = transition.shape
-    reward = np.zeros(nS)
     horizon = max([len(states) for states, actions in trajectories])
-    learning_rate = 1e-3
 
     demo_counts = visitation_counts(nS, trajectories, discount)
-    # TODO: use actual optimization framework
-    for i in range(10):
+    reward = Variable(torch.zeros(nS), requires_grad=True)
+    optimizer = torch.optim.Adam([reward], lr=learning_rate)
+    for i in range(num_iter):
+        print('reward\n', reward.view(4, 4))
         expected_counts = policy_counts(horizon, transition,
-                                        initial_states, reward)
-        grad = expected_counts - demo_counts
-        reward = reward - learning_rate * grad
-    print(reward.reshape(4,4))
-    print(grad.reshape(4,4))
+                                        initial_states, reward.data.numpy())
+        optimizer.zero_grad()
+        reward.grad = Variable(torch.Tensor(expected_counts - demo_counts))
+        print('grad\n', reward.grad.view(4, 4))
+        optimizer.step()
 
-    return reward
+    return reward.data.numpy()
