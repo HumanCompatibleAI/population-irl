@@ -17,14 +17,14 @@ from pirl.utils import getattr_unwrapped
 def visitation_counts(nS, trajectories, discount):
     """Compute empirical state-action feature counts from trajectories."""
     counts = np.zeros((nS, ))
-    num_steps = 0
+    discounted_steps = 0
     for states, actions in trajectories:
         states = states[1:]
         length = len(states)
         incr = np.cumprod([discount] * length)
         counts += np.bincount(states, weights=incr)
-        num_steps += length
-    return counts / num_steps
+        discounted_steps += np.sum(incr)
+    return counts / discounted_steps
 
 def policy_counts(transition, initial_states, reward, horizon, discount):
     """Corresponds to Algorithm 1 of Ziebart et al (2008)."""
@@ -42,13 +42,15 @@ def policy_counts(transition, initial_states, reward, horizon, discount):
     counts = np.zeros((nS, horizon + 1))
     counts[:, 0] = initial_states
     for i in range(1, horizon + 1):
-        x = np.einsum('ijk,k->ij', transition, counts[:, i-1])
-        counts[:, i] = np.sum(x * action_counts * discount, axis=1)
-    weights = np.cumprod([discount] * (horizon + 1))
-    return np.sum(counts, axis=1) / weights.sum()
+        counts[:, i] = np.einsum('i,ij,ijk->k', counts[:, i-1], action_counts, transition) * discount
+    if discount == 1:
+        renorm = horizon + 1
+    else:
+        renorm = (1 - discount ** (horizon + 1)) / (1 - discount)
+    return np.sum(counts, axis=1) / renorm
 
 
-def maxent_irl(mdp, trajectories, discount, learning_rate=1e-2, num_iter=100):
+def maxent_irl(mdp, trajectories, discount, learning_rate=1e-2, num_iter=1000):
     """
     Args:
         - mdp(TabularMdpEnv): MDP trajectories were drawn from.
@@ -75,12 +77,10 @@ def maxent_irl(mdp, trajectories, discount, learning_rate=1e-2, num_iter=100):
     reward = Variable(torch.zeros(nS), requires_grad=True)
     optimizer = torch.optim.Adam([reward], lr=learning_rate)
     for i in range(num_iter):
-        print('reward\n', reward.view(4, 4))
         expected_counts = policy_counts(transition, initial_states,
                                         reward.data.numpy(), horizon, discount)
         optimizer.zero_grad()
         reward.grad = Variable(torch.Tensor(expected_counts - demo_counts))
-        print('grad\n', reward.grad.view(4, 4))
         optimizer.step()
 
     return reward.data.numpy()
