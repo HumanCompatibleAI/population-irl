@@ -14,8 +14,7 @@ import os
 import pickle
 import tempfile
 
-from pirl.experiments.experiments import run_experiment
-from pirl.experiments import config
+from pirl.experiments import config, experiments
 
 logger = logging.getLogger('pirl.experiments.cli')
 
@@ -45,6 +44,7 @@ def parse_args():
     parser = argparse.ArgumentParser(description=desc)
     parser.add_argument('--data_dir', metavar='dir', default='./data',
                         type=writable_dir)
+    parser.add_argument('--seed', metavar='N', default=1234, type=int)
     parser.add_argument('experiments', metavar='experiment',
                         type=experiment_type, nargs='+')
 
@@ -57,7 +57,8 @@ if __name__ == '__main__':
     logging.basicConfig(level=logging.INFO)
 
     for experiment in args.experiments:
-        res = run_experiment(experiment)
+        # reseed so does not matter which order experiments are run in
+        res = experiments.run_experiment(experiment, args.seed)
         
         timestamp = datetime.now().strftime(ISO_TIMESTAMP)
         out_dir = '{}-{}.pkl'.format(experiment, timestamp)

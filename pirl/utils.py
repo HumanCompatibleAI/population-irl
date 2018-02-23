@@ -1,3 +1,7 @@
+from gym.utils import seeding
+import numpy as np
+import torch
+
 def getattr_unwrapped(env, attr):
     """Get attribute attr from env, or one of the nested environments.
 
@@ -15,3 +19,9 @@ def getattr_unwrapped(env, attr):
             raise
         else:
             return getattr_unwrapped(env.env, attr)
+
+def random_seed(seed=None):
+    seed = seeding.create_seed(seed)
+    np.random.seed(seed)
+    torch.manual_seed(seed)
+    torch.cuda.manual_seed(seed)

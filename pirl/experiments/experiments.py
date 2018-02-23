@@ -1,7 +1,9 @@
+import collections
 import logging
 
 import gym
 
+from pirl import utils
 from pirl.experiments import config
 
 logger = logging.getLogger('pirl.experiments.experiments')
@@ -67,7 +69,7 @@ class LearnedRewardWrapper(gym.Wrapper):
         return self.new_reward
 
 
-def run_experiment(experiment):
+def run_experiment(experiment, seed):
     '''Run experiment defined in config.EXPERIMENTS.
 
     Returns:
@@ -82,20 +84,29 @@ def run_experiment(experiment):
             to train a policy on the inferred reward, then compute expected
             discounted value obtained from the resulting policy.
         '''
+    utils.random_seed(seed)
     cfg = config.EXPERIMENTS[experiment]
 
     # Generate synthetic data
     logger.debug('%s: creating environments %s', experiment, cfg['environments'])
-    envs = {name: gym.make(name) for name in cfg['environments']}
+    envs = collections.OrderedDict()
+    for name in cfg['environments']:
+        env = gym.make(name)
+        env.seed(seed)
+        envs[name] = env
     logger.debug('%s: generating synthetic data', experiment)
 
     gen_policy, compute_value = make_rl_algo(cfg['rl'])
-    policies = {name: gen_policy(env) for name, env in envs.items()}
-    trajectories = {k: synthetic_data(e, policies[k], cfg['num_trajectories'])
-                    for k, e in envs.items()}
+    policies = collections.OrderedDict(
+        (name, gen_policy(env)) for name, env in envs.items()
+    )
+    trajectories = collections.OrderedDict(
+        (k, synthetic_data(e, policies[k], cfg['num_trajectories']))
+        for k, e in envs.items()
+    )
 
     # Run IRL
-    rewards = {}
+    rewards = collections.OrderedDict()
     for irl_name in cfg['irl']:
         logger.debug('%s: running IRL algo: %s', experiment, irl_name)
         irl_algo = make_irl_algo(irl_name)
