@@ -22,8 +22,8 @@ def visitation_counts(nS, trajectories, discount):
         states = states[1:]
         length = len(states)
         # TODO: should this be discounted?
-        #incr = np.cumprod([discount] * length)
-        incr = np.array([1] * length)
+        #incr = np.array([1] * length)
+        incr = np.cumprod([discount] * length)
         counts += np.bincount(states, weights=incr)
         num_steps += length
     return counts / num_steps
@@ -34,16 +34,18 @@ def policy_counts(horizon, transition, initial_states, reward):
     nS = initial_states.shape[0]
     state_counts = np.ones(nS)  # TODO: terminal states only?
     for i in range(horizon):
-        action_counts = np.einsum('ijk,i,k->ij', transition, np.exp(reward), state_counts)
+        action_counts = np.einsum('ijk,i,k->ij', transition,
+                                  np.exp(reward), state_counts)
         state_counts = np.sum(action_counts, axis=1)
-    action_probs = action_counts / state_counts.reshape((nS, 1))
+        action_counts = action_counts / state_counts.reshape((nS, 1))
+        state_counts = state_counts / np.sum(state_counts)
 
     # Forward pass
     counts = np.zeros((nS, horizon + 1))
     counts[:, 0] = initial_states
     for i in range(1, horizon + 1):
         x = np.einsum('ijk,k->ij', transition, counts[:, i-1])
-        counts[:, i] = np.sum(x * action_probs, axis=1)
+        counts[:, i] = np.sum(x * action_counts, axis=1)
     return np.sum(counts, axis=1) / (horizon + 1)
 
 
