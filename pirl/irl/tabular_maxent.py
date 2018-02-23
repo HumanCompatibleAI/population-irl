@@ -19,9 +19,7 @@ def visitation_counts(nS, trajectories, discount):
     counts = np.zeros((nS, ))
     discounted_steps = 0
     for states, actions in trajectories:
-        states = states[1:]
-        length = len(states)
-        incr = np.cumprod([discount] * length)
+        incr = np.cumprod([1] + [discount] * (len(states) - 1))
         counts += np.bincount(states, weights=incr)
         discounted_steps += np.sum(incr)
     return counts / discounted_steps
@@ -50,7 +48,7 @@ def policy_counts(transition, initial_states, reward, horizon, discount):
     return np.sum(counts, axis=1) / renorm
 
 
-def maxent_irl(mdp, trajectories, discount, learning_rate=1e-2, num_iter=1000):
+def maxent_irl(mdp, trajectories, discount, learning_rate=1e-2, num_iter=100):
     """
     Args:
         - mdp(TabularMdpEnv): MDP trajectories were drawn from.
