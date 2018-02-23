@@ -18,7 +18,8 @@ def visitation_counts(nS, trajectories, discount):
         states = states[1:]
         length = len(states)
         # TODO: should this be discounted?
-        incr = np.cumprod([discount] * length)
+        #incr = np.cumprod([discount] * length)
+        incr = np.array([1] * length)
         counts += np.bincount(states, weights=incr)
         num_steps += length
     return counts / num_steps
@@ -41,7 +42,7 @@ def policy_counts(horizon, transition, initial_states, reward):
     for i in range(1, horizon + 1):
         x = np.einsum('ijk,k->ij', transition, counts[:, i-1])
         counts[:, i] = np.sum(x * action_probs, axis=1)
-    return np.sum(counts, axis=1)
+    return np.sum(counts, axis=1) / (horizon + 1)
 
 
 def maxent_irl(mdp, trajectories, discount):
@@ -72,7 +73,9 @@ def maxent_irl(mdp, trajectories, discount):
     for i in range(10):
         expected_counts = policy_counts(horizon, transition,
                                         initial_states, reward)
-        grad = demo_counts - expected_counts
-        reward = grad - learning_rate * grad
+        grad = expected_counts - demo_counts
+        reward = reward - learning_rate * grad
+    print(reward.reshape(4,4))
+    print(grad.reshape(4,4))
 
     return reward
