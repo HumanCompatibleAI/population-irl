@@ -5,7 +5,8 @@ from pirl import agents, irl
 
 # Experiments
 EXPERIMENTS = {
-    'dummy-test': {  # ONLY FOR TESTING CODE! Not a realistic experiment.
+    # ONLY FOR TESTING CODE! Not real experiments.
+    'dummy-test': {
         #TODO: change to be a fixed environment and allow overloading
         #reward? This is closer to the semantic meaning we want to express,
         #but is awkward to go with Gym's abstraction.
@@ -13,7 +14,14 @@ EXPERIMENTS = {
         'rl': 'value_iteration',
         'irl': ['max_ent_single'],
         'num_trajectories': 100,
+    },
+    'dummy-test-deterministic': {
+        'environments': ['pirl/GridWorld-Simple-Deterministic-v0'],
+        'rl': 'value_iteration',
+        'irl': ['max_ent_single'],
+        'num_trajectories': 100,
     }
+    # Real experiments below
 }
 
 # RL Algorithms

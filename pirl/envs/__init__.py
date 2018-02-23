@@ -17,3 +17,18 @@ register(
         'noise': 0.2,
     },
 )
+
+# Only intended for testing code, entirely unrealistic
+register(
+    id='pirl/GridWorld-Simple-Deterministic-v0',
+    entry_point='pirl.envs:GridWorldMdp.from_string',
+    max_episode_steps=100,
+    kwargs={
+        'grid': ['A X1',
+                 '    ',
+                 ' 1X ',
+                 'A X9'],
+        'default_reward': 0.1,
+        'noise': 0.0,
+    },
+)
