@@ -27,6 +27,7 @@ dependencies:
 - pycparser=2.18=py36hf9f622e_1
 - python=3.6.4=hc3d631a_1
 - readline=7.0=ha6073c6_4
+- scipy=1.0.0-py36hbf646e7_0
 - setuptools=38.5.1=py36_0
 - six=1.11.0=py36h372c433_1
 - sqlite=3.22.0=h1bed415_0

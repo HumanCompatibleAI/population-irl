@@ -7,6 +7,7 @@ described in the paper:
 """
 
 import numpy as np
+from scipy.special import logsumexp as sp_lse
 import torch
 from torch.autograd import Variable
 
@@ -26,15 +27,14 @@ def visitation_counts(nS, trajectories, discount):
 
 def policy_counts(transition, initial_states, reward, horizon, discount):
     """Corresponds to Algorithm 1 of Ziebart et al (2008)."""
-    # Backwards pass
     nS = initial_states.shape[0]
-    state_counts = np.ones(nS)  # TODO: terminal states only?
+    logsc = np.zeros(nS)  # TODO: terminal states only?
+    logt = np.nan_to_num(np.log(transition))
     for i in range(horizon):
-        action_counts = np.einsum('ijk,i,k->ij', transition,
-                                  np.exp(reward), state_counts)
-        state_counts = np.sum(action_counts, axis=1)
-        action_counts = action_counts / state_counts.reshape((nS, 1))
-        state_counts = state_counts / np.sum(state_counts)
+        x = logt + reward.reshape(nS, 1, 1) + logsc.reshape(1, 1, nS)
+        logac = sp_lse(x, axis=2)
+        logsc = sp_lse(logac, axis=1)
+    action_counts = np.exp(logac - logsc.reshape(nS, 1))
 
     # Forward pass
     counts = np.zeros((nS, horizon + 1))
