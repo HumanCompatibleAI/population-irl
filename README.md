@@ -11,3 +11,9 @@ I use Anaconda for dependencies, you can create an environment with the prerequi
 If you are using GPU, you will also need to install CUDA 9.0 (or another version of CUDA, and adapt the version of PyTorch installed). Note the dependencies in the above file are the minimal required to run the project; you may also want to install packages such as IPython for development convenience.
 
 Alternately, if you wish to configure your own container, the dependencies are Python 3, NumPy, PyTorch and OpenAI Gym.
+
+## Usage
+
+To check everything works, you can run:
+
+	python -m pirl.experiments.cli dummy-test
