@@ -8,6 +8,8 @@ described in the paper:
 
 import numpy as np
 
+from pirl.utils import getattr_unwrapped
+
 def visitation_counts(nS, nA, trajectories, discount):
     """Compute empirical state-action feature counts from trajectories."""
     counts = np.zeros((nS, nA))
@@ -58,8 +60,8 @@ def maxent_irl(mdp, trajectories, discount):
     Returns:
         list: estimated reward for each state in the MDP.
     """
-    mdp = mdp.unwrapped
-    transition = mdp.transition
+    transition = getattr_unwrapped(mdp, 'transition')
+    initial_states = getattr_unwrapped(mdp, 'initial_states')
     nS, nA, _ = transition.shape
     reward = np.zeros(nS)
     horizon = max([len(states) for states, actions in trajectories])
@@ -70,7 +72,7 @@ def maxent_irl(mdp, trajectories, discount):
     # TODO: use actual optimization framework
     for i in range(100):
         expected_counts = policy_counts(horizon, transition,
-                                        mdp.initial_states, reward)
+                                        initial_states, reward)
         grad = demo_counts - expected_counts
         reward = grad - learning_rate * grad
 

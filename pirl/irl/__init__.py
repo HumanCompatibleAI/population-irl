@@ -1,0 +1,1 @@
+from pirl.irl import tabular_maxent
