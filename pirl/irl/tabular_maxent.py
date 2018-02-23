@@ -10,16 +10,16 @@ import numpy as np
 
 from pirl.utils import getattr_unwrapped
 
-def visitation_counts(nS, nA, trajectories, discount):
+def visitation_counts(nS, trajectories, discount):
     """Compute empirical state-action feature counts from trajectories."""
-    counts = np.zeros((nS, nA))
+    counts = np.zeros((nS, ))
     num_steps = 0
     for states, actions in trajectories:
         states = states[1:]
         length = len(states)
         # TODO: should this be discounted?
-        incr = np.cumprod(np.array([discount]) * length)
-        counts[states, actions] += incr
+        incr = np.cumprod([discount] * length)
+        counts += np.bincount(states, weights=incr)
         num_steps += length
     return counts / num_steps
 
@@ -62,15 +62,14 @@ def maxent_irl(mdp, trajectories, discount):
     """
     transition = getattr_unwrapped(mdp, 'transition')
     initial_states = getattr_unwrapped(mdp, 'initial_states')
-    nS, nA, _ = transition.shape
+    nS, _, _ = transition.shape
     reward = np.zeros(nS)
     horizon = max([len(states) for states, actions in trajectories])
     learning_rate = 1e-3
 
-    demo_counts = visitation_counts(nS, nA, trajectories, discount)
-    demo_counts = demo_counts.sum(axis=1)  # reduce to state count
+    demo_counts = visitation_counts(nS, trajectories, discount)
     # TODO: use actual optimization framework
-    for i in range(100):
+    for i in range(10):
         expected_counts = policy_counts(horizon, transition,
                                         initial_states, reward)
         grad = demo_counts - expected_counts
