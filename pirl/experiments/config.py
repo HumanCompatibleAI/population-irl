@@ -24,8 +24,7 @@ RL_ALGORITHMS = {
     # gen_policy, which may have been computed on an environment with a
     # different reward.
     'value_iteration': (lambda env: agents.tabular.value_iteration(env)[0],
-                        #TODO: compute scalar value
-                        lambda env, policy: agents.tabular.value_iteration(env, policy)[2])
+                        agents.tabular.value_of_policy)
 }
 
 # IRL Algorithms

@@ -44,5 +44,10 @@ def value_iteration(env, policy=None,
     pi = Q.argmax(1)
     return pi, Q, V, delta
 
+def value_of_policy(env, *args, **kwargs):
+    _, _, V, _ = value_iteration(env, *args, **kwargs)
+    initial_states = getattr_unwrapped(env, 'initial_states')
+    return np.sum(V * initial_states)
+
 #SOMEDAY: policy iteration, asynchronous value iteration
 #SOMEDAY: PyTorch/TensorFlow-ize?
