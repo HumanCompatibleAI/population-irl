@@ -94,12 +94,13 @@ def run_experiment(experiment, seed):
         env = gym.make(name)
         env.seed(seed)
         envs[name] = env
-    logger.debug('%s: generating synthetic data', experiment)
 
+    logger.debug('%s: generating synthetic data: training', experiment)
     gen_policy, compute_value = make_rl_algo(cfg['rl'])
     policies = collections.OrderedDict(
         (name, gen_policy(env)) for name, env in envs.items()
     )
+    logger.debug('%s: generating synthetic data: sampling', experiment)
     trajectories = collections.OrderedDict(
         (k, synthetic_data(e, policies[k], cfg['num_trajectories']))
         for k, e in envs.items()

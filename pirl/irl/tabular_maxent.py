@@ -21,7 +21,7 @@ def visitation_counts(nS, trajectories, discount):
     discounted_steps = 0
     for states, actions in trajectories:
         incr = np.cumprod([1] + [discount] * (len(states) - 1))
-        counts += np.bincount(states, weights=incr)
+        counts += np.bincount(states, weights=incr, minlength=nS)
         discounted_steps += np.sum(incr)
     return counts / discounted_steps
 

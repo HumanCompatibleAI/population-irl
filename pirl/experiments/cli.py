@@ -54,7 +54,7 @@ ISO_TIMESTAMP = "%Y%m%d_%H%M%S"
 
 if __name__ == '__main__':
     args = parse_args()
-    logging.basicConfig(level=logging.INFO)
+    logging.basicConfig(level=logging.DEBUG)
 
     for experiment in args.experiments:
         # reseed so does not matter which order experiments are run in
