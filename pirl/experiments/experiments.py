@@ -130,10 +130,12 @@ def run_experiment(experiment, seed):
     for irl_name, reward_by_size in rewards.items():
         res = collections.OrderedDict()
         for n, reward_by_env in reward_by_size.items():
-            for env_name, r in reward_by_env.items():
+            for env_name, env in envs.items():
+                # note reward_by_env may include extra items (e.g. mean reward)
+                # that we do not want to evaluate.
                 logger.debug('%s: evaluating %s on %s with %d trajectories',
                              experiment, irl_name, env_name, n)
-                env = envs[env_name]
+                r = reward_by_env[env_name]
                 wrapped_env = LearnedRewardWrapper(env, r)
                 reoptimized_policy = gen_policy(wrapped_env)
                 value = compute_value(env, reoptimized_policy)

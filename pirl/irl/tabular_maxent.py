@@ -109,7 +109,7 @@ def maxent_population_irl(mdps, trajectories, discount,
         - num_iter(int): number of iterations of optimization process.
 
     Returns:
-        list: estimated reward for each state in the MDP.
+        dict<list>: estimated reward for each state in the MDP.
     """
     assert mdps.keys() == trajectories.keys()
 
@@ -131,7 +131,7 @@ def maxent_population_irl(mdps, trajectories, discount,
 
         nS, _, _ = trans.shape
         rewards[name] = Variable(torch.zeros(nS), requires_grad=True)
-    rewards['common'] = Variable(torch.zeros(nS), requires_grad=True)
+    common_reward = Variable(torch.zeros(nS), requires_grad=True)
 
     horizons = {}
     demo_counts = {}
@@ -139,11 +139,12 @@ def maxent_population_irl(mdps, trajectories, discount,
         horizons[name] = max([len(states) for states, actions in trajectory])
         demo_counts[name] = visitation_counts(nS, trajectory, discount)
 
-    optimizer = torch.optim.Adam(rewards.values(), lr=learning_rate)
+    params = list(rewards.values()) + [common_reward]
+    optimizer = torch.optim.Adam(params, lr=learning_rate/2)
     for i in range(num_iter):
         optimizer.zero_grad()
         for name in mdps.keys():
-            effective_reward = rewards[name] + rewards['common']
+            effective_reward = rewards[name] + common_reward
             expected_counts = policy_counts(transitions[name],
                                             initial_states[name],
                                             effective_reward.data.numpy(),
@@ -151,7 +152,9 @@ def maxent_population_irl(mdps, trajectories, discount,
                                             discount)
             grad = Variable(torch.Tensor(expected_counts - demo_counts[name]))
             incr_grad(rewards[name], grad)
-            incr_grad(rewards['common'], grad)
+            incr_grad(common_reward, grad / 3)
             optimizer.step()
 
-    return {k: v.data.numpy() for k, v in rewards.items() if k != 'common'}
+    res = {k: (v + common_reward).data.numpy() for k, v in rewards.items()}
+    res['common'] = common_reward.data.numpy()
+    return res
