@@ -20,8 +20,15 @@ EXPERIMENTS = {
         'rl': 'value_iteration',
         'irl': ['max_ent_single'],
         'num_trajectories': 100,
-    }
+    },
     # Real experiments below
+    'jungle': {
+        'environments': ['pirl/GridWorld-Jungle-{}-v0'.format(k)
+                         for k in ['Soda', 'Water', 'Liquid']],
+        'rl': 'value_iteration',
+        'irl': ['max_ent_single'],
+        'num_trajectories': 200,
+    },
 }
 
 # RL Algorithms

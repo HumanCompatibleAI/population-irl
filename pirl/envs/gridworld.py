@@ -48,7 +48,7 @@ def _create_reward(grid, default_reward):
     rewards = [[convert(cfg) for cfg in row] for row in grid]
     return np.array(rewards)
 
-def _create_initial_state(grid):
+def create_initial_state(grid):
     cfg = np.array(grid, dtype='object')
     initial_state = cfg == 'A'
     return initial_state / initial_state.sum()
@@ -103,7 +103,7 @@ class GridWorldMdp(TabularMdpEnv):
         grid = [list(x) for x in grid]
         walls = np.array(grid, dtype='U1') == 'X'
         reward = _create_reward(grid, default_reward)
-        initial_state = _create_initial_state(grid)
+        initial_state = create_initial_state(grid)
         terminal = np.zeros_like(walls, dtype=bool)
         return GridWorldMdp(walls, reward, initial_state, terminal, noise)
 
