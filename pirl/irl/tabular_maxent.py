@@ -94,11 +94,6 @@ def maxent_irl(mdp, trajectories, discount, learning_rate=1e-2, num_iter=100):
     }
     return reward.data.numpy(), info
 
-def incr_grad(var, inc):
-    if var.grad is None:
-        var.grad = inc
-    else:
-        var.grad += inc
 
 def maxent_population_irl(mdps, trajectories, discount, individual_reg=1e-2,
                           learning_rate=1e-2, num_iter=100):
@@ -157,6 +152,7 @@ def maxent_population_irl(mdps, trajectories, discount, individual_reg=1e-2,
     grad_history = []
     for i in range(num_iter):
         optimizer.zero_grad()
+        grads = {}
         for name in mdps.keys():
             effective_reward = rewards[name] + rewards['common']
             expected_counts = policy_counts(transitions[name],
@@ -164,10 +160,17 @@ def maxent_population_irl(mdps, trajectories, discount, individual_reg=1e-2,
                                             effective_reward.data.numpy(),
                                             horizons[name],
                                             discount)
-            grad = Variable(torch.Tensor(expected_counts - demo_counts[name]))
-            incr_grad(rewards[name], grad + individual_reg * rewards[name])
-            incr_grad(rewards['common'], grad / len(mdps))
+            grads[name] = expected_counts - demo_counts[name]
             ec_history.setdefault(name, []).append(expected_counts)
+        common_grad = np.mean(list(grads.values()), axis=0)
+        rewards['common'].grad = Variable(torch.Tensor(common_grad))
+
+        demeaned_grad = {k: g - common_grad for k, g in grads.items()}
+        for name in mdps.keys():
+            g = demeaned_grad[name]
+            g += individual_reg * rewards[name].data.numpy()
+            rewards[name].grad = Variable(torch.Tensor(g))
+
         grad_history.append({k: v.grad for k, v in rewards.items()})
         optimizer.step()
 
