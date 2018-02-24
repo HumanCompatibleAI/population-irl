@@ -40,35 +40,45 @@ register(
 # Key: A = initial state, X = wall, R = road, L = lava, S = soda, W = water
 # Rewards: default = -1, road = 0, lava = -10
 # Rewards: soda = 1 or 0, water = 1 or 0 (depending on agent preference)
-jungle_topology = [
-    'AAAX  W  ',
-    ' R X   S ',
-    ' R X XXL ',
-    ' R    LL ',
-    ' RRRRRRR ',
-    ' R    LL ',
-    ' R X XXL ',
-    ' R X   W ',
-    'AAAX  S  ',
-]
+jungle_topology = {
+    '9x9': [
+        'AAAX  W  ',
+        ' R X   S ',
+        ' R X XXL ',
+        ' R    LL ',
+        ' RRRRRRR ',
+        ' R    LL ',
+        ' R X XXL ',
+        ' R X   W ',
+        'AAAX  S  ',
+    ],
+    '4x4': [
+        'APLW',
+        'PPP ',
+        'PPP ',
+        'APLS',
+    ],
+}
 jungle_default_reward = -1
-jungle_topology = np.array([list(x) for x in jungle_topology])
+jungle_topology = {k: np.array([list(x) for x in v])
+                   for k, v in jungle_topology.items()}
 cfg = {'Soda': ['S'], 'Water': ['W'], 'Liquid': ['S', 'W']}
 for kind, cells in cfg.items():
     reward_map = {'R': 0, 'L': -10}
     for k in cells:
         reward_map[k] = 1
     fn = np.vectorize(lambda x: reward_map.get(x, jungle_default_reward))
-    reward = fn(jungle_topology)
-    register(
-        id='pirl/GridWorld-Jungle-{}-v0'.format(kind),
-        entry_point='pirl.envs:GridWorldMdp',
-        max_episode_steps=100,
-        kwargs={
-            'walls': jungle_topology == 'X',
-            'reward': reward,
-            'initial_state': gridworld.create_initial_state(jungle_topology),
-            'terminal': np.zeros_like(jungle_topology, dtype=bool),
-            'noise': 0.2,
-        }
-    )
+    for scale, topology in jungle_topology.items():
+        reward = fn(topology)
+        register(
+            id='pirl/GridWorld-Jungle-{}-{}-v0'.format(scale, kind),
+            entry_point='pirl.envs:GridWorldMdp',
+            max_episode_steps=100,
+            kwargs={
+                'walls': topology == 'X',
+                'reward': reward,
+                'initial_state': gridworld.create_initial_state(topology),
+                'terminal': np.zeros_like(topology, dtype=bool),
+                'noise': 0.2,
+            }
+        )

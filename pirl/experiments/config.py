@@ -23,7 +23,7 @@ EXPERIMENTS = {
     },
     # Real experiments below
     'jungle': {
-        'environments': ['pirl/GridWorld-Jungle-{}-v0'.format(k)
+        'environments': ['pirl/GridWorld-Jungle-9x9-{}-v0'.format(k)
                          for k in ['Soda', 'Water', 'Liquid']],
         'rl': 'value_iteration',
         'irl': [
