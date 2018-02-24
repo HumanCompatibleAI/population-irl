@@ -13,13 +13,13 @@ EXPERIMENTS = {
         'environments': ['pirl/GridWorld-Simple-v0'],
         'rl': 'value_iteration',
         'irl': ['max_ent_single', 'max_ent_population'],
-        'num_trajectories': 100,
+        'num_trajectories': [100, 10],
     },
     'dummy-test-deterministic': {
         'environments': ['pirl/GridWorld-Simple-Deterministic-v0'],
         'rl': 'value_iteration',
-        'irl': ['max_ent_single'],
-        'num_trajectories': 100,
+        'irl': ['max_ent_single', 'max_ent_population'],
+        'num_trajectories': [100, 10],
     },
     # Real experiments below
     'jungle': {
@@ -27,7 +27,7 @@ EXPERIMENTS = {
                          for k in ['Soda', 'Water', 'Liquid']],
         'rl': 'value_iteration',
         'irl': ['max_ent_single', 'max_ent_population'],
-        'num_trajectories': 200,
+        'num_trajectories': [200, 100, 50, 30, 20, 10],
     },
 }
 

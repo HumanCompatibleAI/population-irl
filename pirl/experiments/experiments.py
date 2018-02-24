@@ -45,6 +45,10 @@ def synthetic_data(env, policy, num_trajectories):
     trajectories = [sample(env, policy) for _i in range(num_trajectories)]
     return trajectories
 
+def slice_trajectories(trajectories, max_length):
+    return {k: [(states[:max_length], actions[:max_length])
+                for states, actions in env_trajectories]
+            for k, env_trajectories in trajectories.items()}
 
 class LearnedRewardWrapper(gym.Wrapper):
     """
@@ -89,6 +93,7 @@ def run_experiment(experiment, seed):
 
     # Generate synthetic data
     logger.debug('%s: creating environments %s', experiment, cfg['environments'])
+    # To make experiments (more) deterministic, I use sorted collections.
     envs = collections.OrderedDict()
     for name in cfg['environments']:
         env = gym.make(name)
@@ -101,8 +106,9 @@ def run_experiment(experiment, seed):
         (name, gen_policy(env)) for name, env in envs.items()
     )
     logger.debug('%s: generating synthetic data: sampling', experiment)
+    num_trajectories = sorted(cfg['num_trajectories'])
     trajectories = collections.OrderedDict(
-        (k, synthetic_data(e, policies[k], cfg['num_trajectories']))
+        (k, synthetic_data(e, policies[k], max(num_trajectories)))
         for k, e in envs.items()
     )
 
@@ -111,26 +117,33 @@ def run_experiment(experiment, seed):
     for irl_name in cfg['irl']:
         logger.debug('%s: running IRL algo: %s', experiment, irl_name)
         irl_algo = make_irl_algo(irl_name)
-        rewards[irl_name] = irl_algo(envs, trajectories)
+        rewards[irl_name] = collections.OrderedDict()
+        for n in num_trajectories:
+            subset = slice_trajectories(trajectories, n)
+            rewards[irl_name][n] = irl_algo(envs, subset)
 
     # Evaluate results
     # Note the expected value is estimated, and the accuracy of this may depend
     # on the RL algorithm. For value iteration, for example, this is computed
     # directly; for many other algorithms, a sample-based approach is adopted.
     expected_value = {}
-    for irl_name, reward in rewards.items():
-        res = {}
-        for env_name, r in reward.items():
-            logger.debug('%s: evaluating how good %s was on %s',
-                         experiment, irl_name, env_name)
-            env = envs[env_name]
-            wrapped_env = LearnedRewardWrapper(env, r)
-            reoptimized_policy = gen_policy(wrapped_env)
-            res[env_name] = compute_value(env, reoptimized_policy)
-        expected_value[irl_name] = res
+    for irl_name, reward_by_size in rewards.items():
+        res = collections.OrderedDict()
+        for n, reward_by_env in reward_by_size.items():
+            for env_name, r in reward_by_env.items():
+                logger.debug('%s: evaluating %s on %s with %d trajectories',
+                             experiment, irl_name, env_name, n)
+                env = envs[env_name]
+                wrapped_env = LearnedRewardWrapper(env, r)
+                reoptimized_policy = gen_policy(wrapped_env)
+                value = compute_value(env, reoptimized_policy)
+                res.setdefault(env_name, {})[n] = value
+            expected_value[irl_name] = res
     ground_truth = {}
     for env_name, env in envs.items():
-        ground_truth[env_name] = compute_value(env, policies[env_name])
+        value = compute_value(env, policies[env_name])
+        value = collections.OrderedDict([(n, value) for n in num_trajectories])
+        ground_truth[env_name] = value
     expected_value['ground_truth'] = ground_truth
 
     return {
