@@ -100,7 +100,7 @@ def incr_grad(var, inc):
     else:
         var.grad += inc
 
-def maxent_population_irl(mdps, trajectories, discount,
+def maxent_population_irl(mdps, trajectories, discount, individual_reg=1e-2,
                           learning_rate=1e-2, num_iter=100):
     """
     Args:
@@ -114,6 +114,8 @@ def maxent_population_irl(mdps, trajectories, discount,
             visited states/actions in that trajectory. The length of states
             should be one greater than that of actions (since we include the
             start and final state).
+        - individual_reg(float): regularization factor for per-agent reward.
+            Penalty factor applied to the l_2 norm of per-agent reward matrices.
         - discount(float): between 0 and 1.
             Should match that of the agent generating the trajectories.
         - learning_rate(float): for Adam optimizer.
@@ -163,7 +165,7 @@ def maxent_population_irl(mdps, trajectories, discount,
                                             horizons[name],
                                             discount)
             grad = Variable(torch.Tensor(expected_counts - demo_counts[name]))
-            incr_grad(rewards[name], grad)
+            incr_grad(rewards[name], grad + individual_reg * rewards[name])
             incr_grad(rewards['common'], grad / len(mdps))
             ec_history.setdefault(name, []).append(expected_counts)
         grad_history.append({k: v.grad for k, v in rewards.items()})

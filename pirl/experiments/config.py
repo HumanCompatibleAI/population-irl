@@ -26,7 +26,13 @@ EXPERIMENTS = {
         'environments': ['pirl/GridWorld-Jungle-{}-v0'.format(k)
                          for k in ['Soda', 'Water', 'Liquid']],
         'rl': 'value_iteration',
-        'irl': ['max_ent_single', 'max_ent_population'],
+        'irl': [
+            'max_ent_single',
+            'max_ent_population_reg0',
+            'max_ent_population_reg0.001'
+            'max_ent_population_reg0.01'
+            'max_ent_population_reg0.1'
+        ],
         'num_trajectories': [200, 100, 50, 30, 20, 10],
     },
     'jungle-fussy': {
@@ -78,10 +84,13 @@ TRADITIONAL_IRL_ALGORITHMS = {
     'max_ent': functools.partial(irl.tabular_maxent.maxent_irl, discount=0.99),
 }
 
-MY_IRL_ALGORITHMS = {
-    'max_ent_population': functools.partial(irl.tabular_maxent.maxent_population_irl,
-                                            discount=0.99),
-}
+MY_IRL_ALGORITHMS = dict()
+for reg in [0, 1e-3, 1e-2, 1e-1]:
+    fn = functools.partial(irl.tabular_maxent.maxent_population_irl,
+                           discount=0.99,
+                           individual_reg=reg)
+    MY_IRL_ALGORITHMS['max_ent_population_reg{}'.format(reg)] = fn
+MY_IRL_ALGORITHMS['max_ent_population'] = MY_IRL_ALGORITHMS['max_ent_population_reg0']
 
 IRL_ALGORITHMS = dict()
 IRL_ALGORITHMS.update(MY_IRL_ALGORITHMS)
