@@ -114,13 +114,17 @@ def run_experiment(experiment, seed):
 
     # Run IRL
     rewards = collections.OrderedDict()
+    info = collections.OrderedDict()
     for irl_name in cfg['irl']:
         logger.debug('%s: running IRL algo: %s', experiment, irl_name)
         irl_algo = make_irl_algo(irl_name)
         rewards[irl_name] = collections.OrderedDict()
+        info[irl_name] = collections.OrderedDict()
         for n in num_trajectories:
             subset = slice_trajectories(trajectories, n)
-            rewards[irl_name][n] = irl_algo(envs, subset)
+            r, extra = irl_algo(envs, subset)
+            rewards[irl_name][n] = r
+            info[irl_name][n] = extra
 
     # Evaluate results
     # Note the expected value is estimated, and the accuracy of this may depend
@@ -131,8 +135,6 @@ def run_experiment(experiment, seed):
         res = collections.OrderedDict()
         for n, reward_by_env in reward_by_size.items():
             for env_name, env in envs.items():
-                # note reward_by_env may include extra items (e.g. mean reward)
-                # that we do not want to evaluate.
                 logger.debug('%s: evaluating %s on %s with %d trajectories',
                              experiment, irl_name, env_name, n)
                 r = reward_by_env[env_name]
@@ -152,4 +154,5 @@ def run_experiment(experiment, seed):
         'trajectories': trajectories,
         'reward': rewards,
         'expected_value': expected_value,
+        'info': info,
     }

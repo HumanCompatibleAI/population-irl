@@ -29,6 +29,13 @@ EXPERIMENTS = {
         'irl': ['max_ent_single', 'max_ent_population'],
         'num_trajectories': [200, 100, 50, 30, 20, 10],
     },
+    'jungle-fussy': {
+        'environments': ['pirl/GridWorld-Jungle-{}-v0'.format(k)
+                         for k in ['Soda', 'Water']],
+        'rl': 'value_iteration',
+        'irl': ['max_ent_single', 'max_ent_population'],
+        'num_trajectories': [200, 100, 50, 30, 20, 10],
+    },
 }
 
 # RL Algorithms
@@ -47,7 +54,10 @@ def traditional_to_single(f):
     @functools.wraps(f)
     def helper(envs, trajectories, **kwargs):
         #TODO: parallelize
-        return {k: f(envs[k], v, **kwargs) for k, v in trajectories.items()}
+        res = {k: f(envs[k], v, **kwargs) for k, v in trajectories.items()}
+        values = {k: v[0] for k, v in res.items()}
+        info = {k: v[1] for k, v in res.items()}
+        return values, info
     return helper
 
 
@@ -58,8 +68,9 @@ def traditional_to_concat(f):
         # Pick an environment arbitrarily. In the typical use case,
         # they are all the same up to reward anyway.
         env = list(envs.values())[0]
-        res = f(env, concat_trajectories, **kwargs)
-        return {k: res for k in trajectories.keys()}
+        value, info = f(env, concat_trajectories, **kwargs)
+        value = {k: value for k in trajectories.keys()}
+        return value, info
     return helper
 
 

@@ -63,8 +63,9 @@ def maxent_irl(mdp, trajectories, discount, learning_rate=1e-2, num_iter=100):
         - learning_rate(float): for Adam optimizer.
         - num_iter(int): number of iterations of optimization process.
 
-    Returns:
-        list: estimated reward for each state in the MDP.
+    Returns (reward, info) where:
+        reward(list): estimated reward for each state in the MDP.
+        info(dict): log of extra info.
     """
     transition = getattr_unwrapped(mdp, 'transition')
     initial_states = getattr_unwrapped(mdp, 'initial_states')
@@ -74,6 +75,8 @@ def maxent_irl(mdp, trajectories, discount, learning_rate=1e-2, num_iter=100):
     demo_counts = visitation_counts(nS, trajectories, discount)
     reward = Variable(torch.zeros(nS), requires_grad=True)
     optimizer = torch.optim.Adam([reward], lr=learning_rate)
+    ec_history = []
+    grad_history = []
     for i in range(num_iter):
         expected_counts = policy_counts(transition, initial_states,
                                         reward.data.numpy(), horizon, discount)
@@ -81,7 +84,15 @@ def maxent_irl(mdp, trajectories, discount, learning_rate=1e-2, num_iter=100):
         reward.grad = Variable(torch.Tensor(expected_counts - demo_counts))
         optimizer.step()
 
-    return reward.data.numpy()
+        ec_history.append(expected_counts)
+        grad_history.append(reward.grad.data.numpy())
+
+    info = {
+        'demo_counts': demo_counts,
+        'expected_counts': ec_history,
+        'grads': grad_history
+    }
+    return reward.data.numpy(), info
 
 def incr_grad(var, inc):
     if var.grad is None:
@@ -108,9 +119,9 @@ def maxent_population_irl(mdps, trajectories, discount,
         - learning_rate(float): for Adam optimizer.
         - num_iter(int): number of iterations of optimization process.
 
-    Returns:
-        dict<list>: estimated reward for each state in the MDP.
-    """
+    Returns (reward, info) where:
+        reward(dict<list>): estimated reward for each state in the MDP.
+        info(dict): log of extra info.    """
     assert mdps.keys() == trajectories.keys()
 
     transitions = {}
@@ -131,7 +142,7 @@ def maxent_population_irl(mdps, trajectories, discount,
 
         nS, _, _ = trans.shape
         rewards[name] = Variable(torch.zeros(nS), requires_grad=True)
-    common_reward = Variable(torch.zeros(nS), requires_grad=True)
+    rewards['common'] = Variable(torch.zeros(nS), requires_grad=True)
 
     horizons = {}
     demo_counts = {}
@@ -139,12 +150,13 @@ def maxent_population_irl(mdps, trajectories, discount,
         horizons[name] = max([len(states) for states, actions in trajectory])
         demo_counts[name] = visitation_counts(nS, trajectory, discount)
 
-    params = list(rewards.values()) + [common_reward]
-    optimizer = torch.optim.Adam(params, lr=learning_rate/2)
+    optimizer = torch.optim.Adam(rewards.values(), lr=learning_rate/2)
+    ec_history = {}
+    grad_history = []
     for i in range(num_iter):
         optimizer.zero_grad()
         for name in mdps.keys():
-            effective_reward = rewards[name] + common_reward
+            effective_reward = rewards[name] + rewards['common']
             expected_counts = policy_counts(transitions[name],
                                             initial_states[name],
                                             effective_reward.data.numpy(),
@@ -152,9 +164,18 @@ def maxent_population_irl(mdps, trajectories, discount,
                                             discount)
             grad = Variable(torch.Tensor(expected_counts - demo_counts[name]))
             incr_grad(rewards[name], grad)
-            incr_grad(common_reward, grad / 3)
+            incr_grad(rewards['common'], grad / 3)
+            ec_history.setdefault(name, []).append(expected_counts)
+        grad_history.append({k: v.grad for k, v in rewards.items()})
         optimizer.step()
 
-    res = {k: (v + common_reward).data.numpy() for k, v in rewards.items()}
-    res['common'] = common_reward.data.numpy()
-    return res
+    res = {k: (v + rewards['common']).data.numpy()
+           for k, v in rewards.items() if k != 'common'}
+
+    info = {
+        'demo_counts': demo_counts,
+        'expected_counts': ec_history,
+        'grads': grad_history,
+        'common_reward': rewards['common'].data.numpy(),
+    }
+    return res, info
