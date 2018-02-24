@@ -12,7 +12,7 @@ EXPERIMENTS = {
         #but is awkward to go with Gym's abstraction.
         'environments': ['pirl/GridWorld-Simple-v0'],
         'rl': 'value_iteration',
-        'irl': ['max_ent_single'],
+        'irl': ['max_ent_single', 'max_ent_population'],
         'num_trajectories': 100,
     },
     'dummy-test-deterministic': {
@@ -26,7 +26,7 @@ EXPERIMENTS = {
         'environments': ['pirl/GridWorld-Jungle-{}-v0'.format(k)
                          for k in ['Soda', 'Water', 'Liquid']],
         'rl': 'value_iteration',
-        'irl': ['max_ent_single'],
+        'irl': ['max_ent_single', 'max_ent_population'],
         'num_trajectories': 200,
     },
 }
@@ -67,7 +67,10 @@ TRADITIONAL_IRL_ALGORITHMS = {
     'max_ent': functools.partial(irl.tabular_maxent.maxent_irl, discount=0.99),
 }
 
-MY_IRL_ALGORITHMS = dict()
+MY_IRL_ALGORITHMS = {
+    'max_ent_population': functools.partial(irl.tabular_maxent.maxent_population_irl,
+                                            discount=0.99),
+}
 
 IRL_ALGORITHMS = dict()
 IRL_ALGORITHMS.update(MY_IRL_ALGORITHMS)

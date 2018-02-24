@@ -82,3 +82,76 @@ def maxent_irl(mdp, trajectories, discount, learning_rate=1e-2, num_iter=100):
         optimizer.step()
 
     return reward.data.numpy()
+
+def incr_grad(var, inc):
+    if var.grad is None:
+        var.grad = inc
+    else:
+        var.grad += inc
+
+def maxent_population_irl(mdps, trajectories, discount,
+                          learning_rate=1e-2, num_iter=100):
+    """
+    Args:
+        - mdp(dict<TabularMdpEnv>): MDPs trajectories were drawn from.
+            Dictionary containing MDPs trajectories, of the same name, were
+            drawn from. MDPs must have the same state/action spaces, but may
+            have different dynamics and reward functions.
+        - trajectories(dict<list>): observed trajectories.
+            Dictionary of lists containing one (states, actions) pair for each
+            trajectory, where states and actions are lists containing all
+            visited states/actions in that trajectory. The length of states
+            should be one greater than that of actions (since we include the
+            start and final state).
+        - discount(float): between 0 and 1.
+            Should match that of the agent generating the trajectories.
+        - learning_rate(float): for Adam optimizer.
+        - num_iter(int): number of iterations of optimization process.
+
+    Returns:
+        list: estimated reward for each state in the MDP.
+    """
+    assert mdps.keys() == trajectories.keys()
+
+    transitions = {}
+    initial_states = {}
+    rewards = {}
+    transition_shape = None
+    initial_shape = None
+    for name, mdp in mdps.items():
+        trans = getattr_unwrapped(mdp, 'transition')
+        assert transition_shape is None or transition_shape == trans.shape
+        transition_shape = trans.shape
+        transitions[name] = trans
+
+        initial = getattr_unwrapped(mdp, 'initial_states')
+        assert initial_shape is None or initial_shape == initial.shape
+        initial_shape = initial.shape
+        initial_states[name] = initial
+
+        nS, _, _ = trans.shape
+        rewards[name] = Variable(torch.zeros(nS), requires_grad=True)
+    rewards['common'] = Variable(torch.zeros(nS), requires_grad=True)
+
+    horizons = {}
+    demo_counts = {}
+    for name, trajectory in trajectories.items():
+        horizons[name] = max([len(states) for states, actions in trajectory])
+        demo_counts[name] = visitation_counts(nS, trajectory, discount)
+
+    optimizer = torch.optim.Adam(rewards.values(), lr=learning_rate)
+    for i in range(num_iter):
+        optimizer.zero_grad()
+        for name in mdps.keys():
+            effective_reward = rewards[name] + rewards['common']
+            expected_counts = policy_counts(transitions[name],
+                                            initial_states[name],
+                                            effective_reward.data.numpy(),
+                                            horizons[name],
+                                            discount)
+            grad = Variable(torch.Tensor(expected_counts - demo_counts[name]))
+            incr_grad(rewards[name], grad)
+            incr_grad(rewards['common'], grad)
+            optimizer.step()
+
+    return {k: v.data.numpy() for k, v in rewards.items() if k != 'common'}
