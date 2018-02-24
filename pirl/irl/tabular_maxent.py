@@ -153,7 +153,7 @@ def maxent_population_irl(mdps, trajectories, discount,
             grad = Variable(torch.Tensor(expected_counts - demo_counts[name]))
             incr_grad(rewards[name], grad)
             incr_grad(common_reward, grad / 3)
-            optimizer.step()
+        optimizer.step()
 
     res = {k: (v + common_reward).data.numpy() for k, v in rewards.items()}
     res['common'] = common_reward.data.numpy()
