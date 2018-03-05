@@ -97,7 +97,8 @@ def maxent_irl(mdp, trajectories, discount, learning_rate=1e-2, num_iter=100):
     return reward.data.numpy(), info
 
 
-def maxent_population_irl(mdps, trajectories, discount, individual_reg=1e-2,
+def maxent_population_irl(mdps, trajectories, discount,
+                          individual_reg=1e-2, common_scale=1, demean=True,
                           learning_rate=1e-2, num_iter=100):
     """
     Args:
@@ -113,6 +114,8 @@ def maxent_population_irl(mdps, trajectories, discount, individual_reg=1e-2,
             start and final state).
         - individual_reg(float): regularization factor for per-agent reward.
             Penalty factor applied to the l_2 norm of per-agent reward matrices.
+        - common_scale(float): scaling factor for common gradient update.
+        - demean(bool): demean the gradient.
         - discount(float): between 0 and 1.
             Should match that of the agent generating the trajectories.
         - learning_rate(float): for Adam optimizer.
@@ -164,12 +167,14 @@ def maxent_population_irl(mdps, trajectories, discount, individual_reg=1e-2,
                                             discount)
             grads[name] = expected_counts - demo_counts[name]
             ec_history.setdefault(name, []).append(expected_counts)
-        common_grad = np.mean(list(grads.values()), axis=0)
+        common_grad = np.mean(list(grads.values()), axis=0) * common_scale
         rewards['common'].grad = Variable(torch.Tensor(common_grad))
 
-        demeaned_grad = {k: g - common_grad for k, g in grads.items()}
+        if demean:
+            grads = {k: g - common_grad for k, g in grads.items()}
+
         for name in mdps.keys():
-            g = demeaned_grad[name]
+            g = grads[name]
             g += individual_reg * rewards[name].data.numpy()
             rewards[name].grad = Variable(torch.Tensor(g))
 
