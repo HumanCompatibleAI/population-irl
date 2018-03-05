@@ -12,13 +12,13 @@ EXPERIMENTS = {
         #but is awkward to go with Gym's abstraction.
         'environments': ['pirl/GridWorld-Simple-v0'],
         'rl': 'value_iteration',
-        'irl': ['max_ent_single', 'max_ent_population'],
+        'irl': ['mes', 'mep_orig'],
         'num_trajectories': [100, 10],
     },
     'dummy-test-deterministic': {
         'environments': ['pirl/GridWorld-Simple-Deterministic-v0'],
         'rl': 'value_iteration',
-        'irl': ['max_ent_single', 'max_ent_population'],
+        'irl': ['mes', 'mep_orig'],
         'num_trajectories': [100, 10],
     },
     # Real experiments below
@@ -27,10 +27,14 @@ EXPERIMENTS = {
                          for k in ['Soda', 'Water', 'Liquid']],
         'rl': 'value_iteration',
         'irl': [
-            'max_ent_population_reg0',
-            'max_ent_population_reg0.1',
-            'max_ent_population_reg1',
-            'max_ent_single',
+            'mep_orig_scale1_reg0',
+            'mep_orig_scale1_reg0.1',
+            'mep_orig_scale1_reg1',
+            'mep_orig_scale2_reg0',
+            'mep_orig_scale2_reg0.1',
+            'mep_orig_scale2_reg1',
+            'mep_demean',
+            'mes',
         ],
         'num_trajectories': [200, 100, 50, 30, 20, 10],
     },
@@ -39,10 +43,14 @@ EXPERIMENTS = {
                          for k in ['Soda', 'Water', 'Liquid']],
         'rl': 'value_iteration',
         'irl': [
-            'max_ent_population_reg0',
-            'max_ent_population_reg0.1',
-            'max_ent_population_reg1',
-            'max_ent_single',
+            'mep_orig_scale1_reg0',
+            'mep_orig_scale1_reg0.1',
+            'mep_orig_scale1_reg1',
+            'mep_orig_scale2_reg0',
+            'mep_orig_scale2_reg0.1',
+            'mep_orig_scale2_reg1',
+            'mep_demean',
+            'mes',
         ],
         'num_trajectories': [200, 100, 50, 30, 20, 10],
     },
@@ -85,19 +93,25 @@ def traditional_to_concat(f):
 
 
 TRADITIONAL_IRL_ALGORITHMS = {
-    'max_ent': functools.partial(irl.tabular_maxent.maxent_irl, discount=0.99),
+    'me': functools.partial(irl.tabular_maxent.maxent_irl, discount=0.99),
 }
 
+# demean vs non demean
+# without demeaning, change scale, regularization
 MY_IRL_ALGORITHMS = dict()
-for reg in [0, 1e-1, 1]:
+for reg, scale in itertools.product([0, 1e-1, 1], [1, 2]):
     fn = functools.partial(irl.tabular_maxent.maxent_population_irl,
                            discount=0.99,
+                           demean=False,
+                           common_scale=scale,
                            individual_reg=reg)
-    MY_IRL_ALGORITHMS['max_ent_population_reg{}'.format(reg)] = fn
-MY_IRL_ALGORITHMS['max_ent_population'] = MY_IRL_ALGORITHMS['max_ent_population_reg0']
+    MY_IRL_ALGORITHMS['mep_orig_scale{}_reg{}'.format(scale, reg)] = fn
+MY_IRL_ALGORITHMS['mep_orig'] = MY_IRL_ALGORITHMS['mep_orig_scale1_reg0']
+MY_IRL_ALGORITHMS['mep_demean'] = functools.partial(irl.tabular_maxent.maxent_population_irl,
+                                                    discount=0.99)
 
 IRL_ALGORITHMS = dict()
 IRL_ALGORITHMS.update(MY_IRL_ALGORITHMS)
 for name, algo in TRADITIONAL_IRL_ALGORITHMS.items():
-    IRL_ALGORITHMS[name + '_single'] = traditional_to_single(algo)
-    IRL_ALGORITHMS[name + '_concat'] = traditional_to_concat(algo)
+    IRL_ALGORITHMS[name + 's'] = traditional_to_single(algo)
+    IRL_ALGORITHMS[name + 'c'] = traditional_to_concat(algo)
