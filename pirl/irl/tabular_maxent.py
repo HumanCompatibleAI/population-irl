@@ -29,7 +29,9 @@ def policy_counts(transition, initial_states, reward, horizon, discount):
     """Corresponds to Algorithm 1 of Ziebart et al (2008)."""
     nS = initial_states.shape[0]
     logsc = np.zeros(nS)  # TODO: terminal states only?
-    logt = np.nan_to_num(np.log(transition))
+    with np.warnings.catch_warnings():
+        np.warnings.filterwarnings('ignore', 'divide by zero encountered in log')
+        logt = np.nan_to_num(np.log(transition))
     for i in range(horizon):
         x = logt + reward.reshape(nS, 1, 1) + logsc.reshape(1, 1, nS)
         logac = sp_lse(x, axis=2)
