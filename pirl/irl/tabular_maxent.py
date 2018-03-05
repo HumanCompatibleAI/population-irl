@@ -6,6 +6,8 @@ described in the paper:
   - We use Adam rather than exponentiated gradient descent.
 """
 
+import functools
+
 import numpy as np
 from scipy.special import logsumexp as sp_lse
 import torch
@@ -49,8 +51,9 @@ def policy_counts(transition, initial_states, reward, horizon, discount):
         renorm = (1 - discount ** (horizon + 1)) / (1 - discount)
     return np.sum(counts, axis=1) / renorm
 
+default_optimizer = functools.partial(torch.optim.SGD, lr=1e-2)
 
-def maxent_irl(mdp, trajectories, discount, learning_rate=1e-2, num_iter=100):
+def maxent_irl(mdp, trajectories, discount, optimizer=None, num_iter=100):
     """
     Args:
         - mdp(TabularMdpEnv): MDP trajectories were drawn from.
@@ -62,6 +65,8 @@ def maxent_irl(mdp, trajectories, discount, learning_rate=1e-2, num_iter=100):
             final state).
         - discount(float): between 0 and 1.
             Should match that of the agent generating the trajectories.
+        - optimizer(callable): a callable returning a torch.optim object.
+            The callable is called with an iterable of parameters to optimize.
         - learning_rate(float): for Adam optimizer.
         - num_iter(int): number of iterations of optimization process.
 
@@ -76,7 +81,9 @@ def maxent_irl(mdp, trajectories, discount, learning_rate=1e-2, num_iter=100):
 
     demo_counts = visitation_counts(nS, trajectories, discount)
     reward = Variable(torch.zeros(nS), requires_grad=True)
-    optimizer = torch.optim.Adam([reward], lr=learning_rate)
+    if optimizer is None:
+        optimizer = default_optimizer
+    optimizer = optimizer([reward])
     ec_history = []
     grad_history = []
     for i in range(num_iter):
@@ -99,7 +106,7 @@ def maxent_irl(mdp, trajectories, discount, learning_rate=1e-2, num_iter=100):
 
 def maxent_population_irl(mdps, trajectories, discount,
                           individual_reg=1e-2, common_scale=1, demean=True,
-                          learning_rate=1e-2, num_iter=100):
+                          optimizer=None, num_iter=100):
     """
     Args:
         - mdp(dict<TabularMdpEnv>): MDPs trajectories were drawn from.
@@ -118,7 +125,8 @@ def maxent_population_irl(mdps, trajectories, discount,
         - demean(bool): demean the gradient.
         - discount(float): between 0 and 1.
             Should match that of the agent generating the trajectories.
-        - learning_rate(float): for Adam optimizer.
+        - optimizer(callable): a callable returning a torch.optim object.
+            The callable is called with an iterable of parameters to optimize.
         - num_iter(int): number of iterations of optimization process.
 
     Returns (reward, info) where:
@@ -152,7 +160,9 @@ def maxent_population_irl(mdps, trajectories, discount,
         horizons[name] = max([len(states) for states, actions in trajectory])
         demo_counts[name] = visitation_counts(nS, trajectory, discount)
 
-    optimizer = torch.optim.Adam(rewards.values(), lr=learning_rate/2)
+    if optimizer is None:
+        optimizer = default_optimizer
+    optimizer = optimizer(rewards.values())
     ec_history = {}
     grad_history = []
     for i in range(num_iter):
@@ -167,8 +177,8 @@ def maxent_population_irl(mdps, trajectories, discount,
                                             discount)
             grads[name] = expected_counts - demo_counts[name]
             ec_history.setdefault(name, []).append(expected_counts)
-        common_grad = np.mean(list(grads.values()), axis=0) * common_scale
-        rewards['common'].grad = Variable(torch.Tensor(common_grad))
+        common_grad = np.mean(list(grads.values()), axis=0)
+        rewards['common'].grad = Variable(torch.Tensor(common_grad)) * common_scale
 
         if demean:
             grads = {k: g - common_grad for k, g in grads.items()}
