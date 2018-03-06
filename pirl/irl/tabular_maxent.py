@@ -13,6 +13,7 @@ from scipy.special import logsumexp as sp_lse
 import torch
 from torch.autograd import Variable
 
+from pirl.agents import tabular
 from pirl.utils import getattr_unwrapped
 
 #TODO: fully torchize?
@@ -28,23 +29,19 @@ def visitation_counts(nS, trajectories, discount):
     return counts / discounted_steps
 
 def policy_counts(transition, initial_states, reward, horizon, discount):
-    """Corresponds to Algorithm 1 of Ziebart et al (2008)."""
+    """First-half corresponds to algorithm 9.1 of Ziebart (2010);
+       second-half to algorithm 9.3."""
     nS = initial_states.shape[0]
-    logsc = np.zeros(nS)  # TODO: terminal states only?
-    with np.warnings.catch_warnings():
-        np.warnings.filterwarnings('ignore', 'divide by zero encountered in log')
-        logt = np.nan_to_num(np.log(transition))
-    for i in range(horizon):
-        x = logt + reward.reshape(nS, 1, 1) + logsc.reshape(1, 1, nS)
-        logac = sp_lse(x, axis=2)
-        logsc = sp_lse(logac, axis=1)
-    action_counts = np.exp(logac - logsc.reshape(nS, 1))
+    res = tabular.value_iteration(transition, reward,
+                                  soft=True, max_iterations=horizon)
+    action_counts, _, _, _ = res
 
     # Forward pass
     counts = np.zeros((nS, horizon + 1))
     counts[:, 0] = initial_states
     for i in range(1, horizon + 1):
-        counts[:, i] = np.einsum('i,ij,ijk->k', counts[:, i-1], action_counts, transition) * discount
+        counts[:, i] = np.einsum('i,ij,ijk->k', counts[:, i-1],
+                                 action_counts, transition) * discount
     if discount == 1:
         renorm = horizon + 1
     else:
@@ -53,7 +50,7 @@ def policy_counts(transition, initial_states, reward, horizon, discount):
 
 default_optimizer = functools.partial(torch.optim.SGD, lr=1e-2)
 
-def maxent_irl(mdp, trajectories, discount, optimizer=None, num_iter=100):
+def maxent_irl(mdp, trajectories, discount, optimizer=None, num_iter=500):
     """
     Args:
         - mdp(TabularMdpEnv): MDP trajectories were drawn from.
@@ -106,7 +103,7 @@ def maxent_irl(mdp, trajectories, discount, optimizer=None, num_iter=100):
 
 def maxent_population_irl(mdps, trajectories, discount,
                           individual_reg=1e-2, common_scale=1, demean=True,
-                          optimizer=None, num_iter=100):
+                          optimizer=None, num_iter=500):
     """
     Args:
         - mdp(dict<TabularMdpEnv>): MDPs trajectories were drawn from.
@@ -165,6 +162,7 @@ def maxent_population_irl(mdps, trajectories, discount,
     optimizer = optimizer(rewards.values())
     ec_history = {}
     grad_history = []
+    reward_history = []
     for i in range(num_iter):
         optimizer.zero_grad()
         grads = {}
@@ -189,6 +187,7 @@ def maxent_population_irl(mdps, trajectories, discount,
             rewards[name].grad = Variable(torch.Tensor(g))
 
         grad_history.append({k: v.grad for k, v in rewards.items()})
+        reward_history.append(rewards)
         optimizer.step()
 
     res = {k: (v + rewards['common']).data.numpy()
@@ -198,6 +197,7 @@ def maxent_population_irl(mdps, trajectories, discount,
         'demo_counts': demo_counts,
         'expected_counts': ec_history,
         'grads': grad_history,
+        'rewards': reward_history,
         'common_reward': rewards['common'].data.numpy(),
     }
     return res, info

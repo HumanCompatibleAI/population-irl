@@ -59,17 +59,21 @@ EXPERIMENTS = {
 }
 
 # RL Algorithms
-RL_ALGORITHMS = dict()
-# Values take form (gen_policy, compute_value).
-# Both functions take a gym.Env as their single argument.
-# compute_value moreover takes as the second argument a return value from
-# gen_policy, which may have been computed on an environment with a
-# different reward.
-for soft in [False, True]:
-    name = 'value_iteration_{}'.format('soft' if soft else 'hard')
-    gen_policy = lambda env: agents.tabular.value_iteration_env(env, soft=soft)[0]
-    compute_value = functools.partial(agents.tabular.value_of_policy, soft=soft)
-    RL_ALGORITHMS[name] = (gen_policy, compute_value)
+RL_ALGORITHMS = {
+    # Values take form (gen_policy, compute_value).
+    # Both functions take a gym.Env as their single argument.
+    # compute_value moreover takes as the second argument a return value from
+    # gen_policy, which may have been computed on an environment with a
+    # different reward.
+    'value_iteration_soft': (
+        lambda env: agents.tabular.value_iteration_env(env, soft=True)[0],
+        functools.partial(agents.tabular.value_of_policy, soft=True),
+    ),
+    'value_iteration_hard': (
+        lambda env: agents.tabular.value_iteration_env(env, soft=False)[0],
+        functools.partial(agents.tabular.value_of_policy, soft=False),
+    ),
+}
 
 # IRL Algorithms
 def traditional_to_single(f):

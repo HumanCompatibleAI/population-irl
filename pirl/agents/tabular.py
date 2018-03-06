@@ -63,8 +63,9 @@ def value_iteration(T, R, soft=False, policy=None,
         pi = (Q >= Q.max(1).reshape(nS, 1))
         # Problem: if Q has multiple values in the same row attaining maxima,
         # we'll get duplicates. Pick one.
-        pi = pi + np.arange(nS * nA).reshape(nS, nA)
+        pi = pi * np.arange(nS * nA).reshape(nS, nA)
         pi = (pi >= pi.max(1).reshape(nS, 1))
+        pi = pi * 1
     return pi, Q, V, delta
 
 def value_iteration_env(env, reward=None, **kwargs):
