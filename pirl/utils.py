@@ -20,8 +20,15 @@ def getattr_unwrapped(env, attr):
         else:
             return getattr_unwrapped(env.env, attr)
 
+
 def random_seed(seed=None):
     seed = seeding.create_seed(seed)
     np.random.seed(seed)
     torch.manual_seed(seed)
     torch.cuda.manual_seed(seed)
+
+
+def discrete_sample(prob, rng):
+    """Sample from discrete probability distribution, each row of prob
+       specifies class probabilities."""
+    return (np.cumsum(prob) > rng.rand()).argmax()

@@ -3,10 +3,7 @@ from gym.utils import seeding
 
 import numpy as np
 
-def discrete_sample(prob, rng):
-    """Sample from discrete probability distribution, each row of prob
-       specifies class probabilities."""
-    return (np.cumsum(prob) > rng.rand()).argmax()
+from pirl.utils import discrete_sample
 
 def _check_probability(x, axis, tol=1e-6):
     assert np.all(x >= 0)

@@ -2,6 +2,7 @@ import collections
 import logging
 
 import gym
+from gym.utils import seeding
 
 from pirl import utils
 from pirl.experiments import config
@@ -19,11 +20,9 @@ def make_irl_algo(algo):
     return config.IRL_ALGORITHMS[algo]
 
 
-def sample(env, policy):
-    #TODO: generalize. This is specialised to fully-observable MDPs
-    # and assumes policy is a deterministic mapping from states to actions.
-    # Could also use Monitor to log this -- although think it's cleaner
-    # to do it directly ourselves?
+def sample(env, policy, rng):
+    #TODO: generalize. This is specialised to fully-observable MDPs,
+    # with a stochastic policy matrix.
 
     states = []
     actions = []
@@ -33,7 +32,8 @@ def sample(env, policy):
 
     done = False
     while not done:
-        action = policy[state]
+        action_dist = policy[state]
+        action = utils.discrete_sample(action_dist, rng)
         state, reward, done, _ = env.step(action)
         actions.append(action)
         states.append(state)
@@ -41,8 +41,9 @@ def sample(env, policy):
     return states, actions
 
 
-def synthetic_data(env, policy, num_trajectories):
-    trajectories = [sample(env, policy) for _i in range(num_trajectories)]
+def synthetic_data(env, policy, num_trajectories, seed):
+    rng, _ = seeding.np_random(seed)
+    trajectories = [sample(env, policy, rng) for _i in range(num_trajectories)]
     return trajectories
 
 def slice_trajectories(trajectories, max_length):
@@ -108,7 +109,7 @@ def run_experiment(experiment, seed):
     logger.debug('%s: generating synthetic data: sampling', experiment)
     num_trajectories = sorted(cfg['num_trajectories'])
     trajectories = collections.OrderedDict(
-        (k, synthetic_data(e, policies[k], max(num_trajectories)))
+        (k, synthetic_data(e, policies[k], max(num_trajectories), seed))
         for k, e in envs.items()
     )
 

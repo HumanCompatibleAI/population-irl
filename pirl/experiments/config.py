@@ -1,6 +1,8 @@
 import functools
 import itertools
 
+import torch
+
 from pirl import agents, irl
 
 # Experiments
@@ -11,13 +13,13 @@ EXPERIMENTS = {
         #reward? This is closer to the semantic meaning we want to express,
         #but is awkward to go with Gym's abstraction.
         'environments': ['pirl/GridWorld-Simple-v0'],
-        'rl': 'value_iteration',
+        'rl': 'value_iteration_hard',
         'irl': ['mes', 'mep_orig'],
         'num_trajectories': [100, 10],
     },
     'dummy-test-deterministic': {
         'environments': ['pirl/GridWorld-Simple-Deterministic-v0'],
-        'rl': 'value_iteration',
+        'rl': 'value_iteration_hard',
         'irl': ['mes', 'mep_orig'],
         'num_trajectories': [100, 10],
     },
@@ -25,7 +27,7 @@ EXPERIMENTS = {
     'jungle': {
         'environments': ['pirl/GridWorld-Jungle-9x9-{}-v0'.format(k)
                          for k in ['Soda', 'Water', 'Liquid']],
-        'rl': 'value_iteration',
+        'rl': 'value_iteration_hard',
         'irl': [
             'mep_orig_scale1_reg0',
             'mep_orig_scale1_reg0.1',
@@ -41,7 +43,7 @@ EXPERIMENTS = {
     'jungle-small': {
         'environments': ['pirl/GridWorld-Jungle-4x4-{}-v0'.format(k)
                          for k in ['Soda', 'Water', 'Liquid']],
-        'rl': 'value_iteration',
+        'rl': 'value_iteration_hard',
         'irl': [
             'mep_orig_scale1_reg0',
             'mep_orig_scale1_reg0.1',
@@ -57,15 +59,17 @@ EXPERIMENTS = {
 }
 
 # RL Algorithms
-RL_ALGORITHMS = {
-    # Values take form (gen_policy, compute_value).
-    # Both functions take a gym.Env as their single argument.
-    # compute_value moreover takes as the second argument a return value from
-    # gen_policy, which may have been computed on an environment with a
-    # different reward.
-    'value_iteration': (lambda env: agents.tabular.value_iteration(env)[0],
-                        agents.tabular.value_of_policy)
-}
+RL_ALGORITHMS = dict()
+# Values take form (gen_policy, compute_value).
+# Both functions take a gym.Env as their single argument.
+# compute_value moreover takes as the second argument a return value from
+# gen_policy, which may have been computed on an environment with a
+# different reward.
+for soft in [False, True]:
+    name = 'value_iteration_{}'.format('soft' if soft else 'hard')
+    gen_policy = lambda env: agents.tabular.value_iteration_env(env, soft=soft)[0]
+    compute_value = functools.partial(agents.tabular.value_of_policy, soft=soft)
+    RL_ALGORITHMS[name] = (gen_policy, compute_value)
 
 # IRL Algorithms
 def traditional_to_single(f):
@@ -109,6 +113,12 @@ for reg, scale in itertools.product([0, 1e-1, 1], [1, 2]):
 MY_IRL_ALGORITHMS['mep_orig'] = MY_IRL_ALGORITHMS['mep_orig_scale1_reg0']
 MY_IRL_ALGORITHMS['mep_demean'] = functools.partial(irl.tabular_maxent.maxent_population_irl,
                                                     discount=0.99)
+
+adam_optim = functools.partial(torch.optim.Adam, lr=1e-2)
+MY_IRL_ALGORITHMS['mep_orig_adam'] = functools.partial(irl.tabular_maxent.maxent_population_irl,
+                                                       discount=0.99,
+                                                       demean=False,
+                                                       optimizer=adam_optim)
 
 IRL_ALGORITHMS = dict()
 IRL_ALGORITHMS.update(MY_IRL_ALGORITHMS)
