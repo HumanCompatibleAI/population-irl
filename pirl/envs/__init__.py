@@ -53,10 +53,10 @@ jungle_topology = {
         'AAAX  S  ',
     ],
     '4x4': [
-        'APLW',
-        'PPP ',
-        'PPP ',
-        'APLS',
+        'ARLW',
+        'RRR ',
+        'RRR ',
+        'ARLS',
     ],
 }
 jungle_default_reward = -1
