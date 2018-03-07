@@ -48,9 +48,13 @@ def policy_counts(transition, initial_states, reward, horizon, discount):
         renorm = (1 - discount ** (horizon + 1)) / (1 - discount)
     return np.sum(counts, axis=1) / renorm
 
-default_optimizer = functools.partial(torch.optim.SGD, lr=1e-2)
+default_optimizer = functools.partial(torch.optim.SGD, lr=1e-1)
+default_scheduler = functools.partial(torch.optim.lr_scheduler.ExponentialLR,
+                                      gamma=0.995)
 
-def maxent_irl(mdp, trajectories, discount, optimizer=None, num_iter=500):
+
+def maxent_irl(mdp, trajectories, discount,
+               optimizer=None, scheduler=None, num_iter=500):
     """
     Args:
         - mdp(TabularMdpEnv): MDP trajectories were drawn from.
@@ -64,6 +68,8 @@ def maxent_irl(mdp, trajectories, discount, optimizer=None, num_iter=500):
             Should match that of the agent generating the trajectories.
         - optimizer(callable): a callable returning a torch.optim object.
             The callable is called with an iterable of parameters to optimize.
+        - scheduler(callable): a callable returning a torch.optim.lr_scheduler.
+            The callable is called with a torch.optim optimizer object.
         - learning_rate(float): for Adam optimizer.
         - num_iter(int): number of iterations of optimization process.
 
@@ -80,7 +86,10 @@ def maxent_irl(mdp, trajectories, discount, optimizer=None, num_iter=500):
     reward = Variable(torch.zeros(nS), requires_grad=True)
     if optimizer is None:
         optimizer = default_optimizer
+    if scheduler is None:
+        scheduler = default_scheduler
     optimizer = optimizer([reward])
+    scheduler = scheduler(optimizer)
     ec_history = []
     grad_history = []
     for i in range(num_iter):
@@ -89,6 +98,7 @@ def maxent_irl(mdp, trajectories, discount, optimizer=None, num_iter=500):
         optimizer.zero_grad()
         reward.grad = Variable(torch.Tensor(expected_counts - demo_counts))
         optimizer.step()
+        scheduler.step()
 
         ec_history.append(expected_counts)
         grad_history.append(reward.grad.data.numpy())
@@ -103,7 +113,7 @@ def maxent_irl(mdp, trajectories, discount, optimizer=None, num_iter=500):
 
 def maxent_population_irl(mdps, trajectories, discount,
                           individual_reg=1e-2, common_scale=1, demean=True,
-                          optimizer=None, num_iter=500):
+                          optimizer=None, scheduler=None, num_iter=500):
     """
     Args:
         - mdp(dict<TabularMdpEnv>): MDPs trajectories were drawn from.
@@ -124,6 +134,8 @@ def maxent_population_irl(mdps, trajectories, discount,
             Should match that of the agent generating the trajectories.
         - optimizer(callable): a callable returning a torch.optim object.
             The callable is called with an iterable of parameters to optimize.
+        - scheduler(callable): a callable returning a torch.optim.lr_scheduler.
+            The callable is called with a torch.optim optimizer object.
         - num_iter(int): number of iterations of optimization process.
 
     Returns (reward, info) where:
@@ -159,7 +171,10 @@ def maxent_population_irl(mdps, trajectories, discount,
 
     if optimizer is None:
         optimizer = default_optimizer
+    if scheduler is None:
+        scheduler = default_scheduler
     optimizer = optimizer(rewards.values())
+    scheduler = scheduler(optimizer)
     ec_history = {}
     grad_history = []
     reward_history = []
@@ -189,6 +204,7 @@ def maxent_population_irl(mdps, trajectories, discount,
         grad_history.append({k: v.grad for k, v in rewards.items()})
         reward_history.append(rewards)
         optimizer.step()
+        scheduler.step()
 
     res = {k: (v + rewards['common']).data.numpy()
            for k, v in rewards.items() if k != 'common'}
