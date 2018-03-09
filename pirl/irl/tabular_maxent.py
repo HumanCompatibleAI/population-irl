@@ -80,11 +80,14 @@ def policy_loss(policy, trajectories):
     return loss
 
 default_optimizer = functools.partial(torch.optim.Adam, lr=1e-1)
-default_scheduler = functools.partial(torch.optim.lr_scheduler.MultiStepLR,
-                                      milestones=[100], gamma=0.1)
-
-def irl(mdp, trajectories, discount, planner=max_causal_ent_policy,
-        optimizer=None, scheduler=None, num_iter=2000, log_every=200):
+default_scheduler = {
+    max_ent_policy: functools.partial(
+        torch.optim.lr_scheduler.ExponentialLR, gamma=1.0
+    ),
+    max_causal_ent_policy: functools.partial(
+        torch.optim.lr_scheduler.ExponentialLR, gamma=0.999
+    ),
+}
     """
     Args:
         - mdp(TabularMdpEnv): MDP trajectories were drawn from.
@@ -116,7 +119,7 @@ def irl(mdp, trajectories, discount, planner=max_causal_ent_policy,
     if optimizer is None:
         optimizer = default_optimizer
     if scheduler is None:
-        scheduler = default_scheduler
+        scheduler = default_scheduler[planner]
     optimizer = optimizer([reward])
     scheduler = scheduler(optimizer)
 
