@@ -88,15 +88,23 @@ default_scheduler = {
         torch.optim.lr_scheduler.ExponentialLR, gamma=0.999
     ),
 }
+
+def irl(mdp, trajectories, discount, demo_counts=None, horizon=None,
+        planner=max_causal_ent_policy, optimizer=None, scheduler=None,
+        num_iter=5000, log_every=200):
     """
     Args:
         - mdp(TabularMdpEnv): MDP trajectories were drawn from.
-        - trajectories(list): observed trajectories.
+        - trajectories(list): expert trajectories; exclusive with demo_counts.
             List containing one (states, actions) pair for each trajectory,
             where states and actions are lists containing all visited
             states/actions in that trajectory.
         - discount(float): between 0 and 1.
             Should match that of the agent generating the trajectories.
+        - demo_counts(array): expert visitation frequency; exclusive with trajectories.
+            The expected visitation frequency of the optimal policy.
+            Must supply horizon with this argument.
+        - horizon(int): optional, must be supplied if demo_counts used.
         - planner(callable): max_ent_policy or max_causal_ent_policy.
         - optimizer(callable): a callable returning a torch.optim object.
             The callable is called with an iterable of parameters to optimize.
@@ -112,9 +120,12 @@ default_scheduler = {
     transition = getattr_unwrapped(mdp, 'transition')
     initial_states = getattr_unwrapped(mdp, 'initial_states')
     nS, _, _ = transition.shape
-    horizon = max([len(states) for states, actions in trajectories])
 
-    demo_counts = empirical_counts(nS, trajectories, discount)
+    assert sum([trajectories is None, demo_counts is None]) == 1
+    if trajectories is not None:
+        demo_counts = empirical_counts(nS, trajectories, discount)
+        horizon = max([len(states) for states, actions in trajectories])
+
     reward = Variable(torch.zeros(nS), requires_grad=True)
     if optimizer is None:
         optimizer = default_optimizer
@@ -132,7 +143,7 @@ default_scheduler = {
         optimizer.step()
         scheduler.step()
 
-        if i % log_every == 0:
+        if trajectories is not None and i % log_every == 0:
             # loss is expensive to compute
             loss = policy_loss(pol, trajectories)
             it.record('loss', loss)
@@ -146,7 +157,7 @@ default_scheduler = {
 
 def population_irl(mdps, trajectories, discount, planner=max_causal_ent_policy,
                    individual_reg=1e-2, common_scale=1, demean=True,
-                   optimizer=None, scheduler=None, num_iter=2000, log_every=200):
+                   optimizer=None, scheduler=None, num_iter=5000, log_every=200):
     """
     Args:
         - mdp(dict<TabularMdpEnv>): MDPs trajectories were drawn from.

@@ -72,11 +72,12 @@ def q_iteration_policy(T, R, H, discount):
 
 def env_wrapper(f):
     @functools.wraps(f)
-    def helper(env, *args, **kwargs):
+    def helper(env, reward=None, *args, **kwargs):
         T = getattr_unwrapped(env, 'transition')
-        R = getattr_unwrapped(env, 'reward')
+        if reward is None:
+            reward = getattr_unwrapped(env, 'reward')
         H = getattr_unwrapped(env, '_max_episode_steps')
-        return f(T, R, H, *args, **kwargs)
+        return f(T, reward, H, *args, **kwargs)
     return helper
 
 def value_of_policy(env, policy, discount):

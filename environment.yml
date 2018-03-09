@@ -4,9 +4,12 @@ channels:
 - pytorch
 - defaults
 dependencies:
+- apipkg=1.4=py36he372753_0
+- attrs=17.4.0=py36_0
 - ca-certificates=2017.08.26=h1d4fec5_0
 - certifi=2018.1.18=py36_0
 - cffi=1.11.4=py36h9745a5d_0
+- execnet=1.5.0=py36hcd6bdcb_0
 - freetype=2.8=hab7d2ae_1
 - intel-openmp=2018.0.0=hc7b2577_8
 - jpeg=9b=h024ee3a_2
@@ -24,7 +27,12 @@ dependencies:
 - openssl=1.0.2n=hb7f436b_0
 - pillow=5.0.0=py36h3deb7b8_0
 - pip=9.0.1=py36h6c6f9ce_4
+- pluggy=0.6.0=py36hb689045_0
+- py=1.5.2=py36h29bf505_0
 - pycparser=2.18=py36hf9f622e_1
+- pytest=3.4.2=py36_0
+- pytest-forked=0.2=py36h09594ab_0
+- pytest-xdist=1.22.1=py36_0
 - python=3.6.4=hc3d631a_1
 - readline=7.0=ha6073c6_4
 - scipy=1.0.0=py36hbf646e7_0
