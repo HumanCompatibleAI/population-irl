@@ -75,9 +75,8 @@ def expected_counts(policy, transition, initial_states, horizon, discount):
 def policy_loss(policy, trajectories):
     loss = 0
     log_policy = np.log(policy)
-    for trajectory in trajectories:
-        for state, action in zip(*trajectory):
-            loss += log_policy[state, action]
+    for states, actions in trajectories:
+        loss += np.sum(log_policy[states, actions])
     return loss
 
 default_optimizer = functools.partial(torch.optim.Adam, lr=1e-2)
