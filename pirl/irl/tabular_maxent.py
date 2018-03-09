@@ -79,9 +79,9 @@ def policy_loss(policy, trajectories):
         loss += np.sum(log_policy[states, actions])
     return loss
 
-default_optimizer = functools.partial(torch.optim.Adam, lr=1e-2)
-default_scheduler = functools.partial(torch.optim.lr_scheduler.ExponentialLR,
-                                      gamma=0.995)
+default_optimizer = functools.partial(torch.optim.Adam, lr=1e-1)
+default_scheduler = functools.partial(torch.optim.lr_scheduler.MultiStepLR,
+                                      milestones=[100], gamma=0.1)
 
 def irl(mdp, trajectories, discount, planner=max_causal_ent_policy,
         optimizer=None, scheduler=None, num_iter=2000):
