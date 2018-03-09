@@ -28,15 +28,14 @@ def sample(env, policy, rng):
     actions = []
 
     state = env.reset()
-    states.append(state)
 
     done = False
     while not done:
+        states.append(state)
         action_dist = policy[state]
         action = utils.discrete_sample(action_dist, rng)
-        state, reward, done, _ = env.step(action)
         actions.append(action)
-        states.append(state)
+        state, reward, done, _ = env.step(action)
 
     return states, actions
 
