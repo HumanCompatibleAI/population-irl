@@ -13,7 +13,7 @@ from scipy.special import logsumexp as sp_lse
 import torch
 from torch.autograd import Variable
 
-from pirl.utils import getattr_unwrapped
+from pirl.utils import getattr_unwrapped, TrainingIterator
 
 #TODO: fully torchize?
 
@@ -84,16 +84,14 @@ default_scheduler = functools.partial(torch.optim.lr_scheduler.MultiStepLR,
                                       milestones=[100], gamma=0.1)
 
 def irl(mdp, trajectories, discount, planner=max_causal_ent_policy,
-        optimizer=None, scheduler=None, num_iter=2000):
+        optimizer=None, scheduler=None, num_iter=2000, log_every=200):
     """
     Args:
         - mdp(TabularMdpEnv): MDP trajectories were drawn from.
         - trajectories(list): observed trajectories.
             List containing one (states, actions) pair for each trajectory,
             where states and actions are lists containing all visited
-            states/actions in that trajectory. The length of states should be
-            one greater than that of actions (since we include the start and
-            final state).
+            states/actions in that trajectory.
         - discount(float): between 0 and 1.
             Should match that of the agent generating the trajectories.
         - planner(callable): max_ent_policy or max_causal_ent_policy.
@@ -122,11 +120,8 @@ def irl(mdp, trajectories, discount, planner=max_causal_ent_policy,
     optimizer = optimizer([reward])
     scheduler = scheduler(optimizer)
 
-    loss_history = []
-    ec_history = []
-    grad_history = []
-    reward_history = []
-    for i in range(num_iter):
+    it = TrainingIterator(num_iter, 'irl', heartbeat_iters=100)
+    for i in it:
         pol = planner(transition, reward.data.numpy(), horizon, discount)
         ec = expected_counts(pol, transition, initial_states, horizon, discount)
         optimizer.zero_grad()
@@ -134,26 +129,21 @@ def irl(mdp, trajectories, discount, planner=max_causal_ent_policy,
         optimizer.step()
         scheduler.step()
 
-        loss = policy_loss(pol, trajectories)
-        loss_history.append(loss)
-        ec_history.append(ec)
-        #TODO: only every n iterations? factor this out?
-        grad_history.append(reward.grad.data.numpy())
-        reward_history.append(reward.data.numpy().copy())
+        if i % log_every == 0:
+            # loss is expensive to compute
+            loss = policy_loss(pol, trajectories)
+            it.record('loss', loss)
 
-    info = {
-        'loss': loss_history,
-        'demo_counts': demo_counts,
-        'expected_counts': ec_history,
-        'grads': grad_history,
-        'rewards': reward_history,
-    }
-    return reward.data.numpy(), info
+        it.record('expected_counts', ec)
+        it.record('grads', reward.grad.data.numpy())
+        it.record('rewards', reward.data.numpy().copy())
+
+    return reward.data.numpy(), it.vals
 
 
 def population_irl(mdps, trajectories, discount, planner=max_causal_ent_policy,
-                          individual_reg=1e-2, common_scale=1, demean=True,
-                          optimizer=None, scheduler=None, num_iter=2000):
+                   individual_reg=1e-2, common_scale=1, demean=True,
+                   optimizer=None, scheduler=None, num_iter=2000, log_every=200):
     """
     Args:
         - mdp(dict<TabularMdpEnv>): MDPs trajectories were drawn from.
@@ -163,9 +153,7 @@ def population_irl(mdps, trajectories, discount, planner=max_causal_ent_policy,
         - trajectories(dict<list>): observed trajectories.
             Dictionary of lists containing one (states, actions) pair for each
             trajectory, where states and actions are lists containing all
-            visited states/actions in that trajectory. The length of states
-            should be one greater than that of actions (since we include the
-            start and final state).
+            visited states/actions in that trajectory.
         - discount(float): between 0 and 1.
             Should match that of the agent generating the trajectories.
         - planner(callable): max_ent_policy or max_causal_ent_policy.
@@ -216,25 +204,24 @@ def population_irl(mdps, trajectories, discount, planner=max_causal_ent_policy,
         scheduler = default_scheduler
     optimizer = optimizer(rewards.values())
     scheduler = scheduler(optimizer)
-    ec_history = {}
-    grad_history = []
-    reward_history = []
-    for i in range(num_iter):
+    it = TrainingIterator(num_iter, 'population_irl', heartbeat_iters=100)
+    for i in it:
         optimizer.zero_grad()
-        grads = {}
-        for name in mdps.keys():
-            effective_reward = rewards[name] + rewards['common'] * common_scale
-            pol = planner(transitions[name],
-                          effective_reward.data.numpy(),
-                          horizons[name],
-                          discount)
-            ec = expected_counts(pol,
-                                 transitions[name],
-                                 initial_states[name],
-                                 horizons[name],
-                                 discount)
-            grads[name] = ec - demo_counts[name]
-            ec_history.setdefault(name, []).append(ec)
+        effective_rewards = {name: r + rewards['common'] * common_scale
+                             for name, r in rewards.items()
+                             if name != 'common'}
+        pols = {name: planner(transitions[name],
+                              effective_reward.data.numpy(),
+                              horizons[name],
+                              discount)
+                for name, effective_reward in effective_rewards.items()}
+        ecs = {name: expected_counts(pol,
+                                     transitions[name],
+                                     initial_states[name],
+                                     horizons[name],
+                                     discount)
+               for name, pol in pols.items()}
+        grads = {name: ec - demo_counts[name] for name, ec in ecs.items()}
         common_grad = np.mean(list(grads.values()), axis=0)
         rewards['common'].grad = Variable(torch.Tensor(common_grad))
 
@@ -246,19 +233,22 @@ def population_irl(mdps, trajectories, discount, planner=max_causal_ent_policy,
             g += individual_reg * rewards[name].data.numpy()
             rewards[name].grad = Variable(torch.Tensor(g))
 
-        grad_history.append({k: v.grad for k, v in rewards.items()})
-        reward_history.append(rewards)
         optimizer.step()
         scheduler.step()
+
+        if i % log_every == 0:
+            # loss is expensive to compute
+            loss = {name: policy_loss(pol, trajectories[name])
+                    for name, pol in pols.items()}
+            it.record('loss', loss)
+
+        it.record('expected_counts', ecs)
+        it.record('grads', {k: v.grad for k, v in rewards.items()})
+        it.record('rewards', {k: v.data.numpy().copy() for k, v in rewards.items()})
 
     res = {k: (v + rewards['common']).data.numpy()
            for k, v in rewards.items() if k != 'common'}
 
-    info = {
-        'demo_counts': demo_counts,
-        'expected_counts': ec_history,
-        'grads': grad_history,
-        'rewards': reward_history,
-        'common_reward': rewards['common'].data.numpy(),
-    }
-    return res, info
+    info = dict(it.vals)
+    info['common_reward'] = rewards['common'].data.numpy()
+    return res, it.vals
