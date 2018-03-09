@@ -13,12 +13,11 @@ from scipy.special import logsumexp as sp_lse
 import torch
 from torch.autograd import Variable
 
-from pirl.agents import tabular
 from pirl.utils import getattr_unwrapped
 
 #TODO: fully torchize?
 
-def visitation_counts(nS, trajectories, discount):
+def empirical_counts(nS, trajectories, discount):
     """Compute empirical state-action feature counts from trajectories."""
     counts = np.zeros((nS, ))
     discounted_steps = 0
@@ -28,33 +27,65 @@ def visitation_counts(nS, trajectories, discount):
         discounted_steps += np.sum(incr)
     return counts / discounted_steps
 
-def policy_counts(transition, initial_states, reward, horizon, discount):
-    """First-half corresponds to algorithm 9.1 of Ziebart (2010);
-       second-half to algorithm 9.3."""
-    nS = initial_states.shape[0]
-    res = tabular.value_iteration(transition, reward,
-                                  soft=True, max_iterations=horizon)
-    action_counts, _, _, _ = res
+def max_ent_policy(transition, reward, horizon, discount):
+    """Backward pass of algorithm 1 of Ziebart (2008).
+       This corresponds to maximum entropy.
+       WARNING: You probably want to use max_causal_ent_policy instead.
+       See discussion in section 6.2.2 of Ziebart's PhD thesis (2010)."""
+    nS = transition.shape[0]
+    logsc = np.zeros(nS)  # TODO: terminal states only?
+    with np.warnings.catch_warnings():
+        np.warnings.filterwarnings('ignore', 'divide by zero encountered in log')
+        logt = np.nan_to_num(np.log(transition))
+    reward = reward.reshape(nS, 1, 1)
+    for i in range(horizon):
+        # Ziebart (2008) never describes how to handle discounting. This is a
+        # backward pass: so on the i'th iteration, we are computing the
+        # frequency a state/action is visited at the (horizon-i-1)'th position.
+        # So we should multiply reward by discount ** (horizon - i - 1).
+        cur_discount = discount ** (horizon - i - 1)
+        x = logt + (cur_discount * reward) + logsc.reshape(1, 1, nS)
+        logac = sp_lse(x, axis=2)
+        logsc = sp_lse(logac, axis=1)
+    return np.exp(logac - logsc.reshape(nS, 1))
 
-    # Forward pass
+def max_causal_ent_policy(transition, reward, horizon, discount):
+    """Soft Q-iteration, theorem 6.8 of Ziebart's PhD thesis (2010)."""
+    nS, nA, _ = transition.shape
+    V = np.zeros(nS)
+    for i in range(horizon):
+        Q = reward.reshape(nS, 1) + discount * (transition * V).sum(2)
+        V = sp_lse(Q, axis=1)
+    return np.exp(Q - V.reshape(nS, 1))
+
+def expected_counts(policy, transition, initial_states, horizon, discount):
+    """Forward pass of algorithm 1 of Ziebart (2008)."""
+    nS = transition.shape[0]
     counts = np.zeros((nS, horizon + 1))
     counts[:, 0] = initial_states
     for i in range(1, horizon + 1):
         counts[:, i] = np.einsum('i,ij,ijk->k', counts[:, i-1],
-                                 action_counts, transition) * discount
+                                 policy, transition) * discount
     if discount == 1:
         renorm = horizon + 1
     else:
         renorm = (1 - discount ** (horizon + 1)) / (1 - discount)
     return np.sum(counts, axis=1) / renorm
 
-default_optimizer = functools.partial(torch.optim.SGD, lr=1e-1)
+def policy_loss(policy, trajectories):
+    loss = 0
+    log_policy = np.log(policy)
+    for trajectory in trajectories:
+        for state, action in zip(*trajectory):
+            loss += log_policy[state, action]
+    return loss
+
+default_optimizer = functools.partial(torch.optim.Adam, lr=1e-2)
 default_scheduler = functools.partial(torch.optim.lr_scheduler.ExponentialLR,
                                       gamma=0.995)
 
-
-def maxent_irl(mdp, trajectories, discount,
-               optimizer=None, scheduler=None, num_iter=500):
+def irl(mdp, trajectories, discount, planner=max_causal_ent_policy,
+        optimizer=None, scheduler=None, num_iter=2000):
     """
     Args:
         - mdp(TabularMdpEnv): MDP trajectories were drawn from.
@@ -66,6 +97,7 @@ def maxent_irl(mdp, trajectories, discount,
             final state).
         - discount(float): between 0 and 1.
             Should match that of the agent generating the trajectories.
+        - planner(callable): max_ent_policy or max_causal_ent_policy.
         - optimizer(callable): a callable returning a torch.optim object.
             The callable is called with an iterable of parameters to optimize.
         - scheduler(callable): a callable returning a torch.optim.lr_scheduler.
@@ -82,7 +114,7 @@ def maxent_irl(mdp, trajectories, discount,
     nS, _, _ = transition.shape
     horizon = max([len(states) for states, actions in trajectories])
 
-    demo_counts = visitation_counts(nS, trajectories, discount)
+    demo_counts = empirical_counts(nS, trajectories, discount)
     reward = Variable(torch.zeros(nS), requires_grad=True)
     if optimizer is None:
         optimizer = default_optimizer
@@ -90,30 +122,39 @@ def maxent_irl(mdp, trajectories, discount,
         scheduler = default_scheduler
     optimizer = optimizer([reward])
     scheduler = scheduler(optimizer)
+
+    loss_history = []
     ec_history = []
     grad_history = []
+    reward_history = []
     for i in range(num_iter):
-        expected_counts = policy_counts(transition, initial_states,
-                                        reward.data.numpy(), horizon, discount)
+        pol = planner(transition, reward.data.numpy(), horizon, discount)
+        ec = expected_counts(pol, transition, initial_states, horizon, discount)
         optimizer.zero_grad()
-        reward.grad = Variable(torch.Tensor(expected_counts - demo_counts))
+        reward.grad = Variable(torch.Tensor(ec - demo_counts))
         optimizer.step()
         scheduler.step()
 
-        ec_history.append(expected_counts)
+        loss = policy_loss(pol, trajectories)
+        loss_history.append(loss)
+        ec_history.append(ec)
+        #TODO: only every n iterations? factor this out?
         grad_history.append(reward.grad.data.numpy())
+        reward_history.append(reward.data.numpy().copy())
 
     info = {
+        'loss': loss_history,
         'demo_counts': demo_counts,
         'expected_counts': ec_history,
-        'grads': grad_history
+        'grads': grad_history,
+        'rewards': reward_history,
     }
     return reward.data.numpy(), info
 
 
-def maxent_population_irl(mdps, trajectories, discount,
+def population_irl(mdps, trajectories, discount, planner=max_causal_ent_policy,
                           individual_reg=1e-2, common_scale=1, demean=True,
-                          optimizer=None, scheduler=None, num_iter=500):
+                          optimizer=None, scheduler=None, num_iter=2000):
     """
     Args:
         - mdp(dict<TabularMdpEnv>): MDPs trajectories were drawn from.
@@ -126,12 +167,13 @@ def maxent_population_irl(mdps, trajectories, discount,
             visited states/actions in that trajectory. The length of states
             should be one greater than that of actions (since we include the
             start and final state).
+        - discount(float): between 0 and 1.
+            Should match that of the agent generating the trajectories.
+        - planner(callable): max_ent_policy or max_causal_ent_policy.
         - individual_reg(float): regularization factor for per-agent reward.
             Penalty factor applied to the l_2 norm of per-agent reward matrices.
         - common_scale(float): scaling factor for common gradient update.
         - demean(bool): demean the gradient.
-        - discount(float): between 0 and 1.
-            Should match that of the agent generating the trajectories.
         - optimizer(callable): a callable returning a torch.optim object.
             The callable is called with an iterable of parameters to optimize.
         - scheduler(callable): a callable returning a torch.optim.lr_scheduler.
@@ -167,7 +209,7 @@ def maxent_population_irl(mdps, trajectories, discount,
     demo_counts = {}
     for name, trajectory in trajectories.items():
         horizons[name] = max([len(states) for states, actions in trajectory])
-        demo_counts[name] = visitation_counts(nS, trajectory, discount)
+        demo_counts[name] = empirical_counts(nS, trajectory, discount)
 
     if optimizer is None:
         optimizer = default_optimizer
@@ -182,16 +224,20 @@ def maxent_population_irl(mdps, trajectories, discount,
         optimizer.zero_grad()
         grads = {}
         for name in mdps.keys():
-            effective_reward = rewards[name] + rewards['common']
-            expected_counts = policy_counts(transitions[name],
-                                            initial_states[name],
-                                            effective_reward.data.numpy(),
-                                            horizons[name],
-                                            discount)
-            grads[name] = expected_counts - demo_counts[name]
-            ec_history.setdefault(name, []).append(expected_counts)
+            effective_reward = rewards[name] + rewards['common'] * common_scale
+            pol = planner(transitions[name],
+                          effective_reward.data.numpy(),
+                          horizons[name],
+                          discount)
+            ec = expected_counts(pol,
+                                 transitions[name],
+                                 initial_states[name],
+                                 horizons[name],
+                                 discount)
+            grads[name] = ec - demo_counts[name]
+            ec_history.setdefault(name, []).append(ec)
         common_grad = np.mean(list(grads.values()), axis=0)
-        rewards['common'].grad = Variable(torch.Tensor(common_grad)) * common_scale
+        rewards['common'].grad = Variable(torch.Tensor(common_grad))
 
         if demean:
             grads = {k: g - common_grad for k, g in grads.items()}

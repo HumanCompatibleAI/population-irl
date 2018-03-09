@@ -103,8 +103,9 @@ def run_experiment(experiment, seed):
 
     logger.debug('%s: generating synthetic data: training', experiment)
     gen_policy, compute_value = make_rl_algo(cfg['rl'])
+    discount = cfg['discount']
     policies = collections.OrderedDict(
-        (name, gen_policy(env)) for name, env in envs.items()
+        (name, gen_policy(env, discount=discount)) for name, env in envs.items()
     )
     logger.debug('%s: generating synthetic data: sampling', experiment)
     num_trajectories = sorted(cfg['num_trajectories'])
@@ -123,7 +124,7 @@ def run_experiment(experiment, seed):
         info[irl_name] = collections.OrderedDict()
         for n in num_trajectories:
             subset = slice_trajectories(trajectories, n)
-            r, extra = irl_algo(envs, subset)
+            r, extra = irl_algo(envs, subset, discount=discount)
             rewards[irl_name][n] = r
             info[irl_name][n] = extra
 
@@ -139,6 +140,8 @@ def run_experiment(experiment, seed):
                 logger.debug('%s: evaluating %s on %s with %d trajectories',
                              experiment, irl_name, env_name, n)
                 r = reward_by_env[env_name]
+                # TODO: alternately, we could pass the new reward directly
+                # to gen_policy as an override -- unsure which is cleaner?
                 wrapped_env = LearnedRewardWrapper(env, r)
                 reoptimized_policy = gen_policy(wrapped_env)
                 value = compute_value(env, reoptimized_policy)

@@ -4,22 +4,14 @@ import numpy as np
 
 from pirl.utils import getattr_unwrapped
 
-def softmax(Q):
-    nS, nA = Q.shape
-    Q = Q - np.max(Q)
-    probs = np.exp(Q)
-    return probs / np.sum(probs, axis=1).reshape(nS, 1)
-
-def value_iteration(T, R, soft=False, policy=None,
-                    discount=0.99, max_error=1e-3, max_iterations=1000):
+def q_iteration(transition, reward, horizon,
+                policy=None, discount=0.99, max_error=1e-3):
     """Performs value iteration on a finite-state MDP.
 
     Args:
         - T(array): nS*nA*nS transition matrix.
         - R(array): nS reward array.
-        - soft(bool): soft-max or hard-max (only used if policy unspecified).
-            If hard-max, resulting policy will be deterministic.
-            If soft-max, stochastic.
+        - H(int): maximum number of iterations.
         - policy(optional[array]): nS*nA policy matrix.
             Optional. If specified, computes value w.r.t. the policy, where
             cell (i, j) specifies probability of action j in state i.
@@ -27,56 +19,71 @@ def value_iteration(T, R, soft=False, policy=None,
         - discount(float): in [0,1].
         - terminate_at(float): return when
 
-    Returns (pi, Q, delta) where:
-        - pi is a stochastic policy matrix (nS*nA).
+    Returns (Q, info) where:
         - Q is the Q-value matrix (nS*nA matrix).
-        - delta is a bound on the error in the Q-value matrix.
-          The user should check if this is less than terminate_at to be
-          sure of convergence (in case it terminates before max_iterations).
+        - info is a dict providing information about convergence, in particular:
+            - error, a bound on the error in the Q-value matrix.
+            - num_iter, the number of iterations (at most max_iterations).
     """
 
-    nS, nA, _ = T.shape
-    R = R.reshape(nS, 1)
+    nS, nA, _ = transition.shape
+    reward = reward.reshape(nS, 1)
 
     Q = np.zeros((nS, nA))
     V = np.zeros((nS, 1))
     delta = float('+inf')
     terminate_at = max_error * (1 - discount) / discount
-    for i in range(max_iterations):
+    for i in range(horizon):
         if policy is None:
-            if soft:
-                policy_V = np.sum(softmax(Q) * Q, axis=1)
-            else:
-                policy_V = Q.max(1)
+            policy_V = Q.max(1)
         else:
             policy_V = np.sum(policy * Q, axis=1)
-        Q = R + discount * (T * policy_V).sum(2)
+        Q = reward + discount * (transition * policy_V).sum(2)
         new_V = Q.sum(1)
         delta = np.linalg.norm(new_V - V, float('inf'))
         if delta < terminate_at:
             break
         V = new_V
 
-    if soft:
-        pi = softmax(Q)
-    else:
-        pi = (Q >= Q.max(1).reshape(nS, 1))
-        # Problem: if Q has multiple values in the same row attaining maxima,
-        # we'll get duplicates. Pick one.
-        pi = pi * np.arange(nS * nA).reshape(nS, nA)
-        pi = (pi >= pi.max(1).reshape(nS, 1))
-        pi = pi * 1
-    return pi, Q, V, delta
+    info = {
+        'error': delta * discount / (1 - discount),
+        'num_iter': i,
+    }
+    return Q, info
 
-def value_iteration_env(env, reward=None, **kwargs):
-    T = getattr_unwrapped(env, 'transition')
-    if reward is None:
+def get_policy(Q):
+    """
+    Computes an optimal policy from a Q-matrix.
+    Args:
+        - Q(array): nS*nA Q-matrix.
+    Returns:
+        a policy matrix (nS*nA), assigning uniform probability across all
+        optimal actions in a given state.
+    """
+    nS, nA = Q.shape
+    pi = (Q >= Q.max(1).reshape(nS, 1))
+    # If more than one optimal action, split probability between them
+    pi = pi / pi.sum(1).reshape(nS, 1)
+    return pi
+
+def q_iteration_policy(T, R, H):
+    Q, info = q_iteration(T, R, H)
+    return get_policy(Q)
+
+def env_wrapper(f):
+    @functools.wraps(f)
+    def helper(env, *args, **kwargs):
+        T = getattr_unwrapped(env, 'transition')
         R = getattr_unwrapped(env, 'reward')
-    else:
-        R = reward
-    return value_iteration(T, R, **kwargs)
+        H = getattr_unwrapped(env, '_max_episode_steps')
+        return f(T, R, H, *args, **kwargs)
+    return helper
 
-def value_of_policy(env, policy, *args, **kwargs):
-    _, _, V, _ = value_iteration_env(env, *args, policy=policy, **kwargs)
+def value_of_policy(env, policy):
+    T = getattr_unwrapped(env, 'transition')
+    R = getattr_unwrapped(env, 'reward')
+    H = getattr_unwrapped(env, '_max_episode_steps')
+    Q, info = q_iteration(T, R, H, policy=policy)
+    V = Q.sum(1)
     initial_states = getattr_unwrapped(env, 'initial_states')
     return np.sum(V * initial_states)

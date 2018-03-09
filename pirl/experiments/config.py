@@ -9,17 +9,16 @@ from pirl import agents, irl
 EXPERIMENTS = {
     # ONLY FOR TESTING CODE! Not real experiments.
     'dummy-test': {
-        #TODO: change to be a fixed environment and allow overloading
-        #reward? This is closer to the semantic meaning we want to express,
-        #but is awkward to go with Gym's abstraction.
         'environments': ['pirl/GridWorld-Simple-v0'],
-        'rl': 'value_iteration_hard',
+        'discount': 1.00,
+        'rl': 'value_iteration',
         'irl': ['mes', 'mep_orig'],
         'num_trajectories': [100, 10],
     },
     'dummy-test-deterministic': {
         'environments': ['pirl/GridWorld-Simple-Deterministic-v0'],
-        'rl': 'value_iteration_hard',
+        'discount': 1.00,
+        'rl': 'value_iteration',
         'irl': ['mes', 'mep_orig'],
         'num_trajectories': [100, 10],
     },
@@ -27,15 +26,16 @@ EXPERIMENTS = {
     'jungle': {
         'environments': ['pirl/GridWorld-Jungle-9x9-{}-v0'.format(k)
                          for k in ['Soda', 'Water', 'Liquid']],
-        'rl': 'value_iteration_hard',
+        'discount': 1.00,
+        'rl': 'value_iteration',
         'irl': [
             'mep_orig_scale1_reg0',
-            'mep_orig_scale1_reg0.1',
-            'mep_orig_scale1_reg1',
-            'mep_orig_scale2_reg0',
-            'mep_orig_scale2_reg0.1',
-            'mep_orig_scale2_reg1',
-            'mep_demean',
+            # 'mep_orig_scale1_reg0.1',
+            # 'mep_orig_scale1_reg1',
+            # 'mep_orig_scale2_reg0',
+            # 'mep_orig_scale2_reg0.1',
+            # 'mep_orig_scale2_reg1',
+            # 'mep_demean',
             'mes',
         ],
         'num_trajectories': [200, 100, 50, 30, 20, 10],
@@ -43,15 +43,32 @@ EXPERIMENTS = {
     'jungle-small': {
         'environments': ['pirl/GridWorld-Jungle-4x4-{}-v0'.format(k)
                          for k in ['Soda', 'Water', 'Liquid']],
-        'rl': 'value_iteration_hard',
+        'discount': 1.00,
+        'rl': 'value_iteration',
         'irl': [
             'mep_orig_scale1_reg0',
-            'mep_orig_scale1_reg0.1',
-            'mep_orig_scale1_reg1',
-            'mep_orig_scale2_reg0',
-            'mep_orig_scale2_reg0.1',
-            'mep_orig_scale2_reg1',
-            'mep_demean',
+            'mes',
+        ],
+        'num_trajectories': [200, 100, 50, 30, 20, 10],
+    },
+    'jungle-small-maxent': {
+        'environments': ['pirl/GridWorld-Jungle-4x4-{}-v0'.format(k)
+                         for k in ['Soda', 'Water', 'Liquid']],
+        'discount': 1.00,
+        'rl': 'max_ent',
+        'irl': [
+            'mep_orig_scale1_reg0',
+            'mes',
+        ],
+        'num_trajectories': [200, 100, 50, 30, 20, 10],
+    },
+    'jungle-small-maxcausalent': {
+        'environments': ['pirl/GridWorld-Jungle-4x4-{}-v0'.format(k)
+                         for k in ['Soda', 'Water', 'Liquid']],
+        'discount': 1.00,
+        'rl': 'max_causal_ent',
+        'irl': [
+            'mep_orig_scale1_reg0',
             'mes',
         ],
         'num_trajectories': [200, 100, 50, 30, 20, 10],
@@ -65,14 +82,18 @@ RL_ALGORITHMS = {
     # compute_value moreover takes as the second argument a return value from
     # gen_policy, which may have been computed on an environment with a
     # different reward.
-    'value_iteration_soft': (
-        lambda env: agents.tabular.value_iteration_env(env, soft=True)[0],
-        functools.partial(agents.tabular.value_of_policy, soft=True),
+    'value_iteration': (
+        agents.tabular.env_wrapper(agents.tabular.q_iteration_policy),
+        agents.tabular.value_of_policy,
     ),
-    'value_iteration_hard': (
-        lambda env: agents.tabular.value_iteration_env(env, soft=False)[0],
-        functools.partial(agents.tabular.value_of_policy, soft=False),
+    'max_ent': (
+        agents.tabular.env_wrapper(irl.tabular_maxent.max_ent_policy),
+        agents.tabular.value_of_policy,
     ),
+    'max_causal_ent': (
+        agents.tabular.env_wrapper(irl.tabular_maxent.max_causal_ent_policy),
+        agents.tabular.value_of_policy,
+    )
 }
 
 # IRL Algorithms
@@ -101,25 +122,25 @@ def traditional_to_concat(f):
 
 
 TRADITIONAL_IRL_ALGORITHMS = {
-    'me': functools.partial(irl.tabular_maxent.maxent_irl, discount=0.99),
+    'me': functools.partial(irl.tabular_maxent.irl, discount=0.99),
 }
 
 # demean vs non demean
 # without demeaning, change scale, regularization
 MY_IRL_ALGORITHMS = dict()
 for reg, scale in itertools.product([0, 1e-1, 1], [1, 2]):
-    fn = functools.partial(irl.tabular_maxent.maxent_population_irl,
+    fn = functools.partial(irl.tabular_maxent.population_irl,
                            discount=0.99,
                            demean=False,
                            common_scale=scale,
                            individual_reg=reg)
     MY_IRL_ALGORITHMS['mep_orig_scale{}_reg{}'.format(scale, reg)] = fn
 MY_IRL_ALGORITHMS['mep_orig'] = MY_IRL_ALGORITHMS['mep_orig_scale1_reg0']
-MY_IRL_ALGORITHMS['mep_demean'] = functools.partial(irl.tabular_maxent.maxent_population_irl,
+MY_IRL_ALGORITHMS['mep_demean'] = functools.partial(irl.tabular_maxent.population_irl,
                                                     discount=0.99)
 
 adam_optim = functools.partial(torch.optim.Adam, lr=1e-2)
-MY_IRL_ALGORITHMS['mep_orig_adam'] = functools.partial(irl.tabular_maxent.maxent_population_irl,
+MY_IRL_ALGORITHMS['mep_orig_adam'] = functools.partial(irl.tabular_maxent.population_irl,
                                                        discount=0.99,
                                                        demean=False,
                                                        optimizer=adam_optim)
