@@ -143,13 +143,13 @@ def run_experiment(experiment, seed):
                 # TODO: alternately, we could pass the new reward directly
                 # to gen_policy as an override -- unsure which is cleaner?
                 wrapped_env = LearnedRewardWrapper(env, r)
-                reoptimized_policy = gen_policy(wrapped_env)
-                value = compute_value(env, reoptimized_policy)
+                reoptimized_policy = gen_policy(wrapped_env, discount=discount)
+                value = compute_value(env, reoptimized_policy, discount=discount)
                 res.setdefault(env_name, {})[n] = value
             expected_value[irl_name] = res
     ground_truth = {}
     for env_name, env in envs.items():
-        value = compute_value(env, policies[env_name])
+        value = compute_value(env, policies[env_name], discount=discount)
         value = collections.OrderedDict([(n, value) for n in num_trajectories])
         ground_truth[env_name] = value
     expected_value['ground_truth'] = ground_truth

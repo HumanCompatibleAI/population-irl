@@ -4,8 +4,8 @@ import numpy as np
 
 from pirl.utils import getattr_unwrapped
 
-def q_iteration(transition, reward, horizon,
-                policy=None, discount=0.99, max_error=1e-3):
+def q_iteration(transition, reward, horizon, discount,
+                policy=None, max_error=1e-3):
     """Performs value iteration on a finite-state MDP.
 
     Args:
@@ -66,8 +66,8 @@ def get_policy(Q):
     pi = pi / pi.sum(1).reshape(nS, 1)
     return pi
 
-def q_iteration_policy(T, R, H):
-    Q, info = q_iteration(T, R, H)
+def q_iteration_policy(T, R, H, discount):
+    Q, info = q_iteration(T, R, H, discount)
     return get_policy(Q)
 
 def env_wrapper(f):
@@ -79,11 +79,11 @@ def env_wrapper(f):
         return f(T, R, H, *args, **kwargs)
     return helper
 
-def value_of_policy(env, policy):
+def value_of_policy(env, policy, discount):
     T = getattr_unwrapped(env, 'transition')
     R = getattr_unwrapped(env, 'reward')
     H = getattr_unwrapped(env, '_max_episode_steps')
-    Q, info = q_iteration(T, R, H, policy=policy)
+    Q, info = q_iteration(T, R, H, discount, policy=policy)
     V = Q.sum(1)
     initial_states = getattr_unwrapped(env, 'initial_states')
     return np.sum(V * initial_states)
