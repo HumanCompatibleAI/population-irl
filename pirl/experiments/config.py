@@ -27,42 +27,20 @@ EXPERIMENTS = {
         'environments': ['pirl/GridWorld-Jungle-9x9-{}-v0'.format(k)
                          for k in ['Soda', 'Water', 'Liquid']],
         'discount': 1.00,
-        'rl': 'value_iteration',
+        'rl': 'max_causal_ent',
         'irl': [
             'mep_orig_scale1_reg0',
-            # 'mep_orig_scale1_reg0.1',
-            # 'mep_orig_scale1_reg1',
-            # 'mep_orig_scale2_reg0',
-            # 'mep_orig_scale2_reg0.1',
-            # 'mep_orig_scale2_reg1',
-            # 'mep_demean',
+            'mep_orig_scale1_reg0.1',
+            'mep_orig_scale1_reg1',
+            'mep_orig_scale2_reg0',
+            'mep_orig_scale2_reg0.1',
+            'mep_orig_scale2_reg1',
+            'mep_demean',
             'mes',
         ],
-        'num_trajectories': [200, 100, 50, 30, 20, 10],
+        'num_trajectories': [200, 100, 50, 30, 20, 10, 5],
     },
     'jungle-small': {
-        'environments': ['pirl/GridWorld-Jungle-4x4-{}-v0'.format(k)
-                         for k in ['Soda', 'Water', 'Liquid']],
-        'discount': 1.00,
-        'rl': 'value_iteration',
-        'irl': [
-            'mep_orig_scale1_reg0',
-            'mes',
-        ],
-        'num_trajectories': [200, 100, 50, 30, 20, 10],
-    },
-    'jungle-small-maxent': {
-        'environments': ['pirl/GridWorld-Jungle-4x4-{}-v0'.format(k)
-                         for k in ['Soda', 'Water', 'Liquid']],
-        'discount': 1.00,
-        'rl': 'max_ent',
-        'irl': [
-            'mep_orig_scale1_reg0',
-            'mes',
-        ],
-        'num_trajectories': [200, 100, 50, 30, 20, 10],
-    },
-    'jungle-small-maxcausalent': {
         'environments': ['pirl/GridWorld-Jungle-4x4-{}-v0'.format(k)
                          for k in ['Soda', 'Water', 'Liquid']],
         'discount': 1.00,
@@ -71,7 +49,17 @@ EXPERIMENTS = {
             'mep_orig_scale1_reg0',
             'mes',
         ],
-        'num_trajectories': [200, 100, 50, 30, 20, 10],
+        'irl': [
+            'mep_orig_scale1_reg0',
+            'mep_orig_scale1_reg0.1',
+            'mep_orig_scale1_reg1',
+            'mep_orig_scale2_reg0',
+            'mep_orig_scale2_reg0.1',
+            'mep_orig_scale2_reg1',
+            'mep_demean',
+            'mes',
+        ],
+        'num_trajectories': [200, 100, 50, 30, 20, 10, 5],
     },
 }
 
