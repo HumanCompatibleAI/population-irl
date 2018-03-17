@@ -215,7 +215,7 @@ def population_irl(mdps, trajectories, discount, planner=max_causal_ent_policy,
     if optimizer is None:
         optimizer = default_optimizer
     if scheduler is None:
-        scheduler = default_scheduler
+        scheduler = default_scheduler[planner]
     optimizer = optimizer(rewards.values())
     scheduler = scheduler(optimizer)
     it = TrainingIterator(num_iter, 'population_irl', heartbeat_iters=100)
