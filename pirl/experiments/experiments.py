@@ -2,7 +2,9 @@ import collections
 import functools
 import itertools
 import logging
+import os
 
+import git
 import gym
 from gym.utils import seeding
 
@@ -140,6 +142,12 @@ def run_few_shot_irl(experiment, cfg, pool, envs, trajectories):
         infos[irl_name][n][m][env] = info
     return rewards, infos
 
+
+def git_hash():
+    repo = git.Repo(path=os.path.realpath(__file__),
+                    search_parent_directories=True)
+    return repo.head.object.hexsha
+
 def run_experiment(experiment, pool, seed):
     '''Run experiment defined in config.EXPERIMENTS.
 
@@ -218,4 +226,5 @@ def run_experiment(experiment, pool, seed):
         'expected_value': expected_value,
         'ground_truth': ground_truth,
         'info': infos,
+        'version': git_hash(),
     }

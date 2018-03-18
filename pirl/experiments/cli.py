@@ -70,9 +70,10 @@ if __name__ == '__main__':
     for experiment in args.experiments:
         # reseed so does not matter which order experiments are run in
         res = experiments.run_experiment(experiment, pool, args.seed)
-        
+
         timestamp = datetime.now().strftime(ISO_TIMESTAMP)
-        out_dir = '{}-{}.pkl'.format(experiment, timestamp)
+        version = res['version'][:6]
+        out_dir = '{}-{}-{}.pkl'.format(experiment, version, timestamp)
         path = os.path.join(args.data_dir, out_dir)
         logger.info('Experiment %s completed. Outcome:\n %s. Saving to %s.',
                     experiment, res['expected_value'], path)
