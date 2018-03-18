@@ -37,21 +37,24 @@ LOGGING = {
 
 # RL Algorithms
 RL_ALGORITHMS = {
-    # Values take form (gen_policy, compute_value).
+    # Values take form (gen_policy, gen_optimal_policy, compute_value).
     # Both functions take a gym.Env as their single argument.
     # compute_value moreover takes as the second argument a return value from
     # gen_policy, which may have been computed on an environment with a
     # different reward.
     'value_iteration': (
         agents.tabular.env_wrapper(agents.tabular.q_iteration_policy),
+        agents.tabular.env_wrapper(agents.tabular.q_iteration_policy),
         agents.tabular.value_of_policy,
     ),
     'max_ent': (
         agents.tabular.env_wrapper(irl.tabular_maxent.max_ent_policy),
+        agents.tabular.env_wrapper(agents.tabular.q_iteration_policy),
         agents.tabular.value_of_policy,
     ),
     'max_causal_ent': (
         agents.tabular.env_wrapper(irl.tabular_maxent.max_causal_ent_policy),
+        agents.tabular.env_wrapper(agents.tabular.q_iteration_policy),
         agents.tabular.value_of_policy,
     )
 }

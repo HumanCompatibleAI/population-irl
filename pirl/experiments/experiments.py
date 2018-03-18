@@ -180,7 +180,7 @@ def run_experiment(experiment, pool, seed):
         envs[name] = env
 
     logger.debug('%s: generating synthetic data: training', experiment)
-    gen_policy, compute_value = make_rl_algo(cfg['rl'])
+    gen_policy, gen_optimal_policy, compute_value = make_rl_algo(cfg['rl'])
     policies = collections.OrderedDict(
         (name, gen_policy(env, discount=cfg['discount']))
         for name, env in envs.items()
@@ -211,8 +211,8 @@ def run_experiment(experiment, pool, seed):
                     # TODO: alternately, we could pass the new reward directly
                     # to gen_policy as an override -- unsure which is cleaner?
                     wrapped_env = LearnedRewardWrapper(env, r)
-                    reoptimized_policy = gen_policy(wrapped_env,
-                                                    discount=cfg['discount'])
+                    reoptimized_policy = gen_optimal_policy(wrapped_env,
+                                            discount=cfg['discount'])
                     value = compute_value(env, reoptimized_policy,
                                           discount=cfg['discount'])
                     res.setdefault(env_name, {})[n] = value
