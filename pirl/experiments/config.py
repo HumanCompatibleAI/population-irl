@@ -23,7 +23,7 @@ LOGGING = {
         'file': {
             'formatter': 'standard',
             'filename': 'logs/pirl.log',
-            'maxBytes': 100*1024*1024,
+            'maxBytes': 100 * 1024 * 1024,
             'backupCount': 3,
             'class': 'logging.handlers.RotatingFileHandler',
         },
@@ -35,64 +35,6 @@ LOGGING = {
             'propagate': True
         },
     }
-}
-
-# Experiments
-EXPERIMENTS = {
-    # ONLY FOR TESTING CODE! Not real experiments.
-    'dummy-test': {
-        'environments': ['pirl/GridWorld-Simple-v0'],
-        'discount': 1.00,
-        'rl': 'value_iteration',
-        'irl': ['mes', 'mep_orig'],
-        'num_trajectories': [20, 10],
-    },
-    'dummy-test-deterministic': {
-        'environments': ['pirl/GridWorld-Simple-Deterministic-v0'],
-        'discount': 1.00,
-        'rl': 'value_iteration',
-        'irl': ['mes', 'mep_orig'],
-        'num_trajectories': [20, 10],
-    },
-    # Real experiments below
-    'jungle': {
-        'environments': ['pirl/GridWorld-Jungle-9x9-{}-v0'.format(k)
-                         for k in ['Soda', 'Water', 'Liquid']],
-        'discount': 1.00,
-        'rl': 'max_causal_ent',
-        'irl': [
-            'mep_orig_scale1_reg0',
-            'mep_orig_scale1_reg0.1',
-            'mep_orig_scale1_reg1',
-            'mep_orig_scale2_reg0',
-            'mep_orig_scale2_reg0.1',
-            'mep_orig_scale2_reg1',
-            'mep_demean',
-            'mes',
-        ],
-        'num_trajectories': [200, 100, 50, 30, 20, 10, 5],
-    },
-    'jungle-small': {
-        'environments': ['pirl/GridWorld-Jungle-4x4-{}-v0'.format(k)
-                         for k in ['Soda', 'Water', 'Liquid']],
-        'discount': 1.00,
-        'rl': 'max_causal_ent',
-        'irl': [
-            'mep_orig_scale1_reg0',
-            'mes',
-        ],
-        'irl': [
-            'mep_orig_scale1_reg0',
-            'mep_orig_scale1_reg0.1',
-            'mep_orig_scale1_reg1',
-            'mep_orig_scale2_reg0',
-            'mep_orig_scale2_reg0.1',
-            'mep_orig_scale2_reg1',
-            'mep_demean',
-            'mes',
-        ],
-        'num_trajectories': [200, 100, 50, 30, 20, 10, 5],
-    },
 }
 
 # RL Algorithms
@@ -142,7 +84,11 @@ def traditional_to_concat(f):
 
 
 TRADITIONAL_IRL_ALGORITHMS = {
-    'me': functools.partial(irl.tabular_maxent.irl, discount=0.99),
+    # Maximum Causal Entropy (Ziebart 2010)
+    'mce': irl.tabular_maxent.irl,
+    # Maximum Entropy (Ziebart 2008)
+    'me': functools.partial(irl.tabular_maxent.irl,
+                            planner=irl.tabular_maxent.max_ent_policy),
 }
 
 # demean vs non demean
@@ -150,23 +96,100 @@ TRADITIONAL_IRL_ALGORITHMS = {
 MY_IRL_ALGORITHMS = dict()
 for reg, scale in itertools.product([0, 1e-1, 1], [1, 2]):
     fn = functools.partial(irl.tabular_maxent.population_irl,
-                           discount=0.99,
                            demean=False,
                            common_scale=scale,
                            individual_reg=reg)
-    MY_IRL_ALGORITHMS['mep_orig_scale{}_reg{}'.format(scale, reg)] = fn
-MY_IRL_ALGORITHMS['mep_orig'] = MY_IRL_ALGORITHMS['mep_orig_scale1_reg0']
-MY_IRL_ALGORITHMS['mep_demean'] = functools.partial(irl.tabular_maxent.population_irl,
-                                                    discount=0.99)
-
-adam_optim = functools.partial(torch.optim.Adam, lr=1e-2)
-MY_IRL_ALGORITHMS['mep_orig_adam'] = functools.partial(irl.tabular_maxent.population_irl,
-                                                       discount=0.99,
-                                                       demean=False,
-                                                       optimizer=adam_optim)
+    MY_IRL_ALGORITHMS['mcep_orig_scale{}_reg{}'.format(scale, reg)] = fn
+MY_IRL_ALGORITHMS['mcep_orig'] = MY_IRL_ALGORITHMS['mcep_orig_scale1_reg0']
+MY_IRL_ALGORITHMS['mcep_demean'] = functools.partial(irl.tabular_maxent.population_irl)
 
 IRL_ALGORITHMS = dict()
 IRL_ALGORITHMS.update(MY_IRL_ALGORITHMS)
 for name, algo in TRADITIONAL_IRL_ALGORITHMS.items():
     IRL_ALGORITHMS[name + 's'] = traditional_to_single(algo)
     IRL_ALGORITHMS[name + 'c'] = traditional_to_concat(algo)
+
+EXPERIMENTS = {}
+
+# ONLY FOR TESTING CODE! Not real experiments.
+EXPERIMENTS['dummy-test'] = {
+    'environments': ['pirl/GridWorld-Simple-v0'],
+    'discount': 1.00,
+    'rl': 'value_iteration',
+    'irl': ['mces', 'mcep_orig'],
+    'num_trajectories': [20, 10],
+},
+EXPERIMENTS['dummy-test-deterministic'] = {
+    'environments': ['pirl/GridWorld-Simple-Deterministic-v0'],
+    'discount': 1.00,
+    'rl': 'value_iteration',
+    'irl': ['mces', 'mcep_orig'],
+    'num_trajectories': [20, 10],
+}
+
+# Jungle gridworld experiments
+EXPERIMENTS['jungle'] = {
+    'environments': ['pirl/GridWorld-Jungle-9x9-{}-v0'.format(k)
+                     for k in ['Soda', 'Water', 'Liquid']],
+    'discount': 1.00,
+    'rl': 'max_causal_ent',
+    'irl': [
+        'mcep_orig_scale1_reg0',
+        'mcep_orig_scale1_reg0.1',
+        'mcep_orig_scale1_reg1',
+        'mcep_orig_scale2_reg0',
+        'mcep_orig_scale2_reg0.1',
+        'mcep_orig_scale2_reg1',
+        'mcep_demean',
+        'mces',
+    ],
+    'num_trajectories': [200, 100, 50, 30, 20, 10, 5],
+}
+EXPERIMENTS['jungle-small'] = {
+    'environments': ['pirl/GridWorld-Jungle-4x4-{}-v0'.format(k)
+                     for k in ['Soda', 'Water', 'Liquid']],
+    'discount': 1.00,
+    'rl': 'max_causal_ent',
+    'irl': [
+        'mcep_orig_scale1_reg0',
+        'mces',
+    ],
+    'irl': [
+        'mcep_orig_scale1_reg0',
+        'mcep_orig_scale1_reg0.1',
+        'mcep_orig_scale1_reg1',
+        'mcep_orig_scale2_reg0',
+        'mcep_orig_scale2_reg0.1',
+        'mcep_orig_scale2_reg1',
+        'mcep_demean',
+        'mces',
+    ],
+    'num_trajectories': [200, 100, 50, 30, 20, 10, 5],
+}
+
+# Test different planner combinations
+EXPERIMENTS['unexpected-optimal'] = {
+    'environments': ['pirl/GridWorld-Jungle-4x4-Soda-v0'],
+    'discount': 1.00,
+    'rl': 'value_iteration',
+    'irl': [
+        'mces',
+    ],
+    'num_trajectories': [200],
+}
+
+# Test different optimizers
+adam_optim = functools.partial(torch.optim.Adam, lr=1e-2)
+IRL_ALGORITHMS['mces_adam'] = traditional_to_single(functools.partial(
+    irl.tabular_maxent.irl, optimizer=adam_optim,
+))
+EXPERIMENTS['optimizers'] = {
+    'environments': ['pirl/GridWorld-Jungle-4x4-Soda-v0'],
+    'discount': 1.00,
+    'rl': 'value_iteration',
+    'irl': [
+        'mces',
+        'mces_adam',
+    ],
+    'num_trajectories': [200],
+}
