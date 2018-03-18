@@ -1,0 +1,41 @@
+import itertools
+import math
+import os
+
+import gym
+import matplotlib.pyplot as plt
+import numpy as np
+import seaborn as sns
+
+def _gridworld_heatmap(reward, shape, ax):
+    reward = reward.reshape(shape)
+    sns.heatmap(reward, annot=True, fmt='.0f', ax=ax)
+
+def gridworld_heatmap(reward, shape, num_cols=3):
+    num_trajectories = reward.keys()
+    envs = list(reward.values())[0].keys()
+    num_rows = math.ceil((len(num_trajectories) + 1) / num_cols)
+    for env_name in envs:
+        fig, axs = plt.subplots(num_rows, num_cols, squeeze=False)
+        fig.suptitle(env_name)
+        axs = list(itertools.chain(*axs))  # flatten
+
+        # Ground truth reward
+        env = gym.make(env_name)
+        gt = env.unwrapped.reward
+        _gridworld_heatmap(gt, shape, ax=axs[0])
+        axs[0].set_title('Ground Truth')
+
+        for i, n in enumerate(num_trajectories):
+            r = reward[n][env_name]
+            r = r - np.mean(r) + np.mean(gt)
+            _gridworld_heatmap(r, shape, ax=axs[i + 1])
+            axs[i + 1].set_title(n)
+
+        yield env_name, fig
+
+def save_figs(figs, prefix):
+    os.makedirs(prefix, exist_ok=True)
+    for name, fig in figs:
+        path = os.path.join(prefix, name.replace('/', '_') + '.pdf')
+        fig.savefig(path)
