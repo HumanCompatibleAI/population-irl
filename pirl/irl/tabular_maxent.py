@@ -91,7 +91,7 @@ default_scheduler = {
 
 def irl(mdp, trajectories, discount, demo_counts=None, horizon=None,
         planner=max_causal_ent_policy, optimizer=None, scheduler=None,
-        num_iter=5000, log_every=200):
+        num_iter=5000, log_every=100, log_expensive_every=1000):
     """
     Args:
         - mdp(TabularMdpEnv): MDP trajectories were drawn from.
@@ -143,21 +143,22 @@ def irl(mdp, trajectories, discount, demo_counts=None, horizon=None,
         optimizer.step()
         scheduler.step()
 
-        if trajectories is not None and i % log_every == 0:
+        if trajectories is not None and i % log_expensive_every == 0:
             # loss is expensive to compute
             loss = policy_loss(pol, trajectories)
             it.record('loss', loss)
-
-        it.record('expected_counts', ec)
-        it.record('grads', reward.grad.data.numpy())
-        it.record('rewards', reward.data.numpy().copy())
+        if i % log_every == 0:
+            it.record('expected_counts', ec)
+            it.record('grads', reward.grad.data.numpy())
+            it.record('rewards', reward.data.numpy().copy())
 
     return reward.data.numpy(), it.vals
 
 
 def population_irl(mdps, trajectories, discount, planner=max_causal_ent_policy,
                    individual_reg=1e-2, common_scale=1, demean=True,
-                   optimizer=None, scheduler=None, num_iter=5000, log_every=200):
+                   optimizer=None, scheduler=None, num_iter=5000,
+                   log_every=100, log_expensive_every=1000):
     """
     Args:
         - mdp(dict<TabularMdpEnv>): MDPs trajectories were drawn from.
@@ -250,15 +251,15 @@ def population_irl(mdps, trajectories, discount, planner=max_causal_ent_policy,
         optimizer.step()
         scheduler.step()
 
-        if i % log_every == 0:
+        if i % log_expensive_every == 0:
             # loss is expensive to compute
             loss = {name: policy_loss(pol, trajectories[name])
                     for name, pol in pols.items()}
             it.record('loss', loss)
-
-        it.record('expected_counts', ecs)
-        it.record('grads', {k: v.grad.data.numpy() for k, v in rewards.items()})
-        it.record('rewards', {k: v.data.numpy().copy() for k, v in rewards.items()})
+        if i % log_every == 0:
+            it.record('expected_counts', ecs)
+            it.record('grads', {k: v.grad.data.numpy() for k, v in rewards.items()})
+            it.record('rewards', {k: v.data.numpy().copy() for k, v in rewards.items()})
 
     res = {k: (v + rewards['common']).data.numpy()
            for k, v in rewards.items() if k != 'common'}
