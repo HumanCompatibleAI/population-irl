@@ -174,22 +174,7 @@ EXPERIMENTS['unexpected-optimal'] = {
     'rl': 'value_iteration',
     'irl': [
         'mces',
-    ],
-    'num_trajectories': [200],
-}
-
-# Test different optimizers
-adam_optim = functools.partial(torch.optim.Adam, lr=1e-2)
-IRL_ALGORITHMS['mces_adam'] = traditional_to_single(functools.partial(
-    irl.tabular_maxent.irl, optimizer=adam_optim,
-))
-EXPERIMENTS['optimizers'] = {
-    'environments': ['pirl/GridWorld-Jungle-4x4-Soda-v0'],
-    'discount': 1.00,
-    'rl': 'value_iteration',
-    'irl': [
-        'mces',
-        'mces_adam',
+        'mes',
     ],
     'num_trajectories': [200],
 }
