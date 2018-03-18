@@ -137,13 +137,9 @@ EXPERIMENTS['jungle'] = {
         'mcep_orig_scale1_reg0',
         'mcep_orig_scale1_reg0.1',
         'mcep_orig_scale1_reg1',
-        'mcep_orig_scale2_reg0',
-        'mcep_orig_scale2_reg0.1',
-        'mcep_orig_scale2_reg1',
-        'mcep_demean',
         'mces',
     ],
-    'num_trajectories': [200, 100, 50, 30, 20, 10, 5],
+    'num_trajectories': [1000, 500, 200, 100, 50, 30, 20, 10, 5],
 }
 EXPERIMENTS['jungle-small'] = {
     'environments': ['pirl/GridWorld-Jungle-4x4-{}-v0'.format(k)
@@ -152,19 +148,11 @@ EXPERIMENTS['jungle-small'] = {
     'rl': 'max_causal_ent',
     'irl': [
         'mcep_orig_scale1_reg0',
-        'mces',
-    ],
-    'irl': [
-        'mcep_orig_scale1_reg0',
         'mcep_orig_scale1_reg0.1',
         'mcep_orig_scale1_reg1',
-        'mcep_orig_scale2_reg0',
-        'mcep_orig_scale2_reg0.1',
-        'mcep_orig_scale2_reg1',
-        'mcep_demean',
         'mces',
     ],
-    'num_trajectories': [200, 100, 50, 30, 20, 10, 5],
+    'num_trajectories': [500, 200, 100, 50, 30, 20, 10, 5],
 }
 
 # Test different planner combinations

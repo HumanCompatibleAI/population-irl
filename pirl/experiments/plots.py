@@ -33,6 +33,7 @@ def gridworld_heatmap(reward, shape, num_cols=3):
             axs[i + 1].set_title(n)
 
         yield env_name, fig
+        plt.close()
 
 def save_figs(figs, prefix):
     os.makedirs(prefix, exist_ok=True)
