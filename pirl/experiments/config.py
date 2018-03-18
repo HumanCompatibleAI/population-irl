@@ -1,8 +1,6 @@
 import functools
 import itertools
 
-import torch
-
 from pirl import agents, irl
 
 # Logging
@@ -118,7 +116,16 @@ EXPERIMENTS['dummy-test'] = {
     'rl': 'value_iteration',
     'irl': ['mces', 'mcep_orig'],
     'num_trajectories': [20, 10],
-},
+}
+EXPERIMENTS['few-dummy-test'] = {
+    'environments': ['pirl/GridWorld-Simple-v0',
+                     'pirl/GridWorld-Simple-Deterministic-v0'],
+    'discount': 1.00,
+    'rl': 'value_iteration',
+    'irl': ['mces', 'mcep_orig'],
+    'num_trajectories': [20],
+    'few_shot': [1, 5],
+}
 EXPERIMENTS['dummy-test-deterministic'] = {
     'environments': ['pirl/GridWorld-Simple-Deterministic-v0'],
     'discount': 1.00,
@@ -165,4 +172,34 @@ EXPERIMENTS['unexpected-optimal'] = {
         'mes',
     ],
     'num_trajectories': [200],
+}
+
+# Few-shot learning
+EXPERIMENTS['few-jungle'] = {
+    'environments': ['pirl/GridWorld-Jungle-9x9-{}-v0'.format(k)
+                     for k in ['Soda', 'Water', 'Liquid']],
+    'discount': 1.00,
+    'rl': 'max_causal_ent',
+    'irl': [
+        'mcep_orig_scale1_reg0',
+        'mcep_orig_scale1_reg0.1',
+        'mcep_orig_scale1_reg1',
+        'mces',
+    ],
+    'num_trajectories': [1000],
+    'few_shot': [1, 2, 5, 10, 20, 50, 100],
+}
+EXPERIMENTS['few-jungle-small'] = {
+    'environments': ['pirl/GridWorld-Jungle-4x4-{}-v0'.format(k)
+                     for k in ['Soda', 'Water', 'Liquid']],
+    'discount': 1.00,
+    'rl': 'max_causal_ent',
+    'irl': [
+        'mcep_orig_scale1_reg0',
+        'mcep_orig_scale1_reg0.1',
+        'mcep_orig_scale1_reg1',
+        'mces',
+    ],
+    'num_trajectories': [1000],
+    'few_shot': [1, 2, 5, 10, 20, 50, 100],
 }

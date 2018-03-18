@@ -75,11 +75,70 @@ class LearnedRewardWrapper(gym.Wrapper):
     def reward(self):
         return self.new_reward
 
-def run_irl(irl_name, n, experiment, envs, trajectories, discount):
+def _run_irl(irl_name, n, experiment, envs, trajectories, discount):
     logger.debug('%s: running IRL algo: %s [%d]', experiment, irl_name, n)
     irl_algo = make_irl_algo(irl_name)
     subset = slice_trajectories(trajectories, n)
     return irl_algo(envs, subset, discount=discount)
+
+def run_irl(experiment, cfg, pool, envs, trajectories):
+    '''Run experiment in parallel. Returns tuple (reward, info) where each are
+       nested OrderedDicts, with key in the format:
+        - IRL algo
+        - Number of trajectories for other environments
+        - Number of trajectories for this environment
+        - Environment
+       Note that for this experiment type, the second and third arguments are
+       always the same.
+    '''
+    f = functools.partial(_run_irl, experiment=experiment, envs=envs,
+                          trajectories=trajectories, discount=cfg['discount'])
+    args = list(itertools.product(cfg['irl'], sorted(cfg['num_trajectories'])))
+    results = pool.starmap(f, args, chunksize=1)
+    rewards = collections.OrderedDict()
+    infos = collections.OrderedDict()
+    for (irl_name, n), (reward, info) in zip(args, results):
+        reward = collections.OrderedDict([(n, reward)])
+        info = collections.OrderedDict([(n, info)])
+        rewards.setdefault(irl_name, collections.OrderedDict())[n] = reward
+        infos.setdefault(irl_name, collections.OrderedDict())[n] = info
+    return rewards, info
+
+
+def _run_few_shot_irl(irl_name, n, m, small_env,
+                      experiment, envs, trajectories, discount):
+    logger.debug('%s: running IRL algo: %s [%s=%d/%d]',
+                 experiment, irl_name, small_env, m, n)
+    irl_algo = make_irl_algo(irl_name)
+    subset = slice_trajectories(trajectories, n)
+    small = slice_trajectories({'x': trajectories[small_env]}, m)['x']
+    subset[small_env] = small
+    return irl_algo(envs, subset, discount=discount)
+
+def run_few_shot_irl(experiment, cfg, pool, envs, trajectories):
+    '''Same spec as run_irl.'''
+    f = functools.partial(_run_few_shot_irl, experiment=experiment, envs=envs,
+                          trajectories=trajectories, discount=cfg['discount'])
+    args = list(itertools.product(cfg['irl'],
+                                  sorted(cfg['num_trajectories']),
+                                  sorted(cfg['few_shot']),
+                                  envs.keys()))
+    results = pool.starmap(f, args, chunksize=1)
+    rewards = collections.OrderedDict()
+    infos = collections.OrderedDict()
+    for (irl_name, n, m, env), (reward, info) in zip(args, results):
+        if irl_name not in rewards:
+            rewards[irl_name] = collections.OrderedDict()
+            infos[irl_name] = collections.OrderedDict()
+        if n not in rewards[irl_name]:
+            rewards[irl_name][n] = collections.OrderedDict()
+            infos[irl_name][n] = collections.OrderedDict()
+        if m not in rewards[irl_name][n]:
+            rewards[irl_name][n][m] = collections.OrderedDict()
+            infos[irl_name][n][m] = collections.OrderedDict()
+        rewards[irl_name][n][m][env] = reward[env]
+        infos[irl_name][n][m][env] = info
+    return rewards, infos
 
 def run_experiment(experiment, pool, seed):
     '''Run experiment defined in config.EXPERIMENTS.
@@ -114,27 +173,19 @@ def run_experiment(experiment, pool, seed):
 
     logger.debug('%s: generating synthetic data: training', experiment)
     gen_policy, compute_value = make_rl_algo(cfg['rl'])
-    discount = cfg['discount']
     policies = collections.OrderedDict(
-        (name, gen_policy(env, discount=discount)) for name, env in envs.items()
+        (name, gen_policy(env, discount=cfg['discount']))
+        for name, env in envs.items()
     )
     logger.debug('%s: generating synthetic data: sampling', experiment)
-    num_trajectories = sorted(cfg['num_trajectories'])
     trajectories = collections.OrderedDict(
-        (k, synthetic_data(e, policies[k], max(num_trajectories), seed))
+        (k, synthetic_data(e, policies[k], max(cfg['num_trajectories']), seed))
         for k, e in envs.items()
     )
 
     # Run IRL
-    f = functools.partial(run_irl, experiment=experiment, envs=envs,
-                          trajectories=trajectories, discount=discount)
-    args = list(itertools.product(cfg['irl'], num_trajectories))
-    results = pool.starmap(f, args, chunksize=1)
-    rewards = collections.OrderedDict()
-    infos = collections.OrderedDict()
-    for (irl_name, n), (reward, info) in zip(args, results):
-        rewards.setdefault(irl_name, collections.OrderedDict())[n] = reward
-        infos.setdefault(irl_name, collections.OrderedDict())[n] = info
+    fn = run_few_shot_irl if 'few_shot' in cfg else run_irl
+    rewards, infos = fn(experiment, cfg, pool, envs, trajectories)
 
     # Evaluate results
     # Note the expected value is estimated, and the accuracy of this may depend
@@ -143,28 +194,28 @@ def run_experiment(experiment, pool, seed):
     expected_value = {}
     for irl_name, reward_by_size in rewards.items():
         res = collections.OrderedDict()
-        for n, reward_by_env in reward_by_size.items():
-            for env_name, env in envs.items():
-                logger.debug('%s: evaluating %s on %s with %d trajectories',
-                             experiment, irl_name, env_name, n)
-                r = reward_by_env[env_name]
-                # TODO: alternately, we could pass the new reward directly
-                # to gen_policy as an override -- unsure which is cleaner?
-                wrapped_env = LearnedRewardWrapper(env, r)
-                reoptimized_policy = gen_policy(wrapped_env, discount=discount)
-                value = compute_value(env, reoptimized_policy, discount=discount)
-                res.setdefault(env_name, {})[n] = value
-            expected_value[irl_name] = res
-    ground_truth = {}
-    for env_name, env in envs.items():
-        value = compute_value(env, policies[env_name], discount=discount)
-        value = collections.OrderedDict([(n, value) for n in num_trajectories])
-        ground_truth[env_name] = value
-    expected_value['ground_truth'] = ground_truth
+        for n, reward_by_small_size in reward_by_size.items():
+            for m, reward_by_env in reward_by_small_size.items():
+                for env_name, env in envs.items():
+                    logger.debug('%s: evaluating %s on %s with %d/%d trajectories',
+                                 experiment, irl_name, env_name, m, n)
+                    r = reward_by_env[env_name]
+                    # TODO: alternately, we could pass the new reward directly
+                    # to gen_policy as an override -- unsure which is cleaner?
+                    wrapped_env = LearnedRewardWrapper(env, r)
+                    reoptimized_policy = gen_policy(wrapped_env,
+                                                    discount=cfg['discount'])
+                    value = compute_value(env, reoptimized_policy,
+                                          discount=cfg['discount'])
+                    res.setdefault(env_name, {})[n] = value
+                expected_value[irl_name] = res
+    ground_truth = {env_name: compute_value(env, policies[env_name],
+                                            discount=cfg['discount'])}
 
     return {
         'trajectories': trajectories,
         'reward': rewards,
         'expected_value': expected_value,
+        'ground_truth': ground_truth,
         'info': infos,
     }
