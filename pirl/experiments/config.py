@@ -95,7 +95,7 @@ TRADITIONAL_IRL_ALGORITHMS = {
 # demean vs non demean
 # without demeaning, change scale, regularization
 MY_IRL_ALGORITHMS = dict()
-for reg, scale in itertools.product([0, 1e-1, 1], [1, 2]):
+for reg, scale in itertools.product([0, 1e-5, 1e-4, 1e-3, 1e-2, 1e-1, 1], [1]):
     fn = functools.partial(irl.tabular_maxent.population_irl,
                            demean=False,
                            common_scale=scale,
@@ -145,8 +145,10 @@ EXPERIMENTS['jungle'] = {
     'rl': 'max_causal_ent',
     'irl': [
         'mcep_orig_scale1_reg0',
-        'mcep_orig_scale1_reg0.1',
-        'mcep_orig_scale1_reg1',
+        'mcep_orig_scale1_reg0.00001',
+        'mcep_orig_scale1_reg0.0001',
+        'mcep_orig_scale1_reg0.001',
+        'mcep_orig_scale1_reg0.01',
         'mces',
     ],
     'num_trajectories': [1000, 500, 200, 100, 50, 30, 20, 10, 5],
@@ -158,8 +160,10 @@ EXPERIMENTS['jungle-small'] = {
     'rl': 'max_causal_ent',
     'irl': [
         'mcep_orig_scale1_reg0',
-        'mcep_orig_scale1_reg0.1',
-        'mcep_orig_scale1_reg1',
+        'mcep_orig_scale1_reg0.00001',
+        'mcep_orig_scale1_reg0.0001',
+        'mcep_orig_scale1_reg0.001',
+        'mcep_orig_scale1_reg0.01',
         'mces',
     ],
     'num_trajectories': [500, 200, 100, 50, 30, 20, 10, 5],
