@@ -44,6 +44,7 @@ def sample(env, policy, rng):
 
 def synthetic_data(env, policy, num_trajectories, seed):
     rng, _ = seeding.np_random(seed)
+    env.seed(seed)
     trajectories = [sample(env, policy, rng) for _i in range(num_trajectories)]
     return trajectories
 
@@ -109,7 +110,6 @@ def run_experiment(experiment, pool, seed):
     envs = collections.OrderedDict()
     for name in cfg['environments']:
         env = gym.make(name)
-        env.seed(seed)
         envs[name] = env
 
     logger.debug('%s: generating synthetic data: training', experiment)
@@ -129,7 +129,7 @@ def run_experiment(experiment, pool, seed):
     f = functools.partial(run_irl, experiment=experiment, envs=envs,
                           trajectories=trajectories, discount=discount)
     args = list(itertools.product(cfg['irl'], num_trajectories))
-    results = pool.starmap(f, args)
+    results = pool.starmap(f, args, chunksize=1)
     rewards = collections.OrderedDict()
     infos = collections.OrderedDict()
     for (irl_name, n), (reward, info) in zip(args, results):
