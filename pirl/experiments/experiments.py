@@ -131,10 +131,10 @@ def run_experiment(experiment, pool, seed):
     args = list(itertools.product(cfg['irl'], num_trajectories))
     results = pool.starmap(f, args)
     rewards = collections.OrderedDict()
-    info = collections.OrderedDict()
+    infos = collections.OrderedDict()
     for (irl_name, n), (reward, info) in zip(args, results):
         rewards.setdefault(irl_name, collections.OrderedDict())[n] = reward
-        info.setdefault(irl_name, collections.OrderedDict())[n] = info
+        infos.setdefault(irl_name, collections.OrderedDict())[n] = info
 
     # Evaluate results
     # Note the expected value is estimated, and the accuracy of this may depend
