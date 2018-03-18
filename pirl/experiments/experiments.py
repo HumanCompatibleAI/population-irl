@@ -166,5 +166,5 @@ def run_experiment(experiment, pool, seed):
         'trajectories': trajectories,
         'reward': rewards,
         'expected_value': expected_value,
-        'info': info,
+        'info': infos,
     }
