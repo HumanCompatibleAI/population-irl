@@ -266,4 +266,4 @@ def population_irl(mdps, trajectories, discount, planner=max_causal_ent_policy,
 
     info = dict(it.vals)
     info['common_reward'] = rewards['common'].data.numpy()
-    return res, it.vals
+    return res, info
