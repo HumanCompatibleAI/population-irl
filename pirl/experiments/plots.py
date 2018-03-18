@@ -12,9 +12,8 @@ def _gridworld_heatmap(reward, shape, ax):
     sns.heatmap(reward, annot=True, fmt='.0f', ax=ax)
 
 def gridworld_heatmap(reward, shape, num_cols=3):
-    num_general_trajectories = reward.keys()
     envs = list(list(reward.values())[0].values())[0].keys()
-    num_plots = sum([len(d) for d in reward.values()])
+    num_plots = sum([len(d) for d in reward.values()]) + 1
     num_rows = math.ceil(num_plots / num_cols)
     for env_name in envs:
         fig, axs = plt.subplots(num_rows, num_cols, squeeze=False)
