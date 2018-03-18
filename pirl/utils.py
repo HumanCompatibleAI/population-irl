@@ -1,9 +1,12 @@
 import collections
+import logging
 import time
 
 from gym.utils import seeding
 import numpy as np
 import torch
+
+logger = logging.getLogger('pirl.utils')
 
 def getattr_unwrapped(env, attr):
     """Get attribute attr from env, or one of the nested environments.
@@ -80,7 +83,7 @@ class TrainingIterator(object):
                 self._heartbeat |= (cur_time - self._last_h_time) > self._h_time
 
             if self.heartbeat:
-                print(self.status())
+                logger.debug(self.status())
                 self._last_h_time = cur_time
                 last_heartbeat_i = i
 

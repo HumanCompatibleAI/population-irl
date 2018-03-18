@@ -5,6 +5,38 @@ import torch
 
 from pirl import agents, irl
 
+# Logging
+LOGGING = {
+    'version': 1,
+    'disable_existing_loggers': False,
+    'formatters': {
+        'standard': {
+            'format': '(%(processName)s) %(asctime)s [%(levelname)s] %(name)s: %(message)s',
+        },
+    },
+    'handlers': {
+        'stream': {
+            'level': 'DEBUG',
+            'formatter': 'standard',
+            'class': 'logging.StreamHandler',
+        },
+        'file': {
+            'formatter': 'standard',
+            'filename': 'logs/pirl.log',
+            'maxBytes': 100*1024*1024,
+            'backupCount': 3,
+            'class': 'logging.handlers.RotatingFileHandler',
+        },
+    },
+    'loggers': {
+        '': {
+            'handlers': ['stream', 'file'],
+            'level': 'DEBUG',
+            'propagate': True
+        },
+    }
+}
+
 # Experiments
 EXPERIMENTS = {
     # ONLY FOR TESTING CODE! Not real experiments.
@@ -13,14 +45,14 @@ EXPERIMENTS = {
         'discount': 1.00,
         'rl': 'value_iteration',
         'irl': ['mes', 'mep_orig'],
-        'num_trajectories': [100, 10],
+        'num_trajectories': [20, 10],
     },
     'dummy-test-deterministic': {
         'environments': ['pirl/GridWorld-Simple-Deterministic-v0'],
         'discount': 1.00,
         'rl': 'value_iteration',
         'irl': ['mes', 'mep_orig'],
-        'num_trajectories': [100, 10],
+        'num_trajectories': [20, 10],
     },
     # Real experiments below
     'jungle': {

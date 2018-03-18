@@ -9,7 +9,8 @@ CLI app that takes a given environment and RL algorithm and:
 
 import argparse
 from datetime import datetime
-import logging
+import logging.config
+from multiprocessing import Pool, current_process
 import os
 import pickle
 import tempfile
@@ -45,20 +46,30 @@ def parse_args():
     parser.add_argument('--data_dir', metavar='dir', default='./data',
                         type=writable_dir)
     parser.add_argument('--seed', metavar='N', default=1234, type=int)
+    parser.add_argument('--num-cores', metavar='N', default=None, type=int)
     parser.add_argument('experiments', metavar='experiment',
                         type=experiment_type, nargs='+')
 
     return parser.parse_args()
 
+
+def init_worker():
+    current_process().name = current_process().name.replace('ForkPoolWorker-', 'worker')
+    logging.config.dictConfig(config.LOGGING)
+
+
 ISO_TIMESTAMP = "%Y%m%d_%H%M%S"
 
 if __name__ == '__main__':
     args = parse_args()
-    logging.basicConfig(level=logging.DEBUG)
+    current_process().name = 'master'
+    logging.config.dictConfig(config.LOGGING)
+    logger.info('Starting pool')
+    pool = Pool(args.num_cores, initializer=init_worker)
 
     for experiment in args.experiments:
         # reseed so does not matter which order experiments are run in
-        res = experiments.run_experiment(experiment, args.seed)
+        res = experiments.run_experiment(experiment, pool, args.seed)
         
         timestamp = datetime.now().strftime(ISO_TIMESTAMP)
         out_dir = '{}-{}.pkl'.format(experiment, timestamp)

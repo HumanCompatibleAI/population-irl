@@ -257,7 +257,7 @@ def population_irl(mdps, trajectories, discount, planner=max_causal_ent_policy,
             it.record('loss', loss)
 
         it.record('expected_counts', ecs)
-        it.record('grads', {k: v.grad for k, v in rewards.items()})
+        it.record('grads', {k: v.grad.data.numpy() for k, v in rewards.items()})
         it.record('rewards', {k: v.data.numpy().copy() for k, v in rewards.items()})
 
     res = {k: (v + rewards['common']).data.numpy()

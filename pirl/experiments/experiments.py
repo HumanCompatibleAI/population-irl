@@ -1,4 +1,6 @@
 import collections
+import functools
+import itertools
 import logging
 
 import gym
@@ -72,9 +74,19 @@ class LearnedRewardWrapper(gym.Wrapper):
     def reward(self):
         return self.new_reward
 
+def run_irl(irl_name, n, experiment, envs, trajectories, discount):
+    logger.debug('%s: running IRL algo: %s [%d]', experiment, irl_name, n)
+    irl_algo = make_irl_algo(irl_name)
+    subset = slice_trajectories(trajectories, n)
+    return irl_algo(envs, subset, discount=discount)
 
-def run_experiment(experiment, seed):
+def run_experiment(experiment, pool, seed):
     '''Run experiment defined in config.EXPERIMENTS.
+
+    Args:
+        - experiment(str): experiment name.
+        - pool(multiprocessing.Pool)
+        - seed(int)
 
     Returns:
         tuple, (trajectories, rewards, expected_value), where:
@@ -114,18 +126,15 @@ def run_experiment(experiment, seed):
     )
 
     # Run IRL
+    f = functools.partial(run_irl, experiment=experiment, envs=envs,
+                          trajectories=trajectories, discount=discount)
+    args = list(itertools.product(cfg['irl'], num_trajectories))
+    results = pool.starmap(f, args)
     rewards = collections.OrderedDict()
     info = collections.OrderedDict()
-    for irl_name in cfg['irl']:
-        logger.debug('%s: running IRL algo: %s', experiment, irl_name)
-        irl_algo = make_irl_algo(irl_name)
-        rewards[irl_name] = collections.OrderedDict()
-        info[irl_name] = collections.OrderedDict()
-        for n in num_trajectories:
-            subset = slice_trajectories(trajectories, n)
-            r, extra = irl_algo(envs, subset, discount=discount)
-            rewards[irl_name][n] = r
-            info[irl_name][n] = extra
+    for (irl_name, n), (reward, info) in zip(args, results):
+        rewards.setdefault(irl_name, collections.OrderedDict())[n] = reward
+        info.setdefault(irl_name, collections.OrderedDict())[n] = info
 
     # Evaluate results
     # Note the expected value is estimated, and the accuracy of this may depend
