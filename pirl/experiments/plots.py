@@ -9,6 +9,9 @@ import pandas as pd
 import numpy as np
 import seaborn as sns
 
+THIS_DIR = os.path.join(os.path.dirname(os.path.realpath(__file__)))
+plt.style.use(os.path.join(THIS_DIR, 'default.mplstyle'))
+
 def extract_value(data):
     value = data['value']
     ground_truth = data['ground_truth']
