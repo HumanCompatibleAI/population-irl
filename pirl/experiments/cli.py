@@ -73,7 +73,7 @@ if __name__ == '__main__':
 
         timestamp = datetime.now().strftime(ISO_TIMESTAMP)
         version = res['version'][:6]
-        out_dir = '{}-{}-{}.pkl'.format(experiment, version, timestamp)
+        out_dir = '{}-{}-{}.pkl'.format(experiment, timestamp, version)
         path = os.path.join(args.data_dir, out_dir)
         logger.info('Experiment %s completed. Outcome:\n %s. Saving to %s.',
                     experiment, res['value'], path)
