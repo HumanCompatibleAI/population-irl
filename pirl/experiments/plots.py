@@ -1,11 +1,38 @@
+import collections
 import itertools
 import math
 import os
 
 import gym
 import matplotlib.pyplot as plt
+import pandas as pd
 import numpy as np
 import seaborn as sns
+
+def extract_value(data):
+    value = data['value']
+    ground_truth = data['ground_truth']
+
+    def extract(idx):
+        res = collections.OrderedDict()
+        for irl_name, value_by_irl in value.items():
+            d = collections.OrderedDict()
+            for n, value_by_n in value_by_irl.items():
+                for m, value_by_m in value_by_n.items():
+                    k = '{}/{}'.format(m, n)
+                    d[k] = pd.Series(collections.OrderedDict(
+                        [(env, value_by_env[idx])
+                         for env, value_by_env in value_by_m.items()]))
+            df = pd.DataFrame(d)
+            res[irl_name] = df
+        res['ground_truth'] = pd.DataFrame(ground_truth, index=df.columns).T
+
+        return pd.Panel(res)
+
+    res = {'optimal': extract(0), 'planner': extract(1)}
+
+    return res
+
 
 def _gridworld_heatmap(reward, shape, ax):
     reward = reward.reshape(shape)
