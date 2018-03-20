@@ -156,7 +156,7 @@ def irl(mdp, trajectories, discount, demo_counts=None, horizon=None,
 
 
 def population_irl(mdps, trajectories, discount, planner=max_causal_ent_policy,
-                   individual_reg=1e-2, common_scale=1, demean=True,
+                   individual_reg=1e-2, common_scale=1, demean=False,
                    optimizer=None, scheduler=None, num_iter=5000,
                    log_every=100, log_expensive_every=1000):
     """
@@ -173,7 +173,8 @@ def population_irl(mdps, trajectories, discount, planner=max_causal_ent_policy,
             Should match that of the agent generating the trajectories.
         - planner(callable): max_ent_policy or max_causal_ent_policy.
         - individual_reg(float): regularization factor for per-agent reward.
-            Penalty factor applied to the l_2 norm of per-agent reward matrices.
+            Penalty factor applied to the l_2 norm of per-agent reward matrices,
+            divided by the number of trajectories.
         - common_scale(float): scaling factor for common gradient update.
         - demean(bool): demean the gradient.
         - optimizer(callable): a callable returning a torch.optim object.
@@ -245,7 +246,8 @@ def population_irl(mdps, trajectories, discount, planner=max_causal_ent_policy,
 
         for name in mdps.keys():
             g = grads[name]
-            g += individual_reg * rewards[name].data.numpy()
+            scale = individual_reg / len(trajectories[name])
+            g += scale * rewards[name].data.numpy()
             rewards[name].grad = Variable(torch.Tensor(g))
 
         optimizer.step()
