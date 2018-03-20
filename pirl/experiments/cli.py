@@ -76,6 +76,6 @@ if __name__ == '__main__':
         out_dir = '{}-{}-{}.pkl'.format(experiment, version, timestamp)
         path = os.path.join(args.data_dir, out_dir)
         logger.info('Experiment %s completed. Outcome:\n %s. Saving to %s.',
-                    experiment, res['expected_value'], path)
+                    experiment, res['value'], path)
         with open(path, 'wb') as f:
             pickle.dump(res, f)
