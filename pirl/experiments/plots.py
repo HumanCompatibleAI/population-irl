@@ -37,16 +37,26 @@ def extract_value(data):
     return res
 
 
-def _gridworld_heatmap(reward, shape, ax):
+def _gridworld_heatmap(reward, shape, ax, walls=None):
     reward = reward.reshape(shape)
-    sns.heatmap(reward, annot=True, fmt='.0f', ax=ax)
+    sns.heatmap(reward,
+                mask=walls,
+                annot=True,
+                annot_kws={'fontsize': 'smaller'},
+                fmt='.0f',
+                ax=ax)
 
-def gridworld_heatmap(reward, shape, num_cols=3):
+def gridworld_heatmap(reward, shape, num_cols=3, figsize=(11.6, 8.6)):
     envs = list(list(reward.values())[0].values())[0].keys()
     num_plots = sum([len(d) for d in reward.values()]) + 1
     num_rows = math.ceil(num_plots / num_cols)
     for env_name in envs:
-        fig, axs = plt.subplots(num_rows, num_cols, squeeze=False)
+        fig, axs = plt.subplots(num_rows,
+                                num_cols,
+                                squeeze=False,
+                                figsize=figsize,
+                                sharex=True,
+                                sharey=True)
         fig.suptitle(env_name)
         axs = list(itertools.chain(*axs))  # flatten
         i = 0
@@ -54,7 +64,11 @@ def gridworld_heatmap(reward, shape, num_cols=3):
         # Ground truth reward
         env = gym.make(env_name)
         gt = env.unwrapped.reward
-        _gridworld_heatmap(gt, shape, ax=axs[i])
+        try:
+            walls = env.unwrapped.walls
+        except AttributeError:
+            walls = None
+        _gridworld_heatmap(gt, shape, axs[i], walls)
         axs[i].set_title('Ground Truth')
 
         for n, reward_by_m in reward.items():
@@ -62,7 +76,7 @@ def gridworld_heatmap(reward, shape, num_cols=3):
                 r = r[env_name]
                 i += 1
                 r = r - np.mean(r) + np.mean(gt)
-                _gridworld_heatmap(r, shape, ax=axs[i])
+                _gridworld_heatmap(r, shape, axs[i])
                 axs[i].set_title('{}/{}'.format(m, n))
 
         yield env_name, fig

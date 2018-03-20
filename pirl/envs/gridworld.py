@@ -81,7 +81,7 @@ class GridWorldMdp(TabularMdpEnv):
         assert walls.shape == initial_state.shape
 
         # Setup state
-        self.walls = walls  # used only for rendering
+        self._walls = walls  # used only for rendering
         transition = _create_transition(walls, noise)
         reward = reward.flatten()
         initial_state = initial_state.flatten()
@@ -120,7 +120,7 @@ class GridWorldMdp(TabularMdpEnv):
         """
         outfile = StringIO() if mode == 'ansi' else sys.stdout
 
-        walls = self.walls
+        walls = self._walls
         initial_state = self.initial_states.reshape(walls.shape)
         reward = self.reward.reshape(walls.shape)
         width, height = walls.shape
@@ -151,6 +151,10 @@ class GridWorldMdp(TabularMdpEnv):
 
         if mode == 'ansi':
             return outfile
+
+    @property
+    def walls(self):
+        return self._walls
 
 
 class Direction(object):
