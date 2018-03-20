@@ -50,10 +50,6 @@ def synthetic_data(env, policy, num_trajectories, seed):
     trajectories = [sample(env, policy, rng) for _i in range(num_trajectories)]
     return trajectories
 
-def slice_trajectories(trajectories, max_length):
-    return {k: [(states[:max_length], actions[:max_length])
-                for states, actions in env_trajectories]
-            for k, env_trajectories in trajectories.items()}
 
 class LearnedRewardWrapper(gym.Wrapper):
     """
@@ -77,11 +73,13 @@ class LearnedRewardWrapper(gym.Wrapper):
     def reward(self):
         return self.new_reward
 
+
 def _run_irl(irl_name, n, experiment, envs, trajectories, discount):
     logger.debug('%s: running IRL algo: %s [%d]', experiment, irl_name, n)
     irl_algo = make_irl_algo(irl_name)
-    subset = slice_trajectories(trajectories, n)
+    subset = {k: v[:n] for k, v in trajectories.items()}
     return irl_algo(envs, subset, discount=discount)
+
 
 def run_irl(experiment, cfg, pool, envs, trajectories):
     '''Run experiment in parallel. Returns tuple (reward, info) where each are
@@ -112,9 +110,8 @@ def _run_few_shot_irl(irl_name, n, m, small_env,
     logger.debug('%s: running IRL algo: %s [%s=%d/%d]',
                  experiment, irl_name, small_env, m, n)
     irl_algo = make_irl_algo(irl_name)
-    subset = slice_trajectories(trajectories, n)
-    small = slice_trajectories({'x': trajectories[small_env]}, m)['x']
-    subset[small_env] = small
+    subset = {k: v[:n] for k, v in trajectories.items()}
+    subset[small_env] = subset[small_env][:m]
     return irl_algo(envs, subset, discount=discount)
 
 def run_few_shot_irl(experiment, cfg, pool, envs, trajectories):
