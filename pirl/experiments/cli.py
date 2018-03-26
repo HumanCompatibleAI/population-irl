@@ -61,6 +61,7 @@ def init_worker():
 ISO_TIMESTAMP = "%Y%m%d_%H%M%S"
 
 if __name__ == '__main__':
+    config.validate_config()  # fail fast and early
     args = parse_args()
     current_process().name = 'master'
     logging.config.dictConfig(config.LOGGING)
