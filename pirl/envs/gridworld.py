@@ -196,15 +196,15 @@ class GridWorldMdp(TabularMdpEnv):
         draw = ImageDraw.Draw(image)
         for x in range(0,width):
             for y in range(0,height):
-                draw.rectangle([(0+y*S,0+x*S),(S+y*S,S+x*S)], fill=get_color(x, y))
+                draw.rectangle([(0+x*S,0+y*S),(S+x*S,S+y*S)], fill=get_color(x, y))
 
         # Draw initial position
         offset = int(1/4 * S)
-        draw.ellipse([(0+initial_y*S+offset,0+initial_x*S+offset),(S+initial_y*S-offset,S+initial_x*S-offset)], fill="rgb(60,60,60)")
+        draw.ellipse([(0+initial_x*S+offset,0+initial_y*S+offset),(S+initial_x*S-offset,S+initial_y*S-offset)], fill="rgb(60,60,60)")
 
         # Draw current position
         offset = int(1/4 * S)
-        draw.ellipse([(0+current_y*S+offset,0+current_x*S+offset),(S+current_y*S-offset,S+current_x*S-offset)], fill="rgb(255,255,255)")
+        draw.ellipse([(0+current_x*S+offset,0+current_y*S+offset),(S+current_x*S-offset,S+current_y*S-offset)], fill="rgb(255,255,255)")
 
         return np.array(image)
 
