@@ -238,7 +238,9 @@ def population_irl(mdps, trajectories, discount, planner=max_causal_ent_policy,
                                      discount)
                for name, pol in pols.items()}
         grads = {name: ec - demo_counts[name] for name, ec in ecs.items()}
-        common_grad = np.mean(list(grads.values()), axis=0)
+        weighted_grads = {k: v * len(trajectories[k]) for k, v in grads.items()}
+        common_grad = np.mean(list(weighted_grads.values()), axis=0)
+        common_grad /= sum([len(t) for t in trajectories.values()])
         rewards['common'].grad = Variable(torch.Tensor(common_grad))
 
         if demean:
