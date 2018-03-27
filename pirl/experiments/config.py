@@ -95,23 +95,13 @@ TRADITIONAL_IRL_ALGORITHMS = {
                             planner=irl.tabular_maxent.max_ent_policy),
 }
 
-# demean vs non demean
-# without demeaning, change scale, regularization
 MY_IRL_ALGORITHMS = dict()
-for reg, scale in itertools.product(range(-2,3), [1]):
+for reg in range(-2,3):
     fn = functools.partial(irl.tabular_maxent.population_irl,
-                           demean=False,
-                           common_scale=scale,
                            individual_reg=10 ** reg)
-    MY_IRL_ALGORITHMS['mcep_scale{}_reg1e{}'.format(scale, reg)] = fn
-MY_IRL_ALGORITHMS['mcep_scale1_reg0'] = functools.partial(
-    irl.tabular_maxent.population_irl,
-   demean=False,
-   common_scale=scale,
-   individual_reg=0)
-MY_IRL_ALGORITHMS['mcep_demean'] = functools.partial(
-    irl.tabular_maxent.population_irl,
-    demean=True)
+    MY_IRL_ALGORITHMS['mcep_reg1e{}'.format(reg)] = fn
+MY_IRL_ALGORITHMS['mcep_reg0'] = functools.partial(
+    irl.tabular_maxent.population_irl, individual_reg=0)
 
 IRL_ALGORITHMS = dict()
 IRL_ALGORITHMS.update(MY_IRL_ALGORITHMS)
@@ -126,7 +116,7 @@ EXPERIMENTS['dummy-test'] = {
     'environments': ['pirl/GridWorld-Simple-v0'],
     'discount': 1.00,
     'rl': 'value_iteration',
-    'irl': ['mces', 'mcep_scale1_reg0'],
+    'irl': ['mcep_reg0', 'mces'],
     'num_trajectories': [20, 10],
 }
 EXPERIMENTS['few-dummy-test'] = {
@@ -134,7 +124,7 @@ EXPERIMENTS['few-dummy-test'] = {
                      'pirl/GridWorld-Simple-Deterministic-v0'],
     'discount': 1.00,
     'rl': 'value_iteration',
-    'irl': ['mces', 'mcep_scale1_reg0'],
+    'irl': ['mces', 'mcep_reg0'],
     'num_trajectories': [20],
     'few_shot': [1, 5],
 }
@@ -142,7 +132,7 @@ EXPERIMENTS['dummy-test-deterministic'] = {
     'environments': ['pirl/GridWorld-Simple-Deterministic-v0'],
     'discount': 1.00,
     'rl': 'value_iteration',
-    'irl': ['mces', 'mcep_scale1_reg0'],
+    'irl': ['mces', 'mcep_reg0'],
     'num_trajectories': [20, 10],
 }
 
@@ -154,12 +144,12 @@ EXPERIMENTS['jungle'] = {
     'rl': 'max_causal_ent',
     'irl': [
         'mces',
-        'mcep_scale1_reg0',
-        'mcep_scale1_reg1e-2',
-        'mcep_scale1_reg1e-1',
-        'mcep_scale1_reg1e0',
-        'mcep_scale1_reg1e1',
-        'mcep_scale1_reg1e2',
+        'mcep_reg0',
+        'mcep_reg1e-2',
+        'mcep_reg1e-1',
+        'mcep_reg1e0',
+        'mcep_reg1e1',
+        'mcep_reg1e2',
     ],
     'num_trajectories': [1000, 500, 200, 100, 50, 30, 20, 10, 5],
 }
@@ -170,12 +160,12 @@ EXPERIMENTS['jungle-small'] = {
     'rl': 'max_causal_ent',
     'irl': [
         'mces',
-        'mcep_scale1_reg0',
-        'mcep_scale1_reg1e-2',
-        'mcep_scale1_reg1e-1',
-        'mcep_scale1_reg1e0',
-        'mcep_scale1_reg1e1',
-        'mcep_scale1_reg1e2',
+        'mcep_reg0',
+        'mcep_reg1e-2',
+        'mcep_reg1e-1',
+        'mcep_reg1e0',
+        'mcep_reg1e1',
+        'mcep_reg1e2',
     ],
     'num_trajectories': [500, 200, 100, 50, 30, 20, 10, 5],
 }
@@ -200,10 +190,10 @@ EXPERIMENTS['few-jungle'] = {
     'rl': 'max_causal_ent',
     'irl': [
         'mces',
-        'mcep_scale1_reg0',
-        'mcep_scale1_reg1e-2',
-        'mcep_scale1_reg1e-1',
-        'mcep_scale1_reg1e0',
+        'mcep_reg0',
+        'mcep_reg1e-2',
+        'mcep_reg1e-1',
+        'mcep_reg1e0',
     ],
     'num_trajectories': [1000],
     'few_shot': [1, 2, 5, 10, 20, 50, 100],
@@ -215,10 +205,10 @@ EXPERIMENTS['few-jungle-small'] = {
     'rl': 'max_causal_ent',
     'irl': [
         'mces',
-        'mcep_scale1_reg0',
-        'mcep_scale1_reg1e-2',
-        'mcep_scale1_reg1e-1',
-        'mcep_scale1_reg1e0',
+        'mcep_reg0',
+        'mcep_reg1e-2',
+        'mcep_reg1e-1',
+        'mcep_reg1e0',
     ],
     'num_trajectories': [1000],
     'few_shot': [1, 2, 5, 10, 20, 50, 100],

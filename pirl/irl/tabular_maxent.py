@@ -156,9 +156,8 @@ def irl(mdp, trajectories, discount, demo_counts=None, horizon=None,
 
 
 def population_irl(mdps, trajectories, discount, planner=max_causal_ent_policy,
-                   individual_reg=1e-2, common_scale=1, demean=False,
-                   optimizer=None, scheduler=None, num_iter=5000,
-                   log_every=100, log_expensive_every=1000):
+                   individual_reg=1e-2, optimizer=None, scheduler=None,
+                   num_iter=5000, log_every=100, log_expensive_every=1000):
     """
     Args:
         - mdp(dict<TabularMdpEnv>): MDPs trajectories were drawn from.
@@ -175,8 +174,6 @@ def population_irl(mdps, trajectories, discount, planner=max_causal_ent_policy,
         - individual_reg(float): regularization factor for per-agent reward.
             Penalty factor applied to the l_2 norm of per-agent reward matrices,
             divided by the number of trajectories.
-        - common_scale(float): scaling factor for common gradient update.
-        - demean(bool): demean the gradient.
         - optimizer(callable): a callable returning a torch.optim object.
             The callable is called with an iterable of parameters to optimize.
         - scheduler(callable): a callable returning a torch.optim.lr_scheduler.
@@ -206,7 +203,6 @@ def population_irl(mdps, trajectories, discount, planner=max_causal_ent_policy,
 
         nS, _, _ = trans.shape
         rewards[name] = Variable(torch.zeros(nS), requires_grad=True)
-    rewards['common'] = Variable(torch.zeros(nS), requires_grad=True)
 
     horizons = {}
     demo_counts = {}
@@ -223,14 +219,11 @@ def population_irl(mdps, trajectories, discount, planner=max_causal_ent_policy,
     it = TrainingIterator(num_iter, 'population_irl', heartbeat_iters=100)
     for i in it:
         optimizer.zero_grad()
-        effective_rewards = {name: r + rewards['common'] * common_scale
-                             for name, r in rewards.items()
-                             if name != 'common'}
         pols = {name: planner(transitions[name],
-                              effective_reward.data.numpy(),
+                              reward.data.numpy(),
                               horizons[name],
                               discount)
-                for name, effective_reward in effective_rewards.items()}
+                for name, reward in rewards.items()}
         ecs = {name: expected_counts(pol,
                                      transitions[name],
                                      initial_states[name],
@@ -238,18 +231,12 @@ def population_irl(mdps, trajectories, discount, planner=max_causal_ent_policy,
                                      discount)
                for name, pol in pols.items()}
         grads = {name: ec - demo_counts[name] for name, ec in ecs.items()}
-        weighted_grads = {k: v * len(trajectories[k]) for k, v in grads.items()}
-        common_grad = np.mean(list(weighted_grads.values()), axis=0)
-        common_grad /= sum([len(t) for t in trajectories.values()])
-        rewards['common'].grad = Variable(torch.Tensor(common_grad))
-
-        if demean:
-            grads = {k: g - common_grad for k, g in grads.items()}
+        common_reward = np.mean([v.data.numpy() for v in rewards.values()], axis=0)
 
         for name in mdps.keys():
-            g = grads[name]
             scale = individual_reg / len(trajectories[name])
-            g += scale * rewards[name].data.numpy()
+            delta = rewards[name].data.numpy() - common_reward
+            g = grads[name] + scale * delta
             rewards[name].grad = Variable(torch.Tensor(g))
 
         optimizer.step()
@@ -265,9 +252,6 @@ def population_irl(mdps, trajectories, discount, planner=max_causal_ent_policy,
             it.record('grads', {k: v.grad.data.numpy() for k, v in rewards.items()})
             it.record('rewards', {k: v.data.numpy().copy() for k, v in rewards.items()})
 
-    res = {k: (v + rewards['common']).data.numpy()
-           for k, v in rewards.items() if k != 'common'}
+    res = {k: v.data.numpy() for k, v in rewards.items()}
 
-    info = dict(it.vals)
-    info['common_reward'] = rewards['common'].data.numpy()
-    return res, info
+    return res, it.vals
