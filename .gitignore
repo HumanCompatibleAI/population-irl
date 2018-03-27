@@ -6,12 +6,13 @@
 *.pkl
 *.pdf
 
+
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]
 *$py.class
 
-# PyCharm Project Settings 
+# PyCharm Project Settings
 .idea/
 
 # Tests
@@ -19,3 +20,5 @@ __pycache__/
 
 # Logs
 logs/
+
+data/*

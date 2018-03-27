@@ -3,6 +3,7 @@ import sys
 
 import numpy as np
 from gym import utils
+from PIL import Image, ImageFont, ImageDraw
 
 from pirl.envs.tabular_mdp_env import TabularMdpEnv
 
@@ -55,6 +56,10 @@ def create_initial_state(grid):
 
 
 class GridWorldMdp(TabularMdpEnv):
+    metadata = {
+        'render.modes': ['human', 'rgb_array', 'ansi'],
+        'video.frames_per_second' : 10
+    }
     """A grid world where the objective is to navigate to one of many rewards.
 
     Specifies all of the static information that an agent has access to when
@@ -118,6 +123,10 @@ class GridWorldMdp(TabularMdpEnv):
         -9 cannot be represented with a single character. Such rewards are
         encoded as 'R' (if positive) or 'N' (if negative).
         """
+
+        if (mode == 'rgb_array'):
+            return self.rgb_render(mode)
+
         outfile = StringIO() if mode == 'ansi' else sys.stdout
 
         walls = self._walls
@@ -151,6 +160,50 @@ class GridWorldMdp(TabularMdpEnv):
 
         if mode == 'ansi':
             return outfile
+
+    def rgb_render(self, mode='human'):
+        walls = self._walls
+        initial_state = self.initial_states.reshape(walls.shape)
+        reward = self.reward.reshape(walls.shape)
+        width, height = walls.shape
+        current_x, current_y = self.state % width, self.state // width
+        initial_x, initial_y = self.initial_state % width, self.initial_state // width
+
+        S = int(1000 / width) #Always create an image about 1000 pixel wide
+
+        image = Image.new(mode='RGB', size=(width * S, height* S), color=255)
+        max_reward = np.amax(reward)
+        min_reward = np.min(reward)
+
+        def get_color(x, y):
+            if walls[y, x]:
+                return 'black'
+            elif initial_state[y, x] > 0:
+                #TODO: show where we actually started?
+                return 'rgb(0, 0, {})'.format(int(initial_state[y, x] * 255))
+            else:
+                r = reward[y, x]
+                if r > 0 and max_reward > 0:
+                    return 'rgb(0, {}, 0)'.format(int(r/max_reward * 255))
+                elif r < 0 and min_reward < 0:
+                    return 'rgb({}, 0, 0)'.format(int(r/min_reward * 255))
+                else:
+                    return 'white'
+        # Draw grid of rectangles
+        draw = ImageDraw.Draw(image)
+        for x in range(0,width):
+            for y in range(0,height):
+                draw.rectangle([(0+y*S,0+x*S),(S+y*S,S+x*S)], fill=get_color(x, y))
+
+        # Draw initial position
+        offset = int(1/4 * S)
+        draw.ellipse([(0+initial_y*S+offset,0+initial_x*S+offset),(S+initial_y*S-offset,S+initial_x*S-offset)], fill="rgb(60,60,60)")
+
+        # Draw current position
+        offset = int(1/4 * S)
+        draw.ellipse([(0+current_y*S+offset,0+current_x*S+offset),(S+current_y*S-offset,S+current_x*S-offset)], fill="rgb(255,255,255)")
+        
+        return np.array(image)
 
     @property
     def walls(self):

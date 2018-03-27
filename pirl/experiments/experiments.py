@@ -3,8 +3,6 @@ import functools
 import itertools
 import logging
 import os
-
-import git
 import gym
 from gym.utils import seeding
 
@@ -30,7 +28,6 @@ def sample(env, policy, rng):
 
     states = []
     actions = []
-
     state = env.reset()
 
     done = False
@@ -44,7 +41,8 @@ def sample(env, policy, rng):
     return states, actions
 
 
-def synthetic_data(env, policy, num_trajectories, seed):
+def synthetic_data(env, policy, num_trajectories, path, name, seed):
+    env = gym.wrappers.Monitor(env, '{}/{}/videos'.format(path, name.replace('/', '_')), video_callable=lambda x: True, force=True)
     rng, _ = seeding.np_random(seed)
     env.seed(seed)
     trajectories = [sample(env, policy, rng) for _i in range(num_trajectories)]
@@ -139,13 +137,6 @@ def run_few_shot_irl(experiment, cfg, pool, envs, trajectories):
         infos[irl_name][n][m][env] = info
     return rewards, infos
 
-
-def git_hash():
-    repo = git.Repo(path=os.path.realpath(__file__),
-                    search_parent_directories=True)
-    return repo.head.object.hexsha
-
-
 def _value(experiment, cfg, envs, rewards, rl_algo):
     '''
     Compute the expected value of (a) policies optimized on inferred reward,
@@ -210,7 +201,7 @@ def _value(experiment, cfg, envs, rewards, rl_algo):
     return value, ground_truth
 
 
-def run_experiment(experiment, pool, seed):
+def run_experiment(experiment, pool, path, seed):
     '''Run experiment defined in config.EXPERIMENTS.
 
     Args:
@@ -250,7 +241,7 @@ def run_experiment(experiment, pool, seed):
     )
     logger.debug('%s: generating synthetic data: sampling', experiment)
     trajectories = collections.OrderedDict(
-        (k, synthetic_data(e, policies[k], max(cfg['num_trajectories']), seed))
+        (k, synthetic_data(e, policies[k], max(cfg['num_trajectories']), path, k, seed))
         for k, e in envs.items()
     )
 
@@ -266,5 +257,4 @@ def run_experiment(experiment, pool, seed):
         'value': value,
         'ground_truth': ground_truth,
         'info': infos,
-        'version': git_hash(),
     }

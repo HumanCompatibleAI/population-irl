@@ -14,6 +14,7 @@ from multiprocessing import Pool, current_process
 import os
 import pickle
 import tempfile
+import git
 
 from pirl.experiments import config, experiments
 
@@ -57,6 +58,11 @@ def init_worker():
     current_process().name = current_process().name.replace('ForkPoolWorker-', 'worker')
     logging.config.dictConfig(config.LOGGING)
 
+def git_hash():
+    repo = git.Repo(path=os.path.realpath(__file__),
+                    search_parent_directories=True)
+    return repo.head.object.hexsha
+
 
 ISO_TIMESTAMP = "%Y%m%d_%H%M%S"
 
@@ -69,13 +75,14 @@ if __name__ == '__main__':
 
     for experiment in args.experiments:
         # reseed so does not matter which order experiments are run in
-        res = experiments.run_experiment(experiment, pool, args.seed)
-
         timestamp = datetime.now().strftime(ISO_TIMESTAMP)
-        version = res['version'][:6]
-        out_dir = '{}-{}-{}.pkl'.format(experiment, timestamp, version)
+        version = git_hash()
+        out_dir = '{}-{}-{}'.format(experiment, timestamp, version)
         path = os.path.join(args.data_dir, out_dir)
+
+        res = experiments.run_experiment(experiment, pool, path, args.seed)
+
         logger.info('Experiment %s completed. Outcome:\n %s. Saving to %s.',
                     experiment, res['value'], path)
-        with open(path, 'wb') as f:
+        with open('{}/results.pkl'.format(path), 'wb') as f:
             pickle.dump(res, f)
