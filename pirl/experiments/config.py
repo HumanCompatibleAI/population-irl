@@ -1,7 +1,10 @@
 import functools
 import itertools
+import sys
 
-from pirl import agents, irl
+import gym
+
+from pirl import agents, envs, irl
 
 # Logging
 LOGGING = {
@@ -95,12 +98,12 @@ TRADITIONAL_IRL_ALGORITHMS = {
 # demean vs non demean
 # without demeaning, change scale, regularization
 MY_IRL_ALGORITHMS = dict()
-for reg, scale in itertools.product(range(6), [1]):
+for reg, scale in itertools.product(range(-2,3), [1]):
     fn = functools.partial(irl.tabular_maxent.population_irl,
                            demean=False,
                            common_scale=scale,
-                           individual_reg=10 ** (-reg))
-    MY_IRL_ALGORITHMS['mcep_scale{}_reg1e-{}'.format(scale, reg)] = fn
+                           individual_reg=10 ** (reg))
+    MY_IRL_ALGORITHMS['mcep_scale{}_reg1e{}'.format(scale, reg)] = fn
 MY_IRL_ALGORITHMS['mcep_scale1_reg0'] = functools.partial(
     irl.tabular_maxent.population_irl,
    demean=False,
@@ -131,7 +134,7 @@ EXPERIMENTS['few-dummy-test'] = {
                      'pirl/GridWorld-Simple-Deterministic-v0'],
     'discount': 1.00,
     'rl': 'value_iteration',
-    'irl': ['mces', 'mcep'],
+    'irl': ['mces', 'mcep_scale1_reg0'],
     'num_trajectories': [20],
     'few_shot': [1, 5],
 }
@@ -139,7 +142,7 @@ EXPERIMENTS['dummy-test-deterministic'] = {
     'environments': ['pirl/GridWorld-Simple-Deterministic-v0'],
     'discount': 1.00,
     'rl': 'value_iteration',
-    'irl': ['mces', 'mcep'],
+    'irl': ['mces', 'mcep_scale1_reg0'],
     'num_trajectories': [20, 10],
 }
 
@@ -150,12 +153,13 @@ EXPERIMENTS['jungle'] = {
     'discount': 1.00,
     'rl': 'max_causal_ent',
     'irl': [
+        'mces',
         'mcep_scale1_reg0',
-        'mcep_scale1_reg1e-3',
         'mcep_scale1_reg1e-2',
         'mcep_scale1_reg1e-1',
         'mcep_scale1_reg1e0',
-        'mces',
+        'mcep_scale1_reg1e1',
+        'mcep_scale1_reg1e2',
     ],
     'num_trajectories': [1000, 500, 200, 100, 50, 30, 20, 10, 5],
 }
@@ -165,12 +169,13 @@ EXPERIMENTS['jungle-small'] = {
     'discount': 1.00,
     'rl': 'max_causal_ent',
     'irl': [
+        'mces',
         'mcep_scale1_reg0',
-        'mcep_scale1_reg1e-3',
         'mcep_scale1_reg1e-2',
         'mcep_scale1_reg1e-1',
         'mcep_scale1_reg1e0',
-        'mces',
+        'mcep_scale1_reg1e1',
+        'mcep_scale1_reg1e2',
     ],
     'num_trajectories': [500, 200, 100, 50, 30, 20, 10, 5],
 }
@@ -194,12 +199,13 @@ EXPERIMENTS['few-jungle'] = {
     'discount': 1.00,
     'rl': 'max_causal_ent',
     'irl': [
+        'mces',
         'mcep_scale1_reg0',
-        'mcep_scale1_reg1e-3',
         'mcep_scale1_reg1e-2',
         'mcep_scale1_reg1e-1',
         'mcep_scale1_reg1e0',
-        'mces',
+        'mcep_scale1_reg1e1',
+        'mcep_scale1_reg1e2',
     ],
     'num_trajectories': [1000],
     'few_shot': [1, 2, 5, 10, 20, 50, 100],
@@ -210,13 +216,28 @@ EXPERIMENTS['few-jungle-small'] = {
     'discount': 1.00,
     'rl': 'max_causal_ent',
     'irl': [
+        'mces',
         'mcep_scale1_reg0',
-        'mcep_scale1_reg1e-3',
         'mcep_scale1_reg1e-2',
         'mcep_scale1_reg1e-1',
         'mcep_scale1_reg1e0',
-        'mces',
+        'mcep_scale1_reg1e1',
+        'mcep_scale1_reg1e2',
     ],
     'num_trajectories': [1000],
     'few_shot': [1, 2, 5, 10, 20, 50, 100],
 }
+
+def validate_config():
+    for k, v in EXPERIMENTS.items():
+        try:
+            gym.envs.registry.spec('pirl/GridWorld-Jungle-4x4-Liquid-v0')
+            float(v['discount'])
+            RL_ALGORITHMS[v['rl']]
+            for irl in v['irl']:
+                IRL_ALGORITHMS[irl]
+            [int(t) for t in v['num_trajectories']]
+            [int(t) for t in v.get('few_shot', [])]
+        except Exception as e:
+            msg = 'In experiment ' + k + ': ' + str(e)
+            raise type(e)(msg).with_traceback(sys.exc_info()[2])

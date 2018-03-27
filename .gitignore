@@ -12,6 +12,10 @@ __pycache__/
 *.py[cod]
 *$py.class
 
+# Jupyter notebook
+.ipynb_checkpoints/
+*-scratch.ipynb
+
 # PyCharm Project Settings
 .idea/
 
