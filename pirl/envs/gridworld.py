@@ -56,10 +56,6 @@ def create_initial_state(grid):
 
 
 class GridWorldMdp(TabularMdpEnv):
-    metadata = {
-        'render.modes': ['human', 'rgb_array', 'ansi'],
-        'video.frames_per_second' : 10
-    }
     """A grid world where the objective is to navigate to one of many rewards.
 
     Specifies all of the static information that an agent has access to when
@@ -71,6 +67,13 @@ class GridWorldMdp(TabularMdpEnv):
     paths). It can also take the STAY action, in which case it does not receive
     the living reward.
     """
+
+    # Metadata is necessary for gym monitor to record videos
+    metadata = {
+        'render.modes': ['human', 'rgb_array', 'ansi'],
+        'video.frames_per_second' : 10
+    }
+
     def __init__(self, walls, reward, initial_state, terminal, noise=0.2):
         """Create an N*M grid world of the specified structure.
 
@@ -169,7 +172,7 @@ class GridWorldMdp(TabularMdpEnv):
         current_x, current_y = self.state % width, self.state // width
         initial_x, initial_y = self.initial_state % width, self.initial_state // width
 
-        S = int(1000 / width) #Always create an image about 1000 pixel wide
+        S = (500 // width)*2 #Always create an image about 1000 pixel wide
 
         image = Image.new(mode='RGB', size=(width * S, height* S), color=255)
         max_reward = np.amax(reward)
@@ -202,7 +205,7 @@ class GridWorldMdp(TabularMdpEnv):
         # Draw current position
         offset = int(1/4 * S)
         draw.ellipse([(0+current_y*S+offset,0+current_x*S+offset),(S+current_y*S-offset,S+current_x*S-offset)], fill="rgb(255,255,255)")
-        
+
         return np.array(image)
 
     @property
