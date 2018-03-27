@@ -166,7 +166,7 @@ class GridWorldMdp(TabularMdpEnv):
 
     def rgb_render(self, mode='human'):
         walls = self._walls
-        initial_state = self.initial_states.reshape(walls.shape)
+        initial_states = self.initial_states.reshape(walls.shape)
         reward = self.reward.reshape(walls.shape)
         width, height = walls.shape
         current_x, current_y = self.state % width, self.state // width
@@ -181,9 +181,8 @@ class GridWorldMdp(TabularMdpEnv):
         def get_color(x, y):
             if walls[y, x]:
                 return 'black'
-            elif initial_state[y, x] > 0:
-                #TODO: show where we actually started?
-                return 'rgb(0, 0, {})'.format(int(initial_state[y, x] * 255))
+            elif initial_states[y, x] > 0:
+                return 'rgb(0, 0, {})'.format(int(initial_states[y, x] * 255))
             else:
                 r = reward[y, x]
                 if r > 0 and max_reward > 0:
@@ -194,17 +193,25 @@ class GridWorldMdp(TabularMdpEnv):
                     return 'white'
         # Draw grid of rectangles
         draw = ImageDraw.Draw(image)
-        for x in range(0,width):
-            for y in range(0,height):
+        for x in range(0, width):
+            for y in range(0, height):
                 draw.rectangle([(0+x*S,0+y*S),(S+x*S,S+y*S)], fill=get_color(x, y))
 
         # Draw initial position
-        offset = int(1/4 * S)
-        draw.ellipse([(0+initial_x*S+offset,0+initial_y*S+offset),(S+initial_x*S-offset,S+initial_y*S-offset)], fill="rgb(60,60,60)")
+        offset = S // 4
+        draw.ellipse([(0+initial_x*S+offset,0+initial_y*S+offset),
+                      (S+initial_x*S-offset,S+initial_y*S-offset)],
+                      fill="rgb(60,60,60)")
 
         # Draw current position
-        offset = int(1/4 * S)
-        draw.ellipse([(0+current_x*S+offset,0+current_y*S+offset),(S+current_x*S-offset,S+current_y*S-offset)], fill="rgb(255,255,255)")
+        offset = S // 4
+        draw.ellipse([(0+current_x*S+offset,0+current_y*S+offset),
+                      (S+current_x*S-offset,S+current_y*S-offset)],
+                      fill="rgb(255,255,255)")
+        offset = 2 * S // 5
+        draw.ellipse([(0+current_x*S+offset,0+current_y*S+offset),
+                      (S+current_x*S-offset,S+current_y*S-offset)],
+                      fill="rgb(0,0,0)")
 
         return np.array(image)
 
