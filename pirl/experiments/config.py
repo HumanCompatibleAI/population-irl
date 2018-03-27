@@ -102,7 +102,7 @@ for reg, scale in itertools.product(range(-2,3), [1]):
     fn = functools.partial(irl.tabular_maxent.population_irl,
                            demean=False,
                            common_scale=scale,
-                           individual_reg=10 ** (reg))
+                           individual_reg=10 ** reg)
     MY_IRL_ALGORITHMS['mcep_scale{}_reg1e{}'.format(scale, reg)] = fn
 MY_IRL_ALGORITHMS['mcep_scale1_reg0'] = functools.partial(
     irl.tabular_maxent.population_irl,
@@ -204,8 +204,6 @@ EXPERIMENTS['few-jungle'] = {
         'mcep_scale1_reg1e-2',
         'mcep_scale1_reg1e-1',
         'mcep_scale1_reg1e0',
-        'mcep_scale1_reg1e1',
-        'mcep_scale1_reg1e2',
     ],
     'num_trajectories': [1000],
     'few_shot': [1, 2, 5, 10, 20, 50, 100],
@@ -221,8 +219,6 @@ EXPERIMENTS['few-jungle-small'] = {
         'mcep_scale1_reg1e-2',
         'mcep_scale1_reg1e-1',
         'mcep_scale1_reg1e0',
-        'mcep_scale1_reg1e1',
-        'mcep_scale1_reg1e2',
     ],
     'num_trajectories': [1000],
     'few_shot': [1, 2, 5, 10, 20, 50, 100],
