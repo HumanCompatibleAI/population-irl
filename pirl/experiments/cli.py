@@ -9,6 +9,7 @@ CLI app that takes a given environment and RL algorithm and:
 
 import argparse
 from datetime import datetime
+import functools
 import logging.config
 from multiprocessing import Pool, current_process
 import os
@@ -54,9 +55,9 @@ def parse_args():
     return parser.parse_args()
 
 
-def init_worker():
+def init_worker(timestamp):
     current_process().name = current_process().name.replace('ForkPoolWorker-', 'worker')
-    logging.config.dictConfig(config.LOGGING)
+    logging.config.dictConfig(config.logging(timestamp))
 
 def git_hash():
     repo = git.Repo(path=os.path.realpath(__file__),
@@ -68,12 +69,22 @@ ISO_TIMESTAMP = "%Y%m%d_%H%M%S"
 
 if __name__ == '__main__':
     config.validate_config()  # fail fast and early
-    args = parse_args()
-    current_process().name = 'master'
-    logging.config.dictConfig(config.LOGGING)
-    logger.info('Starting pool')
-    pool = Pool(args.num_cores, initializer=init_worker)
 
+    # Logging
+    current_process().name = 'master'
+    timestamp = datetime.now().strftime(ISO_TIMESTAMP)
+    logging.config.dictConfig(config.logging(timestamp))
+
+    # Argument parsing
+    args = parse_args()
+    logger.info('CLI args: %s', args)
+
+    # Pool
+    logger.info('Starting pool')
+    pool = Pool(args.num_cores,
+                initializer=functools.partial(init_worker, timestamp))
+
+    # Experiment loop
     for experiment in args.experiments:
         # reseed so does not matter which order experiments are run in
         timestamp = datetime.now().strftime(ISO_TIMESTAMP)

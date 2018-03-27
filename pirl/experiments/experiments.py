@@ -2,7 +2,6 @@ import collections
 import functools
 import itertools
 import logging
-import os
 import gym
 from gym.utils import seeding
 
@@ -72,6 +71,7 @@ class LearnedRewardWrapper(gym.Wrapper):
         return self.new_reward
 
 
+@utils.log_errors
 def _run_irl(irl_name, n, experiment, envs, trajectories, discount):
     logger.debug('%s: running IRL algo: %s [%d]', experiment, irl_name, n)
     irl_algo = make_irl_algo(irl_name)
@@ -103,6 +103,7 @@ def run_irl(experiment, cfg, pool, envs, trajectories):
     return rewards, info
 
 
+@utils.log_errors
 def _run_few_shot_irl(irl_name, n, m, small_env,
                       experiment, envs, trajectories, discount):
     logger.debug('%s: running IRL algo: %s [%s=%d/%d]',
@@ -111,6 +112,7 @@ def _run_few_shot_irl(irl_name, n, m, small_env,
     subset = {k: v[:n] for k, v in trajectories.items()}
     subset[small_env] = subset[small_env][:m]
     return irl_algo(envs, subset, discount=discount)
+
 
 def run_few_shot_irl(experiment, cfg, pool, envs, trajectories):
     '''Same spec as run_irl.'''

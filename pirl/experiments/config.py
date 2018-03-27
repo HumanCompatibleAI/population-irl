@@ -7,36 +7,37 @@ import gym
 from pirl import agents, envs, irl
 
 # Logging
-LOGGING = {
-    'version': 1,
-    'disable_existing_loggers': False,
-    'formatters': {
-        'standard': {
-            'format': '(%(processName)s) %(asctime)s [%(levelname)s] %(name)s: %(message)s',
+def logging(identifier):
+    return {
+        'version': 1,
+        'disable_existing_loggers': False,
+        'formatters': {
+            'standard': {
+                'format': '(%(processName)s) %(asctime)s [%(levelname)s] %(name)s: %(message)s',
+            },
         },
-    },
-    'handlers': {
-        'stream': {
-            'level': 'DEBUG',
-            'formatter': 'standard',
-            'class': 'logging.StreamHandler',
+        'handlers': {
+            'stream': {
+                'level': 'DEBUG',
+                'formatter': 'standard',
+                'class': 'logging.StreamHandler',
+            },
+            'file': {
+                'formatter': 'standard',
+                'filename': 'logs/pirl-{}.log'.format(identifier),
+                'maxBytes': 100 * 1024 * 1024,
+                'backupCount': 3,
+                'class': 'logging.handlers.RotatingFileHandler',
+            },
         },
-        'file': {
-            'formatter': 'standard',
-            'filename': 'logs/pirl.log',
-            'maxBytes': 100 * 1024 * 1024,
-            'backupCount': 3,
-            'class': 'logging.handlers.RotatingFileHandler',
-        },
-    },
-    'loggers': {
-        '': {
-            'handlers': ['stream', 'file'],
-            'level': 'DEBUG',
-            'propagate': True
-        },
+        'loggers': {
+            '': {
+                'handlers': ['stream', 'file'],
+                'level': 'DEBUG',
+                'propagate': True
+            },
+        }
     }
-}
 
 # RL Algorithms
 RL_ALGORITHMS = {
