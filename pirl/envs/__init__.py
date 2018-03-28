@@ -4,6 +4,7 @@ from gym.envs.registration import register
 from pirl.envs import gridworld, tabular_mdp_env
 from pirl.envs.gridworld import GridWorldMdp
 from pirl.envs.tabular_mdp_env import TabularMdpEnv
+from pirl.envs.seaquest import SeaquestPopulation
 
 ### Gridworlds
 
@@ -82,3 +83,11 @@ for kind, cells in cfg.items():
                 'noise': 0.2,
             }
         )
+
+## Register seaquest environment
+register(
+    id='pirl/SeaquestPopulation-v0',
+    entry_point='pirl.envs:SeaquestPopulation',
+    max_episode_steps=1000000, # Randomly picked one million, no idea whether this is a sensible episode length
+    kwargs={},
+)
