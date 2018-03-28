@@ -1,5 +1,7 @@
 import collections
+import functools
 import logging
+import traceback
 import time
 
 from gym.utils import seeding
@@ -91,3 +93,17 @@ class TrainingIterator(object):
 
     def record(self, k, v):
         self._vals.setdefault(k, collections.OrderedDict())[self._i] = v
+
+def log_errors(f):
+    '''For use with multiprocessing. If an exception occurs, log it immediately
+       and then reraise it. This gives early warning in the event of an error
+       (by default, multiprocessing will wait on all other executions before
+        raising or in any way reporting the exception).'''
+    @functools.wraps(f)
+    def helper(*args, **kwargs):
+        try:
+            return f(*args, **kwargs)
+        except Exception as e:
+            logger.error('Error in subprocess: %s', traceback.format_exc())
+            raise e
+    return helper

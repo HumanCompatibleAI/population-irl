@@ -2,7 +2,6 @@ import collections
 import functools
 import itertools
 import logging
-import os
 import gym
 from gym.utils import seeding
 
@@ -41,8 +40,16 @@ def sample(env, policy, rng):
     return states, actions
 
 
-def synthetic_data(env, policy, num_trajectories, path, name, seed):
-    env = gym.wrappers.Monitor(env, '{}/{}/videos'.format(path, name.replace('/', '_')), video_callable=lambda x: True, force=True)
+def synthetic_data(name, env, policy, num_trajectories, path, video_every, seed):
+    out_dir = '{}/{}/videos'.format(path, name.replace('/', '_'))
+    if video_every is None:
+        video_callable = lambda x: False
+    else:
+        video_callable = lambda x: x % video_every == 0
+    env = gym.wrappers.Monitor(env,
+                               out_dir,
+                               video_callable=video_callable,
+                               force=True)
     rng, _ = seeding.np_random(seed)
     env.seed(seed)
     trajectories = [sample(env, policy, rng) for _i in range(num_trajectories)]
@@ -72,6 +79,7 @@ class LearnedRewardWrapper(gym.Wrapper):
         return self.new_reward
 
 
+@utils.log_errors
 def _run_irl(irl_name, n, experiment, envs, trajectories, discount):
     logger.debug('%s: running IRL algo: %s [%d]', experiment, irl_name, n)
     irl_algo = make_irl_algo(irl_name)
@@ -103,6 +111,7 @@ def run_irl(experiment, cfg, pool, envs, trajectories):
     return rewards, info
 
 
+@utils.log_errors
 def _run_few_shot_irl(irl_name, n, m, small_env,
                       experiment, envs, trajectories, discount):
     logger.debug('%s: running IRL algo: %s [%s=%d/%d]',
@@ -111,6 +120,7 @@ def _run_few_shot_irl(irl_name, n, m, small_env,
     subset = {k: v[:n] for k, v in trajectories.items()}
     subset[small_env] = subset[small_env][:m]
     return irl_algo(envs, subset, discount=discount)
+
 
 def run_few_shot_irl(experiment, cfg, pool, envs, trajectories):
     '''Same spec as run_irl.'''
@@ -201,12 +211,13 @@ def _value(experiment, cfg, envs, rewards, rl_algo):
     return value, ground_truth
 
 
-def run_experiment(experiment, pool, path, seed):
+def run_experiment(experiment, pool, path, video_every, seed):
     '''Run experiment defined in config.EXPERIMENTS.
 
     Args:
         - experiment(str): experiment name.
         - pool(multiprocessing.Pool)
+        - video_every(optional[int]): if None, do not record video.
         - seed(int)
 
     Returns:
@@ -240,8 +251,10 @@ def run_experiment(experiment, pool, path, seed):
         for name, env in envs.items()
     )
     logger.debug('%s: generating synthetic data: sampling', experiment)
+    max_trajectories = max(cfg['num_trajectories'])
     trajectories = collections.OrderedDict(
-        (k, synthetic_data(e, policies[k], max(cfg['num_trajectories']), path, k, seed))
+        (k, synthetic_data(k, e, policies[k], max_trajectories,
+                           path, video_every, seed))
         for k, e in envs.items()
     )
 

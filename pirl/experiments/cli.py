@@ -9,6 +9,7 @@ CLI app that takes a given environment and RL algorithm and:
 
 import argparse
 from datetime import datetime
+import functools
 import logging.config
 from multiprocessing import Pool, current_process
 import os
@@ -47,6 +48,8 @@ def parse_args():
     parser.add_argument('--data_dir', metavar='dir', default='./data',
                         type=writable_dir)
     parser.add_argument('--seed', metavar='N', default=1234, type=int)
+    parser.add_argument('--video-every', metavar='N', default=1, type=int,
+                        help='video every N episodes; 0 to disable.')
     parser.add_argument('--num-cores', metavar='N', default=None, type=int)
     parser.add_argument('experiments', metavar='experiment',
                         type=experiment_type, nargs='+')
@@ -54,9 +57,9 @@ def parse_args():
     return parser.parse_args()
 
 
-def init_worker():
+def init_worker(timestamp):
     current_process().name = current_process().name.replace('ForkPoolWorker-', 'worker')
-    logging.config.dictConfig(config.LOGGING)
+    logging.config.dictConfig(config.logging(timestamp))
 
 def git_hash():
     repo = git.Repo(path=os.path.realpath(__file__),
@@ -68,12 +71,23 @@ ISO_TIMESTAMP = "%Y%m%d_%H%M%S"
 
 if __name__ == '__main__':
     config.validate_config()  # fail fast and early
-    args = parse_args()
-    current_process().name = 'master'
-    logging.config.dictConfig(config.LOGGING)
-    logger.info('Starting pool')
-    pool = Pool(args.num_cores, initializer=init_worker)
 
+    # Logging
+    current_process().name = 'master'
+    timestamp = datetime.now().strftime(ISO_TIMESTAMP)
+    logging.config.dictConfig(config.logging(timestamp))
+
+    # Argument parsing
+    args = parse_args()
+    video_every = args.video_every if args.video_every != 0 else None
+    logger.info('CLI args: %s', args)
+
+    # Pool
+    logger.info('Starting pool')
+    pool = Pool(args.num_cores,
+                initializer=functools.partial(init_worker, timestamp))
+
+    # Experiment loop
     for experiment in args.experiments:
         # reseed so does not matter which order experiments are run in
         timestamp = datetime.now().strftime(ISO_TIMESTAMP)
@@ -81,7 +95,8 @@ if __name__ == '__main__':
         out_dir = '{}-{}-{}'.format(experiment, timestamp, version)
         path = os.path.join(args.data_dir, out_dir)
 
-        res = experiments.run_experiment(experiment, pool, path, args.seed)
+        res = experiments.run_experiment(experiment, pool, path,
+                                         video_every, args.seed)
 
         logger.info('Experiment %s completed. Outcome:\n %s. Saving to %s.',
                     experiment, res['value'], path)
