@@ -78,7 +78,7 @@ def traditional_to_single(f):
 def traditional_to_concat(f):
     @functools.wraps(f)
     def helper(envs, trajectories, **kwargs):
-        concat_trajectories = itertools.chain(*trajectories.values())
+        concat_trajectories = list(itertools.chain(*trajectories.values()))
         # Pick an environment arbitrarily. In the typical use case,
         # they are all the same up to reward anyway.
         env = list(envs.values())[0]
@@ -125,7 +125,7 @@ EXPERIMENTS['few-dummy-test'] = {
                      'pirl/GridWorld-Simple-Deterministic-v0'],
     'discount': 1.00,
     'rl': 'value_iteration',
-    'irl': ['mces', 'mcep_reg0'],
+    'irl': ['mces', 'mcec', 'mcep_reg0'],
     'num_trajectories': [20],
     'few_shot': [1, 5],
 }
@@ -145,12 +145,11 @@ EXPERIMENTS['jungle'] = {
     'rl': 'max_causal_ent',
     'irl': [
         'mces',
+        'mcec',
         'mcep_reg0',
         'mcep_reg1e-2',
         'mcep_reg1e-1',
         'mcep_reg1e0',
-        'mcep_reg1e1',
-        'mcep_reg1e2',
     ],
     'num_trajectories': [1000, 500, 200, 100, 50, 30, 20, 10, 5],
 }
@@ -161,12 +160,11 @@ EXPERIMENTS['jungle-small'] = {
     'rl': 'max_causal_ent',
     'irl': [
         'mces',
+        'mcec',
         'mcep_reg0',
         'mcep_reg1e-2',
         'mcep_reg1e-1',
         'mcep_reg1e0',
-        'mcep_reg1e1',
-        'mcep_reg1e2',
     ],
     'num_trajectories': [500, 200, 100, 50, 30, 20, 10, 5],
 }
@@ -191,6 +189,7 @@ EXPERIMENTS['few-jungle'] = {
     'rl': 'max_causal_ent',
     'irl': [
         'mces',
+        'mcec',
         'mcep_reg0',
         'mcep_reg1e-2',
         'mcep_reg1e-1',
@@ -206,6 +205,7 @@ EXPERIMENTS['few-jungle-small'] = {
     'rl': 'max_causal_ent',
     'irl': [
         'mces',
+        'mcec',
         'mcep_reg0',
         'mcep_reg1e-2',
         'mcep_reg1e-1',
