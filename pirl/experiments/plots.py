@@ -37,14 +37,13 @@ def extract_value(data):
     return res
 
 
-def _gridworld_heatmap(reward, shape, ax, walls=None):
+def _gridworld_heatmap(reward, shape, walls=None, **kwargs):
     reward = reward.reshape(shape)
-    sns.heatmap(reward,
-                mask=walls,
-                annot=True,
-                annot_kws={'fontsize': 'smaller'},
-                fmt='.0f',
-                ax=ax)
+    kwargs.setdefault('fmt', '.0f')
+    kwargs.setdefault('annot', True)
+    kwargs.setdefault('annot_kws', {'fontsize': 'smaller'})
+    sns.heatmap(reward, mask=walls, **kwargs)
+
 
 def gridworld_heatmap(reward, shape, num_cols=3, figsize=(11.6, 8.6)):
     envs = list(list(reward.values())[0].values())[0].keys()
@@ -68,7 +67,7 @@ def gridworld_heatmap(reward, shape, num_cols=3, figsize=(11.6, 8.6)):
             walls = env.unwrapped.walls
         except AttributeError:
             walls = None
-        _gridworld_heatmap(gt, shape, axs[i], walls)
+        _gridworld_heatmap(gt, shape, walls, ax=axs[i])
         axs[i].set_title('Ground Truth')
 
         for n, reward_by_m in reward.items():
@@ -76,11 +75,12 @@ def gridworld_heatmap(reward, shape, num_cols=3, figsize=(11.6, 8.6)):
                 r = r[env_name]
                 i += 1
                 r = r - np.mean(r) + np.mean(gt)
-                _gridworld_heatmap(r, shape, axs[i])
+                _gridworld_heatmap(r, shape, ax=axs[i])
                 axs[i].set_title('{}/{}'.format(m, n))
 
         yield env_name, fig
         plt.close()
+
 
 def save_figs(figs, prefix):
     os.makedirs(prefix, exist_ok=True)
