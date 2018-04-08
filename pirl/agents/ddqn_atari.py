@@ -6,6 +6,7 @@ import argparse
 from datetime import datetime
 import os
 import tempfile
+import time
 
 import tensorflow as tf
 import zipfile
@@ -204,6 +205,13 @@ def learn(env,
     reset = True
     model_saved = False
     model_file = os.path.join(out_dir, "model")
+    if os.path.exists(model_file + '.index'):
+        load_state(model_file)
+        logger.log('Restored model from {}'.format(model_file))
+        exploration = LinearSchedule(schedule_timesteps=1,
+                                     initial_p=1.0,
+                                     final_p=exploration_final_eps)
+
     for t in range(max_timesteps):
         if callback is not None:
             if callback(locals(), globals()):
@@ -280,11 +288,79 @@ def learn(env,
     return act
 
 
+def train(env, args):
+    # Parameters from Wang et al (2016): https://arxiv.org/pdf/1511.06581.pdf
+    model = deepq.models.cnn_to_mlp(
+        convs=[(32, 8, 4), (64, 4, 2), (64, 3, 1)],
+        hiddens=[512],
+        dueling=True,
+    )
+    ISO_TIMESTAMP = "%Y%m%d_%H%M%S"
+    timestamp = datetime.now().strftime(ISO_TIMESTAMP)
+    if args.out_dir is None:
+        out_dir = os.path.join('data', 'deepq', '{}-{}'.format(args.env, timestamp))
+    else:
+        out_dir = args.out_dir
+    os.makedirs(out_dir, exist_ok=True)
+
+    act = learn(
+        env,
+        q_func=model,
+        out_dir=out_dir,
+        lr=1e-4,
+        max_timesteps=args.num_timesteps,
+        buffer_size=10000,
+        exploration_fraction=0.1,
+        exploration_final_eps=0.01,
+        train_freq=4,
+        learning_starts=10000,
+        target_network_update_freq=1000,
+        gamma=0.99,
+        prioritized_replay=True,
+    )
+    act.save("{}/model.pkl".format(out_dir))
+    env.close()
+
+
+def test(env, args):
+    act = ActWrapper.load(args.model)
+
+    while True:
+        obs, done = env.reset(), False
+        episode_rew = 0
+        delay = 1 / args.fps
+        target_next_frame = time.time()
+        while not done:
+            loop_start = time.time()
+            delta = target_next_frame - loop_start
+            if delta > 0:
+                time.sleep(delta)
+            env.render()
+            target_next_frame = loop_start + delay
+            obs, rew, done, _ = env.step(act(obs[None])[0])
+            episode_rew += rew
+        print("Episode reward", episode_rew)
+
+
 def main():
     parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter)
-    parser.add_argument('--env', help='environment ID', default='SeaquestNoFrameskip-v4')
+    parser.add_argument('--env', help='environment ID',
+                        default='SeaquestNoFrameskip-v4')
     parser.add_argument('--seed', help='RNG seed', type=int, default=0)
-    parser.add_argument('--num-timesteps', type=int, default=int(10e6))
+    subparsers = parser.add_subparsers(dest='subparser',
+                                       help='train model or test existing model')
+    train_parser = subparsers.add_parser('train')
+    # Mnih et al (2015) and other DeepMind work usually train for 200e6 frames,
+    # which is 50e6 time steps with 4 frameskip (introduced by wrapper in
+    # make_atari.)
+    train_parser.add_argument('--num-timesteps', type=int, default=int(50e6))
+    train_parser.add_argument('--out-dir', type=str, default=None,
+                              help='checkpoint directory')
+
+    test_parser = subparsers.add_parser('test')
+    test_parser.add_argument('--fps', type=int, default=int(1e3))
+    test_parser.add_argument('model', help='model file', type=str)
+
     args = parser.parse_args()
 
     config = tf.ConfigProto()
@@ -297,34 +373,12 @@ def main():
         env = bench.Monitor(env, logger.get_dir())
         env = deepq.wrap_atari_dqn(env)
 
-        # Parameters from Wang et al (2016): https://arxiv.org/pdf/1511.06581.pdf
-        model = deepq.models.cnn_to_mlp(
-            convs=[(32, 8, 4), (64, 4, 2), (64, 3, 1)],
-            hiddens=[512],
-            dueling=True,
-        )
-        ISO_TIMESTAMP = "%Y%m%d_%H%M%S"
-        timestamp = datetime.now().strftime(ISO_TIMESTAMP)
-        out_dir = os.path.join('data', 'deepq', '{}-{}'.format(args.env, timestamp))
-        os.makedirs(out_dir)
-
-        act = learn(
-            env,
-            q_func=model,
-            out_dir=out_dir,
-            lr=1e-4,
-            max_timesteps=args.num_timesteps,
-            buffer_size=10000,
-            exploration_fraction=0.1,
-            exploration_final_eps=0.01,
-            train_freq=4,
-            learning_starts=10000,
-            target_network_update_freq=1000,
-            gamma=0.99,
-            prioritized_replay=True,
-        )
-        act.save("{}/model.pkl".format(out_dir))
-        env.close()
+        if args.subparser == 'train':
+            train(env, args)
+        elif args.subparser == 'test':
+            test(env, args)
+        else:
+            assert False
 
 
 if __name__ == '__main__':
