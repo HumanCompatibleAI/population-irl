@@ -5,12 +5,14 @@
 
 I use Anaconda for dependencies, you can create an environment with the prerequisite dependencies by running:
 
-	conda env create --file environment.yml 
+	
+	conda env create name pirl
 	source activate pirl
+	pip install git+git://github.com/AdamGleave/rllab.git
+	pip install git+git://github.com/AdamGleave/inverse_rl.git
+	conda env update --name pirl --file environment.yml 
 
-If you are using GPU, you will also need to install CUDA 9.0 (or another version of CUDA, and adapt the version of PyTorch installed). Note the dependencies in the above file are the minimal required to run the project; you may also want to install packages such as IPython for development convenience.
-
-Alternately, if you wish to configure your own container, the dependencies are Python 3, NumPy, PyTorch and OpenAI Gym.
+Alternately, if you wish to configure your own container, the dependencies are RLLab, Python 3, NumPy, PyTorch and OpenAI Gym.
 
 ## Usage
 
