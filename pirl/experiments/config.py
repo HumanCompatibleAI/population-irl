@@ -3,8 +3,16 @@ import itertools
 import sys
 
 import gym
+import tensorflow as tf
 
 from pirl import agents, envs, irl
+
+# ML Framework Config
+def make_tf_config():
+    config = tf.ConfigProto()
+    config.gpu_options.allow_growth = True
+    return config
+TENSORFLOW = make_tf_config()
 
 # Logging
 def logging(identifier):
@@ -40,26 +48,45 @@ def logging(identifier):
     }
 
 # RL Algorithms
+ppo_cts = functools.partial(agents.ppo.train_continuous, num_timesteps=1e6)
+
 RL_ALGORITHMS = {
-    # Values take form (gen_policy, gen_optimal_policy, compute_value).
-    # Both functions take a gym.Env as their single argument.
-    # compute_value moreover takes as the second argument a return value from
-    # gen_policy, which may have been computed on an environment with a
-    # different reward.
+    # Values take form (gen_policy, gen_optimal_policy, compute_value, sample).
+    #
+    # Both gen_* functions have signature (env, discount) where env is a gym.Env
+    # and discount is a float. They return a policy (algorithm-specific object).
+    #
+    # compute_value has signature (env, policy, discount).
+    # It returns (mean, se) where mean is the estimated reward and se is the
+    # standard error (0 for exact methods).
+    #
+    # sample has signature (env, policy, num_episodes, seed) where
+    # num_episodes is the number of trajectories to sample, and seed is used
+    # to sample deterministically. It returns a list of 3-tuples
+    # (states, actions, rewards), each of which is a list.
     'value_iteration': (
         agents.tabular.env_wrapper(agents.tabular.q_iteration_policy),
         agents.tabular.env_wrapper(agents.tabular.q_iteration_policy),
         agents.tabular.value_of_policy,
+        agents.tabular.sample,
     ),
     'max_ent': (
         agents.tabular.env_wrapper(irl.tabular_maxent.max_ent_policy),
         agents.tabular.env_wrapper(agents.tabular.q_iteration_policy),
         agents.tabular.value_of_policy,
+        agents.tabular.sample,
     ),
     'max_causal_ent': (
         agents.tabular.env_wrapper(irl.tabular_maxent.max_causal_ent_policy),
         agents.tabular.env_wrapper(agents.tabular.q_iteration_policy),
         agents.tabular.value_of_policy,
+        agents.tabular.sample,
+    ),
+    'ppo_cts': (
+        ppo_cts,
+        ppo_cts,
+        agents.ppo.value,
+        agents.ppo.sample,
     )
 }
 
@@ -135,6 +162,13 @@ EXPERIMENTS['dummy-test-deterministic'] = {
     'rl': 'value_iteration',
     'irl': ['mces', 'mcep_reg0'],
     'num_trajectories': [20, 10],
+}
+EXPERIMENTS['dummy-continuous-test'] = {
+    'environments': ['airl/TwoDMaze-v0'],
+    'discount': 0.99,
+    'rl': 'ppo',
+    'irl': ['gcls'],
+    'num_trajectories': [10, 20],
 }
 
 # Jungle gridworld experiments

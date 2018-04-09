@@ -23,8 +23,11 @@ def extract_value(data):
             for n, value_by_n in value_by_irl.items():
                 for m, value_by_m in value_by_n.items():
                     k = '{}/{}'.format(m, n)
-                    d[k] = pd.Series(collections.OrderedDict(
-                        [(env, value_by_env[idx])
+                    d[k + '_mu'] = pd.Series(collections.OrderedDict(
+                        [(env, value_by_env[idx][0])
+                         for env, value_by_env in value_by_m.items()]))
+                    d[k + '_se'] = pd.Series(collections.OrderedDict(
+                        [(env, value_by_env[idx][1])
                          for env, value_by_env in value_by_m.items()]))
             df = pd.DataFrame(d)
             res[irl_name] = df

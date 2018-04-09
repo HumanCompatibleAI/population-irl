@@ -84,10 +84,11 @@ for kind, cells in cfg.items():
             }
         )
 
-## Register seaquest environment
+## Seaquest
 register(
     id='pirl/SeaquestPopulation-v0',
     entry_point='pirl.envs:SeaquestPopulation',
-    max_episode_steps=1000000, # Randomly picked one million, no idea whether this is a sensible episode length
+    max_episode_steps=100000,
     kwargs={},
 )
+

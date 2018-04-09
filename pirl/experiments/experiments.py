@@ -3,7 +3,6 @@ import functools
 import itertools
 import logging
 import gym
-from gym.utils import seeding
 
 from pirl import utils
 from pirl.experiments import config
@@ -21,26 +20,8 @@ def make_irl_algo(algo):
     return config.IRL_ALGORITHMS[algo]
 
 
-def sample(env, policy, rng):
-    #TODO: generalize. This is specialised to fully-observable MDPs,
-    # with a stochastic policy matrix.
-
-    states = []
-    actions = []
-    state = env.reset()
-
-    done = False
-    while not done:
-        states.append(state)
-        action_dist = policy[state]
-        action = utils.discrete_sample(action_dist, rng)
-        actions.append(action)
-        state, reward, done, _ = env.step(action)
-
-    return states, actions
-
-
-def synthetic_data(name, env, policy, num_trajectories, path, video_every, seed):
+def synthetic_data(name, env, policy, sample,
+                   num_trajectories, path, video_every, seed):
     out_dir = '{}/{}/videos'.format(path, name.replace('/', '_'))
     if video_every is None:
         video_callable = lambda x: False
@@ -50,10 +31,7 @@ def synthetic_data(name, env, policy, num_trajectories, path, video_every, seed)
                                out_dir,
                                video_callable=video_callable,
                                force=True)
-    rng, _ = seeding.np_random(seed)
-    env.seed(seed)
-    trajectories = [sample(env, policy, rng) for _i in range(num_trajectories)]
-    return trajectories
+    return sample(env, policy, num_trajectories, seed)
 
 
 class LearnedRewardWrapper(gym.Wrapper):
@@ -232,7 +210,7 @@ def run_experiment(experiment, pool, path, video_every, seed):
             to train a policy on the inferred reward, then compute expected
             discounted value obtained from the resulting policy.
         '''
-    utils.random_seed(seed)
+    seed = utils.random_seed(seed)
     cfg = config.EXPERIMENTS[experiment]
 
     # Generate synthetic data
@@ -241,13 +219,14 @@ def run_experiment(experiment, pool, path, video_every, seed):
     envs = collections.OrderedDict()
     for name in cfg['environments']:
         env = gym.make(name)
+        env.seed(seed)
         envs[name] = env
 
     logger.debug('%s: generating synthetic data: training', experiment)
     rl_algo = make_rl_algo(cfg['rl'])
     gen_policy = rl_algo[0]
     policies = collections.OrderedDict(
-        (name, gen_policy(env, discount=cfg['discount']))
+        (name, gen_policy(env, discount=cfg['discount'], seed=seed))
         for name, env in envs.items()
     )
     logger.debug('%s: generating synthetic data: sampling', experiment)

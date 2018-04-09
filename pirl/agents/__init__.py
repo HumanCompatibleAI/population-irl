@@ -1,1 +1,1 @@
-from pirl.agents import tabular
+from pirl.agents import tabular, ppo

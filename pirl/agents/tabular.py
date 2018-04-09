@@ -1,8 +1,9 @@
 import functools
 
+from gym.utils import seeding
 import numpy as np
 
-from pirl.utils import getattr_unwrapped
+from pirl.utils import discrete_sample, getattr_unwrapped
 
 def q_iteration(transition, reward, horizon, discount,
                 policy=None, max_error=1e-3):
@@ -51,6 +52,7 @@ def q_iteration(transition, reward, horizon, discount,
     }
     return Q, info
 
+
 def get_policy(Q):
     """
     Computes an optimal policy from a Q-matrix.
@@ -66,13 +68,16 @@ def get_policy(Q):
     pi = pi / pi.sum(1).reshape(nS, 1)
     return pi
 
+
 def q_iteration_policy(T, R, H, discount):
     Q, info = q_iteration(T, R, H, discount)
     return get_policy(Q)
 
+
 def env_wrapper(f):
     @functools.wraps(f)
-    def helper(env, reward=None, *args, **kwargs):
+    def helper(env, reward=None, seed=None, *args, **kwargs):
+        # seed ignored (no randomness in Q-iteration)
         T = getattr_unwrapped(env, 'transition')
         if reward is None:
             reward = getattr_unwrapped(env, 'reward')
@@ -80,11 +85,39 @@ def env_wrapper(f):
         return f(T, reward, H, *args, **kwargs)
     return helper
 
+
 def value_of_policy(env, policy, discount):
+    '''Exact value of a tabular policy in environment env with given discount.
+       Returns (value, 0), where 0 represents the standard error.'''
     T = getattr_unwrapped(env, 'transition')
     R = getattr_unwrapped(env, 'reward')
     H = getattr_unwrapped(env, '_max_episode_steps')
     Q, info = q_iteration(T, R, H, discount, policy=policy)
     V = Q.sum(1)
     initial_states = getattr_unwrapped(env, 'initial_states')
-    return np.sum(V * initial_states)
+    value = np.sum(V * initial_states)
+    return value, 0
+
+
+def sample(env, policy, num_episodes, seed):
+    # Seed to make results reproducible
+    env.seed(seed)
+    rng, _ = seeding.np_random(seed)
+
+    def helper():
+        '''Samples for one episode.'''
+        states = []
+        actions = []
+        rewards = []
+
+        state = env.reset()
+        done = False
+        while not done:
+            states.append(state)
+            action_dist = policy[state]
+            action = discrete_sample(action_dist, rng)
+            actions.append(action)
+            state, reward, done, _ = env.step(action)
+            rewards.append(reward)
+
+    return [helper() for i in range(num_episodes)]
