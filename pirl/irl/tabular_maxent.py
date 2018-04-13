@@ -89,7 +89,7 @@ default_scheduler = {
     ),
 }
 
-def irl(mdp, trajectories, discount, demo_counts=None, horizon=None,
+def irl(mdp, trajectories, discount, log_dir=None, demo_counts=None, horizon=None,
         planner=max_causal_ent_policy, optimizer=None, scheduler=None,
         num_iter=5000, log_every=100, log_expensive_every=1000):
     """
@@ -101,6 +101,7 @@ def irl(mdp, trajectories, discount, demo_counts=None, horizon=None,
             states/actions in that trajectory.
         - discount(float): between 0 and 1.
             Should match that of the agent generating the trajectories.
+        - log_dir: ignored.
         - demo_counts(array): expert visitation frequency; exclusive with trajectories.
             The expected visitation frequency of the optimal policy.
             Must supply horizon with this argument.
@@ -155,7 +156,7 @@ def irl(mdp, trajectories, discount, demo_counts=None, horizon=None,
     return reward.data.numpy(), it.vals
 
 
-def population_irl(mdps, trajectories, discount, planner=max_causal_ent_policy,
+def population_irl(mdps, trajectories, discount, log_dir=None, planner=max_causal_ent_policy,
                    individual_reg=1e-2, optimizer=None, scheduler=None,
                    num_iter=5000, log_every=100, log_expensive_every=1000):
     """
@@ -170,6 +171,7 @@ def population_irl(mdps, trajectories, discount, planner=max_causal_ent_policy,
             visited states/actions in that trajectory.
         - discount(float): between 0 and 1.
             Should match that of the agent generating the trajectories.
+        - log_dir: ignored.
         - planner(callable): max_ent_policy or max_causal_ent_policy.
         - individual_reg(float): regularization factor for per-agent reward.
             Penalty factor applied to the l_2 norm of per-agent reward matrices,

@@ -45,12 +45,13 @@ def load_model(log_dir):
     return model
 
 
-def train_continuous(env, discount, tf_config, log_dir, num_timesteps):
+def train_continuous(env, discount, log_dir, tf_config, num_timesteps):
     '''Policy with hyperparameters optimized for continuous control environments
        (e.g. MuJoCo). Returns log_dir, where the trained policy is saved.'''
     #TODO: should we set a seed from within here, or is it ok to rely on caller?
 
-    blogger.configure(dir=log_dir)
+    blog_dir = osp.join(log_dir, 'ppo')
+    blogger.configure(dir=blog_dir)
     #TODO: Do I want to use this for all algorithms?
     env = bench.Monitor(env, blogger.get_dir())
     with tf.Session(config=make_config(tf_config)):
@@ -66,14 +67,14 @@ def train_continuous(env, discount, tf_config, log_dir, num_timesteps):
             total_timesteps=num_timesteps,
             save_interval=4)
 
-    return log_dir
+    return blog_dir
 
 
-def value(env, log_dir, discount, tf_config, num_episodes=10, seed=0):
-    '''Test policy saved in log_dir on num_episodes in env.
+def value(env, blog_dir, discount, tf_config, num_episodes=10, seed=0):
+    '''Test policy saved in blog_dir on num_episodes in env.
         Return average reward.'''
     # TODO: does this belong in PPO or a more general class?
-    trajectories = sample(env, log_dir, tf_config, num_episodes, seed)
+    trajectories = sample(env, blog_dir, tf_config, num_episodes, seed)
     rewards = [r for (s, a, r) in trajectories]
     horizon = max([len(s) for (s, a, r) in trajectories])
     weights = np.cumprod([1] + [discount] * (horizon - 1))

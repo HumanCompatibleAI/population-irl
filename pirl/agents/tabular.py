@@ -76,8 +76,8 @@ def q_iteration_policy(T, R, H, discount):
 
 def env_wrapper(f):
     @functools.wraps(f)
-    def helper(env, reward=None, seed=None, *args, **kwargs):
-        # seed ignored (no randomness in Q-iteration)
+    def helper(env, log_dir=None, reward=None, *args, **kwargs):
+        # log_dir is not used but is needed to match function signature.
         T = getattr_unwrapped(env, 'transition')
         if reward is None:
             reward = getattr_unwrapped(env, 'reward')
@@ -119,5 +119,6 @@ def sample(env, policy, num_episodes, seed):
             actions.append(action)
             state, reward, done, _ = env.step(action)
             rewards.append(reward)
+        return states, actions, rewards
 
     return [helper() for i in range(num_episodes)]

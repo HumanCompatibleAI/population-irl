@@ -6,6 +6,8 @@ import gym
 import tensorflow as tf
 
 from pirl import agents, envs, irl
+from airl import envs as airl_envs
+airl_envs.register_custom_envs()
 
 # ML Framework Config
 def make_tf_config():
@@ -48,13 +50,16 @@ def logging(identifier):
     }
 
 # RL Algorithms
-ppo_cts = functools.partial(agents.ppo.train_continuous, num_timesteps=1e6)
+ppo_cts = functools.partial(agents.ppo.train_continuous,
+                            tf_config=TENSORFLOW,
+                            num_timesteps=1e6)
 
 RL_ALGORITHMS = {
     # Values take form (gen_policy, gen_optimal_policy, compute_value, sample).
     #
-    # Both gen_* functions have signature (env, discount) where env is a gym.Env
-    # and discount is a float. They return a policy (algorithm-specific object).
+    # Both gen_* functions have signature (env, discount, log_dir),
+    # where env is a gym.Env, discount is a float and log_dir is a writable directory.
+    # They return a policy (algorithm-specific object).
     #
     # compute_value has signature (env, policy, discount).
     # It returns (mean, se) where mean is the estimated reward and se is the
@@ -121,6 +126,8 @@ TRADITIONAL_IRL_ALGORITHMS = {
     # Maximum Entropy (Ziebart 2008)
     'me': functools.partial(irl.tabular_maxent.irl,
                             planner=irl.tabular_maxent.max_ent_policy),
+    'airl': functools.partial(irl.airl.irl,
+                              tf_config=TENSORFLOW),
 }
 
 MY_IRL_ALGORITHMS = dict()
@@ -131,6 +138,11 @@ for reg in range(-2,3):
 MY_IRL_ALGORITHMS['mcep_reg0'] = functools.partial(
     irl.tabular_maxent.population_irl, individual_reg=0)
 
+# Function with signature (env, trajectories, discount, log_dir) where:
+# - env is a gym.Env.
+# - trajectories is a dict of environment IDs to lists of trajectories.
+# - discount is a float in [0,1].
+# - log_dir is a directory which may be used for logging or other temporary output.
 IRL_ALGORITHMS = dict()
 IRL_ALGORITHMS.update(MY_IRL_ALGORITHMS)
 for name, algo in TRADITIONAL_IRL_ALGORITHMS.items():
@@ -166,8 +178,8 @@ EXPERIMENTS['dummy-test-deterministic'] = {
 EXPERIMENTS['dummy-continuous-test'] = {
     'environments': ['airl/TwoDMaze-v0'],
     'discount': 0.99,
-    'rl': 'ppo',
-    'irl': ['gcls'],
+    'rl': 'ppo_cts',
+    'irl': ['airls'],
     'num_trajectories': [10, 20],
 }
 

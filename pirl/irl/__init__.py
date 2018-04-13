@@ -1,1 +1,1 @@
-from pirl.irl import tabular_maxent
+from pirl.irl import airl, tabular_maxent
