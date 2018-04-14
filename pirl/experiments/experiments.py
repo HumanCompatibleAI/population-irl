@@ -22,21 +22,23 @@ def make_irl_algo(algo):
 
 
 @memory.cache(ignore=['out_dir', 'video_every', 'policy'])
-def synthetic_data(name, env, rl, num_trajectories, seed,
+def synthetic_data(env_name, rl, num_trajectories, seed,
                    out_dir, video_every, policy):
     '''Precondition: policy produced by RL algorithm rl.'''
     _, sample, _ = make_rl_algo(rl)
 
-    video_dir = '{}/{}/videos'.format(out_dir, name.replace('/', '_'))
+    video_dir = '{}/{}/videos'.format(out_dir, env_name.replace('/', '_'))
     if video_every is None:
         video_callable = lambda x: False
     else:
         video_callable = lambda x: x % video_every == 0
+    env = gym.make(env_name)
     env = gym.wrappers.Monitor(env,
                                video_dir,
                                video_callable=video_callable,
                                force=True)
     samples = sample(env, policy, num_trajectories, seed)
+    env.close()
     #TODO: numpy array rather than Python list?
     return [(observations, actions) for (observations, actions, rewards) in samples]
 
@@ -66,19 +68,24 @@ class LearnedRewardWrapper(gym.Wrapper):
 
 @utils.log_errors
 def _run_irl(irl_name, n, m, small_env, experiment,
-            out_dir, envs, trajectories, discount):
+            out_dir, env_names, trajectories, discount):
     logger.debug('%s: running IRL algo: %s [%s=%s/%s]',
                  experiment, irl_name, small_env, m, n)
     irl_algo, compute_value = make_irl_algo(irl_name)
     subset = {k: v[:n] for k, v in trajectories.items()}
     if small_env is not None:
         subset[small_env] = subset[small_env][:m]
+
     log_dir = osp.join(out_dir, '{}:{}:{}/{}'.format(irl_name, small_env, m, n))
+    envs = {k: gym.make(k) for k in env_names}
     rewards, policies = irl_algo(envs, subset, discount=discount, log_dir=log_dir)
     values = {k: compute_value(envs[k], p, discount) for k, p in policies.items()}
+    for env in envs:
+        env.close()
+
     return rewards, values
 
-def run_irl(experiment, out_dir, cfg, pool, envs, trajectories):
+def run_irl(experiment, out_dir, cfg, pool, trajectories):
     '''Run experiment in parallel. Returns tuple (reward, info) where each are
        nested OrderedDicts, with key in the format:
         - IRL algo
@@ -88,9 +95,9 @@ def run_irl(experiment, out_dir, cfg, pool, envs, trajectories):
        Note that for this experiment type, the second and third arguments are
        always the same.
     '''
-    f = functools.partial(_run_irl, experiment=experiment, out_dir=out_dir, envs=envs,
-                          trajectories=trajectories, discount=cfg['discount'],
-                          m=None, small_env=None)
+    f = functools.partial(_run_irl, experiment=experiment, out_dir=out_dir,
+                          env_names=cfg['environments'], trajectories=trajectories,
+                          discount=cfg['discount'], m=None, small_env=None)
     args = list(itertools.product(cfg['irl'], sorted(cfg['num_trajectories'])))
     results = pool.starmap(f, args, chunksize=1)
     rewards = collections.OrderedDict()
@@ -103,14 +110,16 @@ def run_irl(experiment, out_dir, cfg, pool, envs, trajectories):
     return rewards, values
 
 
-def run_few_shot_irl(experiment, out_dir, cfg, pool, envs, trajectories):
+def run_few_shot_irl(experiment, out_dir, cfg, pool, trajectories):
     '''Same spec as run_irl.'''
-    f = functools.partial(_run_irl, experiment=experiment, out_dir=out_dir, envs=envs,
-                          trajectories=trajectories, discount=cfg['discount'])
+    env_names = cfg['environments']
+    f = functools.partial(_run_irl, experiment=experiment, out_dir=out_dir,
+                          env_names=env_names, trajectories=trajectories,
+                          discount=cfg['discount'])
     args = list(itertools.product(cfg['irl'],
                                   sorted(cfg['num_trajectories']),
                                   sorted(cfg['few_shot']),
-                                  envs.keys()))
+                                  env_names))
     results = pool.starmap(f, args, chunksize=1)
     rewards = collections.OrderedDict()
     values = collections.OrderedDict()
@@ -128,7 +137,7 @@ def run_few_shot_irl(experiment, out_dir, cfg, pool, envs, trajectories):
         values[irl_name][n][m][env] = value
     return rewards, values
 
-def _value(experiment, cfg, envs, rewards):
+def _value(experiment, cfg, rewards):
     '''
     Compute the expected value of (a) policies optimized on inferred reward,
     and (b) optimal policies for the ground truth reward. Policies will be 
@@ -137,7 +146,6 @@ def _value(experiment, cfg, envs, rewards):
     Args:
         - experiment
         - cfg: config.EXPERIMENTS[experiment]
-        - envs
         - rewards
     Returns:
         tuple, (value, ground_truth) where each is a nested dictionary of the
@@ -146,6 +154,7 @@ def _value(experiment, cfg, envs, rewards):
     '''
     discount = cfg['discount']
     value = collections.OrderedDict()
+    envs = {k: gym.make(k) for k in cfg['environments']}
     for rl in cfg['eval']:
         #TODO: parallelize?
         gen_policy, _sample, compute_value = make_rl_algo(rl)
@@ -177,25 +186,29 @@ def _value(experiment, cfg, envs, rewards):
             ground_truth.setdefault(env_name, {})[rl] = v
 
         return value, ground_truth
+    for k, env in envs.items():
+        env.close()
 
-@memory.cache(ignore=['env', 'out_dir'])
-def _train_policy(rl, discount, env_name, seed, env, out_dir):
+@memory.cache(ignore=['out_dir'])
+def _train_policy(rl, discount, env_name, seed, out_dir):
     gen_policy, _sample, compute_value = make_rl_algo(rl)
     log_dir = osp.join(out_dir, env_name)
 
+    env = gym.make(env_name)
     env.seed(seed)
     p = gen_policy(env, discount=discount, log_dir=log_dir)
     v = compute_value(env, p, discount=discount)
+    env.close()
 
     return p, v
 
-def _expert_trajs(experiment, out_dir, cfg, video_every, seed, envs):
+def _expert_trajs(experiment, out_dir, cfg, video_every, seed):
     logger.debug('%s: generating synthetic data: training', experiment)
     rl_name = cfg['expert']
     policies = collections.OrderedDict()
     values = collections.OrderedDict()
-    for name, env in envs.items():
-        p, v = _train_policy(rl_name, cfg['discount'], name, seed, env, out_dir)
+    for name in cfg['environments']:
+        p, v = _train_policy(rl_name, cfg['discount'], name, seed, out_dir)
         policies[name] = p
         values[name] = v
 
@@ -203,9 +216,9 @@ def _expert_trajs(experiment, out_dir, cfg, video_every, seed, envs):
     _, sample, _ = make_rl_algo(cfg['expert'])
     max_trajectories = max(cfg['num_trajectories'])
     trajectories = collections.OrderedDict(
-        (name, synthetic_data(name, env, cfg['expert'], max_trajectories, seed,
+        (name, synthetic_data(name, cfg['expert'], max_trajectories, seed,
                               out_dir, video_every, policies[name]))
-        for name, env in envs.items()
+        for name in cfg['environments']
     )
 
     return trajectories, values
@@ -240,21 +253,16 @@ def run_experiment(experiment, pool, out_dir, video_every, seed):
 
     # Generate synthetic data
     logger.debug('%s: creating environments %s', experiment, cfg['environments'])
-    # I use sorted collections to make experiments (closer to) deterministic
-    envs = collections.OrderedDict(
-        (name, gym.make(name))
-        for name in cfg['environments']
-    )
-
+    # I use sorted collections to make experiments (closer to) deterministicJ
     expert_trajs, expert_vals = _expert_trajs(experiment, out_dir, cfg,
-                                              video_every, seed, envs)
+                                              video_every, seed)
 
     # Run IRL
     fn = run_few_shot_irl if 'few_shot' in cfg else run_irl
-    rewards, irl_values = fn(experiment, out_dir, cfg, pool, envs, expert_trajs)
+    rewards, irl_values = fn(experiment, out_dir, cfg, pool, expert_trajs)
 
     # Evaluate IRL by reoptimizing in cfg['evals']
-    values, ground_truth = _value(experiment, cfg, envs, rewards)
+    values, ground_truth = _value(experiment, cfg, rewards)
 
     # Add in the value obtained by the expert policy & IRL policy
     for name, val in expert_vals.items():
