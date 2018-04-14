@@ -53,25 +53,22 @@ def logging(identifier):
     }
 
 # RL Algorithms
-ppo_cts_pol = functools.partial(agents.ppo.train_continuous,
-                                tf_config=TENSORFLOW,
-                                num_timesteps=1e6)
 
+# Values take form (gen_policy, sample, compute_value).
+#
+# gen_policy has signature (env, discount, log_dir), where env is a gym.Env,
+# discount is a float and log_dir is a writable directory.
+# They return a policy (algorithm-specific object).
+#
+# sample has signature (env, policy, num_episodes, seed) where
+# num_episodes is the number of trajectories to sample, and seed is used
+# to sample deterministically. It returns a list of 3-tuples
+# (states, actions, rewards), each of which is a list.
+#
+# compute_value has signature (env, policy, discount).
+# It returns (mean, se) where mean is the estimated reward and se is the
+# standard error (0 for exact methods).
 RL_ALGORITHMS = {
-    # Values take form (gen_policy, sample, compute_value).
-    #
-    # gen_policy has signature (env, discount, log_dir), where env is a gym.Env,
-    # discount is a float and log_dir is a writable directory.
-    # They return a policy (algorithm-specific object).
-    #
-    # sample has signature (env, policy, num_episodes, seed) where
-    # num_episodes is the number of trajectories to sample, and seed is used
-    # to sample deterministically. It returns a list of 3-tuples
-    # (states, actions, rewards), each of which is a list.
-    #
-    # compute_value has signature (env, policy, discount).
-    # It returns (mean, se) where mean is the estimated reward and se is the
-    # standard error (0 for exact methods).
     'value_iteration': (
         agents.tabular.env_wrapper(agents.tabular.q_iteration_policy),
         agents.tabular.sample,
@@ -87,12 +84,19 @@ RL_ALGORITHMS = {
         agents.tabular.sample,
         agents.tabular.value_of_policy,
     ),
-    'ppo_cts': (
-        ppo_cts_pol,
-        functools.partial(agents.ppo.sample, tf_config=TENSORFLOW),
-        functools.partial(agents.ppo.value, tf_config=TENSORFLOW),
-    )
 }
+
+ppo_cts_pol = functools.partial(agents.ppo.train_continuous,
+                                tf_config=TENSORFLOW,
+                                num_timesteps=1e6)
+ppo_cts_sample = functools.partial(agents.ppo.sample, tf_config=TENSORFLOW)
+ppo_cts_value = functools.partial(agents.continuous.value, ppo_cts_sample)
+RL_ALGORITHMS['ppo_cts'] = (ppo_cts_pol, ppo_cts_sample, ppo_cts_value)
+
+ppo_cts_pol_quick = functools.partial(agents.ppo.train_continuous,
+                                      tf_config=TENSORFLOW,
+                                      num_timesteps=1e4)
+RL_ALGORITHMS['ppo_cts_quick'] = (ppo_cts_pol_quick, ppo_cts_sample, ppo_cts_value)
 
 # IRL Algorithms
 def traditional_to_single(fs):
@@ -129,9 +133,12 @@ TRADITIONAL_IRL_ALGORITHMS = {
     # Maximum Entropy (Ziebart 2008)
     'me': (functools.partial(irl.tabular_maxent.irl, planner=irl.tabular_maxent.max_ent_policy),
            agents.tabular.value_of_policy),
-    'airl': (functools.partial(irl.airl.irl, tf_config=TENSORFLOW),
-             functools.partial(irl.airl.value, tf_config=TENSORFLOW)),
 }
+
+airl_irl = functools.partial(irl.airl.irl, tf_config=TENSORFLOW)
+airl_value = functools.partial(agents.continuous.value,
+                functools.partial(irl.airl.sample, tf_config=TENSORFLOW))
+TRADITIONAL_IRL_ALGORITHMS['airl'] = (airl_irl, airl_value)
 
 MY_IRL_ALGORITHMS = dict()
 for reg in range(-2,3):
@@ -197,8 +204,8 @@ EXPERIMENTS['dummy-test-deterministic'] = {
 EXPERIMENTS['dummy-continuous-test'] = {
     'environments': ['Reacher-v2'],
     'discount': 0.99,
-    'expert': 'ppo_cts',
-    'eval': ['ppo_cts'],
+    'expert': 'ppo_cts_quick',
+    'eval': ['ppo_cts_quick'],
     'irl': ['airls'],
     'num_trajectories': [10, 20],
 }
