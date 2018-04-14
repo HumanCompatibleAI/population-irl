@@ -28,23 +28,6 @@ def make_config(tf_config):
     return config
 
 
-def load_model(log_dir):
-    '''Load model from checkpoint. (Yuck!)'''
-    path = osp.join(log_dir, 'make_model.pkl')
-    with open(path, 'rb') as fh:
-        make_model = cloudpickle.load(fh)
-    model = make_model()
-    checkpoint_dir = osp.join(log_dir, 'checkpoints')
-    checkpoint_files = os.listdir(checkpoint_dir)
-    # filename starts with strictly increasing 5-digit update ID
-    latest_checkpoint = max(checkpoint_files)
-    checkpoint_path = osp.join(checkpoint_dir, latest_checkpoint)
-    logger.debug('Loading model from %s', checkpoint_path)
-    model.load(checkpoint_path)
-
-    return model
-
-
 def train_continuous(env, discount, log_dir, tf_config, num_timesteps):
     '''Policy with hyperparameters optimized for continuous control environments
        (e.g. MuJoCo). Returns log_dir, where the trained policy is saved.'''
@@ -59,7 +42,8 @@ def train_continuous(env, discount, log_dir, tf_config, num_timesteps):
         env = VecNormalize(env)
 
         policy = MlpPolicy
-        ppo2.learn(policy=policy, env=env, nsteps=2048, nminibatches=32,
+        mean_reward, make_model, params = ppo2.learn(
+            policy=policy, env=env, nsteps=2048, nminibatches=32,
             lam=0.95, gamma=discount, noptepochs=10, log_interval=1,
             ent_coef=0.0,
             lr=3e-4,
@@ -67,14 +51,15 @@ def train_continuous(env, discount, log_dir, tf_config, num_timesteps):
             total_timesteps=num_timesteps,
             save_interval=4)
 
-    return blog_dir
+    make_model_pkl = cloudpickle.dumps(make_model)  # joblib cannot pickle lambdas
+    return make_model_pkl, params
 
 
-def value(env, blog_dir, discount, tf_config, num_episodes=10, seed=0):
+def value(env, policy, discount, tf_config, num_episodes=10, seed=0):
     '''Test policy saved in blog_dir on num_episodes in env.
         Return average reward.'''
     # TODO: does this belong in PPO or a more general class?
-    trajectories = sample(env, blog_dir, tf_config, num_episodes, seed)
+    trajectories = sample(env, policy, tf_config, num_episodes, seed)
     rewards = [r for (s, a, r) in trajectories]
     horizon = max([len(s) for (s, a, r) in trajectories])
     weights = np.cumprod([1] + [discount] * (horizon - 1))
@@ -85,7 +70,7 @@ def value(env, blog_dir, discount, tf_config, num_episodes=10, seed=0):
     return mean, se
 
 
-def sample(env, log_dir, tf_config, num_episodes, seed):
+def sample(env, policy, num_episodes, seed, tf_config):
     with tf.Session(config=make_config(tf_config)):
         # Seed to make results reproducible
         seed = seeding.create_seed(seed)
@@ -93,7 +78,10 @@ def sample(env, log_dir, tf_config, num_episodes, seed):
         tf.set_random_seed(seed)
 
         # Load model and initialize environment
-        model = load_model(log_dir)
+        make_model_pkl, params = policy
+        make_model = cloudpickle.loads(make_model_pkl)
+        model = make_model()
+        model.restore_params(params)
         env = DummyVecEnv([lambda: env])
 
         def helper():
