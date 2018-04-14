@@ -1,13 +1,16 @@
 import functools
 import itertools
+import os.path as osp
 import sys
 
 import gym
 import tensorflow as tf
 
 from pirl import agents, envs, irl
-from airl import envs as airl_envs
-airl_envs.register_custom_envs()
+
+# General
+PROJECT_DIR = osp.dirname(osp.dirname(osp.dirname(osp.realpath(__file__))))
+CACHE_DIR = osp.join(PROJECT_DIR, 'data', 'cache')
 
 # ML Framework Config
 def make_tf_config():
@@ -50,99 +53,112 @@ def logging(identifier):
     }
 
 # RL Algorithms
-ppo_cts = functools.partial(agents.ppo.train_continuous,
-                            tf_config=TENSORFLOW,
-                            num_timesteps=1e6)
+ppo_cts_pol = functools.partial(agents.ppo.train_continuous,
+                                tf_config=TENSORFLOW,
+                                num_timesteps=1e6)
 
 RL_ALGORITHMS = {
-    # Values take form (gen_policy, gen_optimal_policy, compute_value, sample).
+    # Values take form (gen_policy, sample, compute_value).
     #
-    # Both gen_* functions have signature (env, discount, log_dir),
-    # where env is a gym.Env, discount is a float and log_dir is a writable directory.
+    # gen_policy has signature (env, discount, log_dir), where env is a gym.Env,
+    # discount is a float and log_dir is a writable directory.
     # They return a policy (algorithm-specific object).
-    #
-    # compute_value has signature (env, policy, discount).
-    # It returns (mean, se) where mean is the estimated reward and se is the
-    # standard error (0 for exact methods).
     #
     # sample has signature (env, policy, num_episodes, seed) where
     # num_episodes is the number of trajectories to sample, and seed is used
     # to sample deterministically. It returns a list of 3-tuples
     # (states, actions, rewards), each of which is a list.
+    #
+    # compute_value has signature (env, policy, discount).
+    # It returns (mean, se) where mean is the estimated reward and se is the
+    # standard error (0 for exact methods).
     'value_iteration': (
         agents.tabular.env_wrapper(agents.tabular.q_iteration_policy),
-        agents.tabular.env_wrapper(agents.tabular.q_iteration_policy),
-        agents.tabular.value_of_policy,
         agents.tabular.sample,
+        agents.tabular.value_of_policy,
     ),
     'max_ent': (
         agents.tabular.env_wrapper(irl.tabular_maxent.max_ent_policy),
-        agents.tabular.env_wrapper(agents.tabular.q_iteration_policy),
-        agents.tabular.value_of_policy,
         agents.tabular.sample,
+        agents.tabular.value_of_policy,
     ),
     'max_causal_ent': (
         agents.tabular.env_wrapper(irl.tabular_maxent.max_causal_ent_policy),
-        agents.tabular.env_wrapper(agents.tabular.q_iteration_policy),
-        agents.tabular.value_of_policy,
         agents.tabular.sample,
+        agents.tabular.value_of_policy,
     ),
     'ppo_cts': (
-        ppo_cts,
-        ppo_cts,
-        agents.ppo.value,
-        agents.ppo.sample,
+        ppo_cts_pol,
+        functools.partial(agents.ppo.sample, tf_config=TENSORFLOW),
+        functools.partial(agents.ppo.value, tf_config=TENSORFLOW),
     )
 }
 
 # IRL Algorithms
-def traditional_to_single(f):
-    @functools.wraps(f)
+def traditional_to_single(fs):
+    irl_algo, compute_value = fs
+    @functools.wraps(irl_algo)
     def helper(envs, trajectories, **kwargs):
-        #TODO: parallelize
-        res = {k: f(envs[k], v, **kwargs) for k, v in trajectories.items()}
-        values = {k: v[0] for k, v in res.items()}
-        info = {k: v[1] for k, v in res.items()}
-        return values, info
-    return helper
+        #SOMEDAY: parallelize
+        res = {k: irl_algo(envs[k], v, **kwargs) for k, v in trajectories.items()}
+        rewards = {k: v[0] for k, v in res.items()}
+        policies = {k: v[1] for k, v in res.items()}
+        return rewards, policies
+    return helper, compute_value
 
 
-def traditional_to_concat(f):
-    @functools.wraps(f)
+def traditional_to_concat(fs):
+    irl_algo, compute_value = fs
+    @functools.wraps(irl_algo)
     def helper(envs, trajectories, **kwargs):
         concat_trajectories = list(itertools.chain(*trajectories.values()))
         # Pick an environment arbitrarily. In the typical use case,
         # they are all the same up to reward anyway.
         env = list(envs.values())[0]
-        value, info = f(env, concat_trajectories, **kwargs)
-        value = {k: value for k in trajectories.keys()}
-        return value, info
-    return helper
+        reward, policy = irl_algo(env, concat_trajectories, **kwargs)
+        rewards = {k: reward for k in trajectories.keys()}
+        policies = {k: policy for k in trajectories.keys()}
+        return rewards, policies
+    return helper, compute_value
 
 
 TRADITIONAL_IRL_ALGORITHMS = {
     # Maximum Causal Entropy (Ziebart 2010)
-    'mce': irl.tabular_maxent.irl,
+    'mce': (irl.tabular_maxent.irl,
+            agents.tabular.value_of_policy),
     # Maximum Entropy (Ziebart 2008)
-    'me': functools.partial(irl.tabular_maxent.irl,
-                            planner=irl.tabular_maxent.max_ent_policy),
-    'airl': functools.partial(irl.airl.irl,
-                              tf_config=TENSORFLOW),
+    'me': (functools.partial(irl.tabular_maxent.irl, planner=irl.tabular_maxent.max_ent_policy),
+           agents.tabular.value_of_policy),
+    'airl': (functools.partial(irl.airl.irl, tf_config=TENSORFLOW),
+             functools.partial(irl.airl.value, tf_config=TENSORFLOW)),
 }
 
 MY_IRL_ALGORITHMS = dict()
 for reg in range(-2,3):
     fn = functools.partial(irl.tabular_maxent.population_irl,
                            individual_reg=10 ** reg)
-    MY_IRL_ALGORITHMS['mcep_reg1e{}'.format(reg)] = fn
-MY_IRL_ALGORITHMS['mcep_reg0'] = functools.partial(
-    irl.tabular_maxent.population_irl, individual_reg=0)
+    MY_IRL_ALGORITHMS['mcep_reg1e{}'.format(reg)] = fn, agents.tabular.value_of_policy
+MY_IRL_ALGORITHMS['mcep_reg0'] = (
+    functools.partial(irl.tabular_maxent.population_irl, individual_reg=0),
+    agents.tabular.value_of_policy)
 
-# Function with signature (env, trajectories, discount, log_dir) where:
+# Values take the form: (irl, compute_value).
+#
+# irl signature (env, trajectories, discount, log_dir) where:
 # - env is a gym.Env.
 # - trajectories is a dict of environment IDs to lists of trajectories.
 # - discount is a float in [0,1].
 # - log_dir is a directory which may be used for logging or other temporary output.
+# It returns a tuple (reward, policy), both of which are algorithm-specific
+# objects. reward must be comprehensible to RL algorithms (if any) specified in
+# the 'eval' key in the experimental config.
+#
+# compute_value has signature (env, policy, discount) where:
+# - env is a gym.Env.
+# - policy is as returned by the IRL algorithm.
+# - discount is a float in [0,1].
+# It returns (mean, se) where mean is the estimated reward and se is the
+# standard error (0 for exact methods).
 IRL_ALGORITHMS = dict()
 IRL_ALGORITHMS.update(MY_IRL_ALGORITHMS)
 for name, algo in TRADITIONAL_IRL_ALGORITHMS.items():
@@ -155,7 +171,8 @@ EXPERIMENTS = {}
 EXPERIMENTS['dummy-test'] = {
     'environments': ['pirl/GridWorld-Simple-v0'],
     'discount': 1.00,
-    'rl': 'value_iteration',
+    'expert': 'value_iteration',
+    'eval': ['value_iteration'],
     'irl': ['mcep_reg0', 'mces'],
     'num_trajectories': [20, 10],
 }
@@ -163,7 +180,8 @@ EXPERIMENTS['few-dummy-test'] = {
     'environments': ['pirl/GridWorld-Simple-v0',
                      'pirl/GridWorld-Simple-Deterministic-v0'],
     'discount': 1.00,
-    'rl': 'value_iteration',
+    'expert': 'value_iteration',
+    'eval': ['value_iteration'],
     'irl': ['mces', 'mcec', 'mcep_reg0'],
     'num_trajectories': [20],
     'few_shot': [1, 5],
@@ -171,14 +189,16 @@ EXPERIMENTS['few-dummy-test'] = {
 EXPERIMENTS['dummy-test-deterministic'] = {
     'environments': ['pirl/GridWorld-Simple-Deterministic-v0'],
     'discount': 1.00,
-    'rl': 'value_iteration',
+    'expert': 'value_iteration',
+    'eval': ['value_iteration'],
     'irl': ['mces', 'mcep_reg0'],
     'num_trajectories': [20, 10],
 }
 EXPERIMENTS['dummy-continuous-test'] = {
-    'environments': ['airl/TwoDMaze-v0'],
+    'environments': ['Reacher-v2'],
     'discount': 0.99,
-    'rl': 'ppo_cts',
+    'expert': 'ppo_cts',
+    'eval': ['ppo_cts'],
     'irl': ['airls'],
     'num_trajectories': [10, 20],
 }
@@ -188,7 +208,8 @@ EXPERIMENTS['jungle'] = {
     'environments': ['pirl/GridWorld-Jungle-9x9-{}-v0'.format(k)
                      for k in ['Soda', 'Water', 'Liquid']],
     'discount': 1.00,
-    'rl': 'max_causal_ent',
+    'expert': 'max_causal_ent',
+    'eval': ['value_iteration'],
     'irl': [
         'mces',
         'mcec',
@@ -203,7 +224,8 @@ EXPERIMENTS['jungle-small'] = {
     'environments': ['pirl/GridWorld-Jungle-4x4-{}-v0'.format(k)
                      for k in ['Soda', 'Water', 'Liquid']],
     'discount': 1.00,
-    'rl': 'max_causal_ent',
+    'expert': 'max_causal_ent',
+    'eval': ['value_iteration'],
     'irl': [
         'mces',
         'mcec',
@@ -219,7 +241,8 @@ EXPERIMENTS['jungle-small'] = {
 EXPERIMENTS['unexpected-optimal'] = {
     'environments': ['pirl/GridWorld-Jungle-4x4-Soda-v0'],
     'discount': 1.00,
-    'rl': 'value_iteration',
+    'expert': 'max_causal_ent',
+    'eval': ['value_iteration'],
     'irl': [
         'mces',
         'mes',
@@ -232,7 +255,8 @@ EXPERIMENTS['few-jungle'] = {
     'environments': ['pirl/GridWorld-Jungle-9x9-{}-v0'.format(k)
                      for k in ['Soda', 'Water', 'Liquid']],
     'discount': 1.00,
-    'rl': 'max_causal_ent',
+    'expert': 'max_causal_ent',
+    'eval': ['value_iteration'],
     'irl': [
         'mces',
         'mcec',
@@ -248,7 +272,8 @@ EXPERIMENTS['few-jungle-small'] = {
     'environments': ['pirl/GridWorld-Jungle-4x4-{}-v0'.format(k)
                      for k in ['Soda', 'Water', 'Liquid']],
     'discount': 1.00,
-    'rl': 'max_causal_ent',
+    'expert': 'max_causal_ent',
+    'eval': ['value_iteration'],
     'irl': [
         'mces',
         'mcec',
@@ -266,7 +291,9 @@ def validate_config():
         try:
             gym.envs.registry.spec('pirl/GridWorld-Jungle-4x4-Liquid-v0')
             float(v['discount'])
-            RL_ALGORITHMS[v['rl']]
+            RL_ALGORITHMS[v['expert']]
+            for rl in v.get(eval, []):
+                RL_ALGORITHMS[rl]
             for irl in v['irl']:
                 IRL_ALGORITHMS[irl]
             [int(t) for t in v['num_trajectories']]

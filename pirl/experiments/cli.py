@@ -99,6 +99,6 @@ if __name__ == '__main__':
                                          video_every, args.seed)
 
         logger.info('Experiment %s completed. Outcome:\n %s. Saving to %s.',
-                    experiment, res['value'], path)
+                    experiment, res['values'], path)
         with open('{}/results.pkl'.format(path), 'wb') as f:
             pickle.dump(res, f)

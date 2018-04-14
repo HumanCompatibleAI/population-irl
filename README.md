@@ -20,4 +20,5 @@ Alternately, if you wish to configure your own container, the dependencies are R
 
 To check everything works, you can run:
 
-	python -m pirl.experiments.cli dummy-test
+	python -m pirl.experiments.cli dummy-test few-dummy-test dummy-continuous-test
+	pytest

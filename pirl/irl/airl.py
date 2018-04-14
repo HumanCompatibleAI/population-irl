@@ -43,3 +43,8 @@ def irl(env, trajectories, discount, log_dir, tf_config, fusion=False):
     with rllab_logdir(algo=algo, dirname=log_dir):
         with tf.Session(tf_config):
             algo.train()
+
+def value(env, policy, tf_config, num_episodes=10, seed=0):
+    # TODO: implement
+    # Probably actually want to implement sample, and then reuse ppo.value.
+    pass
