@@ -1,6 +1,7 @@
 import collections
 import functools
 import itertools
+import joblib
 import logging
 import os.path as osp
 
@@ -98,6 +99,11 @@ def _run_irl(irl_name, n, m, small_env, experiment,
         log_dir = osp.join(log_root, '{}'.format(n))
     envs = {k: gym.make(k) for k in env_names}
     rewards, policies = irl_algo(envs, subset, discount=discount, log_dir=log_dir)
+
+    # Save learnt reward & policy for debugging purposes
+    joblib.dump(rewards, osp.join(log_dir, 'rewards.pkl'))
+    joblib.dump(policies, osp.join(log_dir, 'policies.pkl'))
+
     values = {k: compute_value(envs[k], p, discount) for k, p in policies.items()}
     for env in envs.values():
         env.close()
