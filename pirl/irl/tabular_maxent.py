@@ -89,7 +89,7 @@ default_scheduler = {
     ),
 }
 
-def irl(mdp, trajectories, discount, demo_counts=None, horizon=None,
+def irl(mdp, trajectories, discount, log_dir=None, demo_counts=None, horizon=None,
         planner=max_causal_ent_policy, optimizer=None, scheduler=None,
         num_iter=5000, log_every=100, log_expensive_every=1000):
     """
@@ -101,6 +101,7 @@ def irl(mdp, trajectories, discount, demo_counts=None, horizon=None,
             states/actions in that trajectory.
         - discount(float): between 0 and 1.
             Should match that of the agent generating the trajectories.
+        - log_dir: ignored.
         - demo_counts(array): expert visitation frequency; exclusive with trajectories.
             The expected visitation frequency of the optimal policy.
             Must supply horizon with this argument.
@@ -113,9 +114,9 @@ def irl(mdp, trajectories, discount, demo_counts=None, horizon=None,
         - learning_rate(float): for Adam optimizer.
         - num_iter(int): number of iterations of optimization process.
 
-    Returns (reward, info) where:
+    Returns (reward, policy) where:
         reward(list): estimated reward for each state in the MDP.
-        info(dict): log of extra info.
+        policy(array): array of dimensions S * A, describing a stochastic policy.
     """
     transition = getattr_unwrapped(mdp, 'transition')
     initial_states = getattr_unwrapped(mdp, 'initial_states')
@@ -152,10 +153,11 @@ def irl(mdp, trajectories, discount, demo_counts=None, horizon=None,
             it.record('grads', reward.grad.data.numpy())
             it.record('rewards', reward.data.numpy().copy())
 
-    return reward.data.numpy(), it.vals
+    #TODO: log to disk (used to return it.vals, but this conflicts with new API)
+    return reward.data.numpy(), pol
 
 
-def population_irl(mdps, trajectories, discount, planner=max_causal_ent_policy,
+def population_irl(mdps, trajectories, discount, log_dir=None, planner=max_causal_ent_policy,
                    individual_reg=1e-2, optimizer=None, scheduler=None,
                    num_iter=5000, log_every=100, log_expensive_every=1000):
     """
@@ -170,6 +172,7 @@ def population_irl(mdps, trajectories, discount, planner=max_causal_ent_policy,
             visited states/actions in that trajectory.
         - discount(float): between 0 and 1.
             Should match that of the agent generating the trajectories.
+        - log_dir: ignored.
         - planner(callable): max_ent_policy or max_causal_ent_policy.
         - individual_reg(float): regularization factor for per-agent reward.
             Penalty factor applied to the l_2 norm of per-agent reward matrices,
@@ -180,9 +183,12 @@ def population_irl(mdps, trajectories, discount, planner=max_causal_ent_policy,
             The callable is called with a torch.optim optimizer object.
         - num_iter(int): number of iterations of optimization process.
 
-    Returns (reward, info) where:
-        reward(dict<list>): estimated reward for each state in the MDP.
-        info(dict): log of extra info.    """
+    Returns (rewards, policies) where:
+        rewards(dict<list>): contains estimated reward for each state in the MDP.
+        policies(dict<array>): contains array of dimensions S * A, describing a
+                               stochastic policy.
+
+    """
     assert mdps.keys() == trajectories.keys()
 
     transitions = {}
@@ -254,4 +260,4 @@ def population_irl(mdps, trajectories, discount, planner=max_causal_ent_policy,
 
     res = {k: v.data.numpy() for k, v in rewards.items()}
 
-    return res, it.vals
+    return res, pols

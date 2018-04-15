@@ -1,11 +1,13 @@
 import collections
 import functools
 import logging
+import random
 import traceback
 import time
 
 from gym.utils import seeding
 import numpy as np
+import tensorflow as tf
 import torch
 
 logger = logging.getLogger('pirl.utils')
@@ -31,9 +33,12 @@ def getattr_unwrapped(env, attr):
 
 def random_seed(seed=None):
     seed = seeding.create_seed(seed)
+    random.seed(seed)
     np.random.seed(seed)
     torch.manual_seed(seed)
     torch.cuda.manual_seed(seed)
+    tf.set_random_seed(seed)
+    return seed
 
 
 def discrete_sample(prob, rng):

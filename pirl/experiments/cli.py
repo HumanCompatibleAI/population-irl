@@ -48,7 +48,7 @@ def parse_args():
     parser.add_argument('--data_dir', metavar='dir', default='./data',
                         type=writable_dir)
     parser.add_argument('--seed', metavar='N', default=1234, type=int)
-    parser.add_argument('--video-every', metavar='N', default=1, type=int,
+    parser.add_argument('--video-every', metavar='N', default=100, type=int,
                         help='video every N episodes; 0 to disable.')
     parser.add_argument('--num-cores', metavar='N', default=None, type=int)
     parser.add_argument('experiments', metavar='experiment',
@@ -94,11 +94,12 @@ if __name__ == '__main__':
         version = git_hash()
         out_dir = '{}-{}-{}'.format(experiment, timestamp, version)
         path = os.path.join(args.data_dir, out_dir)
+        os.makedirs(path)
 
         res = experiments.run_experiment(experiment, pool, path,
                                          video_every, args.seed)
 
         logger.info('Experiment %s completed. Outcome:\n %s. Saving to %s.',
-                    experiment, res['value'], path)
+                    experiment, res['values'], path)
         with open('{}/results.pkl'.format(path), 'wb') as f:
             pickle.dump(res, f)
