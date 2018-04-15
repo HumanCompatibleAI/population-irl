@@ -1,5 +1,6 @@
 import functools
 
+import gym
 from gym.utils import seeding
 import numpy as np
 
@@ -122,3 +123,19 @@ def sample(env, policy, num_episodes, seed):
         return states, actions, rewards
 
     return [helper() for i in range(num_episodes)]
+
+
+class TabularRewardWrapper(gym.Wrapper):
+    """Wrapper for a gym.Env replacing with a new reward matrix."""
+    def __init__(self, env, new_reward):
+        self.new_reward = new_reward
+        super().__init__(env)
+
+    def step(self, action):
+        observation, old_reward, done, info = self.env.step(action)
+        new_reward = self.new_reward[observation, action]
+        return observation, new_reward, done, info
+
+    @property
+    def reward(self):
+        return self.new_reward

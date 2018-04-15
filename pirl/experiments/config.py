@@ -100,7 +100,7 @@ RL_ALGORITHMS['ppo_cts_quick'] = (ppo_cts_pol_quick, ppo_cts_sample, ppo_cts_val
 
 # IRL Algorithms
 def traditional_to_single(fs):
-    irl_algo, compute_value = fs
+    irl_algo, reward_wrapper, compute_value = fs
     @functools.wraps(irl_algo)
     def helper(envs, trajectories, **kwargs):
         #SOMEDAY: parallelize
@@ -108,11 +108,11 @@ def traditional_to_single(fs):
         rewards = {k: v[0] for k, v in res.items()}
         policies = {k: v[1] for k, v in res.items()}
         return rewards, policies
-    return helper, compute_value
+    return helper, reward_wrapper, compute_value
 
 
 def traditional_to_concat(fs):
-    irl_algo, compute_value = fs
+    irl_algo, reward_wrapper, compute_value = fs
     @functools.wraps(irl_algo)
     def helper(envs, trajectories, **kwargs):
         concat_trajectories = list(itertools.chain(*trajectories.values()))
@@ -123,22 +123,25 @@ def traditional_to_concat(fs):
         rewards = {k: reward for k in trajectories.keys()}
         policies = {k: policy for k in trajectories.keys()}
         return rewards, policies
-    return helper, compute_value
+    return helper, reward_wrapper, compute_value
 
 
 TRADITIONAL_IRL_ALGORITHMS = {
     # Maximum Causal Entropy (Ziebart 2010)
     'mce': (irl.tabular_maxent.irl,
+            agents.tabular.TabularRewardWrapper,
             agents.tabular.value_of_policy),
     # Maximum Entropy (Ziebart 2008)
     'me': (functools.partial(irl.tabular_maxent.irl, planner=irl.tabular_maxent.max_ent_policy),
+           agents.tabular.TabularRewardWrapper,
            agents.tabular.value_of_policy),
 }
 
 airl_irl = functools.partial(irl.airl.irl, tf_config=TENSORFLOW)
+airl_reward = functools.partial(irl.airl.AIRLRewardWrapper, tf_config=TENSORFLOW)
 airl_value = functools.partial(agents.continuous.value,
                 functools.partial(irl.airl.sample, tf_config=TENSORFLOW))
-TRADITIONAL_IRL_ALGORITHMS['airl'] = (airl_irl, airl_value)
+TRADITIONAL_IRL_ALGORITHMS['airl'] = (airl_irl, airl_reward, airl_value)
 
 MY_IRL_ALGORITHMS = dict()
 for reg in range(-2,3):
@@ -147,9 +150,10 @@ for reg in range(-2,3):
     MY_IRL_ALGORITHMS['mcep_reg1e{}'.format(reg)] = fn, agents.tabular.value_of_policy
 MY_IRL_ALGORITHMS['mcep_reg0'] = (
     functools.partial(irl.tabular_maxent.population_irl, individual_reg=0),
+    agents.tabular.TabularRewardWrapper,
     agents.tabular.value_of_policy)
 
-# Values take the form: (irl, compute_value).
+# Values take the form: (irl, reward_wrapper, compute_value).
 #
 # irl signature (env, trajectories, discount, log_dir) where:
 # - env is a gym.Env.
@@ -159,6 +163,10 @@ MY_IRL_ALGORITHMS['mcep_reg0'] = (
 # It returns a tuple (reward, policy), both of which are algorithm-specific
 # objects. reward must be comprehensible to RL algorithms (if any) specified in
 # the 'eval' key in the experimental config.
+#
+# reward_wrapper is a class with signature __init__(env, reward).
+# It wraps environment and overrides step() to return the reward learnt by
+# the IRL algorithm.
 #
 # compute_value has signature (env, policy, discount) where:
 # - env is a gym.Env.

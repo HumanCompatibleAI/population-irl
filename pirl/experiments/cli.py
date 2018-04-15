@@ -94,6 +94,7 @@ if __name__ == '__main__':
         version = git_hash()
         out_dir = '{}-{}-{}'.format(experiment, timestamp, version)
         path = os.path.join(args.data_dir, out_dir)
+        os.makedirs(path)
 
         res = experiments.run_experiment(experiment, pool, path,
                                          video_every, args.seed)

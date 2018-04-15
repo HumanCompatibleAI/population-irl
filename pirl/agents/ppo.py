@@ -1,13 +1,11 @@
 '''Wrapper around OpenAI Baselines PPO2 (GPU optimized).
    Based on baselines/ppo2/run_mujoco.py.'''
 
-import os
 import os.path as osp
 
 import cloudpickle
 from gym.utils import seeding
 import tensorflow as tf
-import numpy as np
 import logging
 
 from baselines.ppo2 import ppo2
