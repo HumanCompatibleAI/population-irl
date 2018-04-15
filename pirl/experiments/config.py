@@ -137,11 +137,13 @@ TRADITIONAL_IRL_ALGORITHMS = {
            agents.tabular.value_of_policy),
 }
 
-airl_irl = functools.partial(irl.airl.irl, tf_config=TENSORFLOW)
-airl_reward = functools.partial(irl.airl.AIRLRewardWrapper, tf_config=TENSORFLOW)
+airl_irl = functools.partial(irl.airl.irl, tf_cfg=TENSORFLOW)
+airl_quick_irl = functools.partial(airl_irl, irl_cfg={'n_itr': 10})
+airl_reward = functools.partial(irl.airl.AIRLRewardWrapper, tf_cfg=TENSORFLOW)
 airl_value = functools.partial(agents.continuous.value,
-                functools.partial(irl.airl.sample, tf_config=TENSORFLOW))
+                functools.partial(irl.airl.sample, tf_cfg=TENSORFLOW))
 TRADITIONAL_IRL_ALGORITHMS['airl'] = (airl_irl, airl_reward, airl_value)
+TRADITIONAL_IRL_ALGORITHMS['airl_quick'] = (airl_quick_irl, airl_reward, airl_value)
 
 MY_IRL_ALGORITHMS = dict()
 for reg in range(-2,3):
@@ -214,7 +216,7 @@ EXPERIMENTS['dummy-continuous-test'] = {
     'discount': 0.99,
     'expert': 'ppo_cts_quick',
     'eval': ['ppo_cts_quick'],
-    'irl': ['airls'],
+    'irl': ['airl_quicks'],
     'num_trajectories': [10, 20],
 }
 

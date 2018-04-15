@@ -26,7 +26,8 @@ def _convert_trajectories(trajs):
     return [{'observations': np.array(obs), 'actions': np.array(actions)} for obs, actions in trajs]
 
 
-def irl(env, trajectories, discount, log_dir, tf_config, fusion=False):
+def irl(env, trajectories, discount, log_dir, tf_cfg, fusion=False,
+        policy_cfg={}, irl_cfg={}):
     experts = _convert_trajectories(trajectories)
     env = GymEnv(env, record_video=False, record_log=False)
     env = TfEnv(env)
@@ -34,24 +35,31 @@ def irl(env, trajectories, discount, log_dir, tf_config, fusion=False):
                                    state_only=True, fusion=fusion, max_itrs=10)
     train_graph = tf.Graph()
     with train_graph.as_default():
+        policy_kwargs = {'hidden_sizes': (32, 32)}
+        policy_kwargs.update(policy_cfg)
+        policy = GaussianMLPPolicy(name='policy', env_spec=env.spec, **policy_kwargs)
+
+        irl_kwargs = {
+            'n_itr': 1000,
+            'batch_size': 10000,
+            'max_path_length': 500,
+            'irl_model_wt': 1.0,
+            'entropy_weight': 0.1,
+        }
+        irl_kwargs.update(irl_cfg)
         irl_model = make_irl_model()
-        policy = GaussianMLPPolicy(name='policy', env_spec=env.spec, hidden_sizes=(32, 32))
         algo = IRLTRPO(
             env=env,
             policy=policy,
             irl_model=irl_model,
-            n_itr=1000,
-            batch_size=10000,
-            max_path_length=500,
             discount=discount,
             store_paths=True,
-            irl_model_wt=1.0,
-            entropy_weight=0.1,
             zero_environment_reward=True,
             baseline=LinearFeatureBaseline(env_spec=env.spec),
+            **irl_kwargs
         )
         with rllab_logdir(algo=algo, dirname=log_dir):
-            with tf.Session(config=tf_config):
+            with tf.Session(config=tf_cfg):
                 algo.train()
 
                 reward_params = irl_model.get_params()
@@ -61,10 +69,10 @@ def irl(env, trajectories, discount, log_dir, tf_config, fusion=False):
     return reward, policy_pkl
 
 
-def sample(env, policy_pkl, num_episodes, seed, tf_config):
+def sample(env, policy_pkl, num_episodes, seed, tf_cfg):
     infer_graph = tf.Graph()
     with infer_graph.as_default():
-        with tf.Session(config=tf_config):
+        with tf.Session(config=tf_cfg):
             # Seed to make results reproducible
             seed = gym.utils.seeding.create_seed(seed)
             env.seed(seed)
@@ -94,13 +102,13 @@ def sample(env, policy_pkl, num_episodes, seed, tf_config):
 
 class AIRLRewardWrapper(gym.Wrapper):
     """Wrapper for a gym.Env replacing with a new reward matrix."""
-    def __init__(self, env, new_reward, tf_config):
+    def __init__(self, env, new_reward, tf_cfg):
         make_irl_model_pkl, reward_params = new_reward
         make_irl_model = cloudpickle.loads(make_irl_model_pkl)
         infer_graph = tf.Graph()
         with infer_graph.as_default():
             self.irl_model = make_irl_model()
-            self.sess = tf.Session(config=tf_config)
+            self.sess = tf.Session(config=tf_cfg)
             with self.sess.as_default():
                 self.irl_model.set_params(reward_params)
         super().__init__(env)
