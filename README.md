@@ -7,8 +7,6 @@ I use Anaconda for dependencies, you can create an environment with the prerequi
 	
 	conda env create name pirl
 	source activate pirl
-	pip install git+git://github.com/AdamGleave/rllab.git
-	pip install git+git://github.com/AdamGleave/inverse_rl.git
 	conda env update --name pirl --file environment.yml 
 
 There are some binary libraries that some Python packages required that are not in Conda. On Ubuntu you can install the necessary dependencies by:

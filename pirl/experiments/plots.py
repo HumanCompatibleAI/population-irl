@@ -12,32 +12,35 @@ import seaborn as sns
 THIS_DIR = os.path.join(os.path.dirname(os.path.realpath(__file__)))
 plt.style.use(os.path.join(THIS_DIR, 'default.mplstyle'))
 
+def nested_dicts_to_df(ds, idxs, transform):
+    if len(idxs) == 2:
+        ds = transform(ds)
+        df = pd.DataFrame(ds)
+        df.columns.name = idxs[0]
+        df.index.name = idxs[1]
+    else:
+        ds = {k: nested_dicts_to_df(v, idxs[1:], transform)
+              for k, v in ds.items()}
+        ds = {k: v.stack() for k, v in ds.items()}
+        df = pd.DataFrame(ds)
+        df.columns.name = idxs[0]
+    return df
+
 def extract_value(data):
-    value = data['value']
-    ground_truth = data['ground_truth']
+    def unpack_mean_sd_tuple(d):
+        return {k: {'mean': v[0], 'se': v[1]} for k, v in d.items()}
+    idxs = ['irl', 'n', 'm', 'env', 'eval', 'type']
+    values = nested_dicts_to_df(data['values'], idxs, unpack_mean_sd_tuple)
+    sorted_idx = ['env', 'n', 'm', 'eval', 'type']
+    values = values.reorder_levels(sorted_idx)
 
-    def extract(idx):
-        res = collections.OrderedDict()
-        for irl_name, value_by_irl in value.items():
-            d = collections.OrderedDict()
-            for n, value_by_n in value_by_irl.items():
-                for m, value_by_m in value_by_n.items():
-                    k = '{}/{}'.format(m, n)
-                    d[k + '_mu'] = pd.Series(collections.OrderedDict(
-                        [(env, value_by_env[idx][0])
-                         for env, value_by_env in value_by_m.items()]))
-                    d[k + '_se'] = pd.Series(collections.OrderedDict(
-                        [(env, value_by_env[idx][1])
-                         for env, value_by_env in value_by_m.items()]))
-            df = pd.DataFrame(d)
-            res[irl_name] = df
-        res['ground_truth'] = pd.DataFrame(ground_truth, index=df.columns).T
+    ground_truth = pd.DataFrame(unpack_mean_sd_tuple(data['ground_truth']))
+    def get_gt(k):
+        env, _, _, _, kind = k
+        return ground_truth.loc[kind, env]
+    values['expert'] = list(map(get_gt, values.index))
 
-        return pd.Panel(res)
-
-    res = {'optimal': extract(0), 'planner': extract(1)}
-
-    return res
+    return values
 
 
 def _gridworld_heatmap(reward, shape, walls=None, **kwargs):
