@@ -44,7 +44,7 @@ def synthetic_data(env_name, rl, num_trajectories, seed,
     '''Precondition: policy produced by RL algorithm rl.'''
     _, sample, _ = make_rl_algo(rl)
 
-    video_dir = osp.join(out_dir, 'expert', sanitize_env_name(env_name), 'videos')
+    video_dir = osp.join(out_dir, sanitize_env_name(env_name), 'videos')
     if video_every is None:
         video_callable = lambda x: False
     else:
@@ -65,8 +65,9 @@ def _expert_trajs(experiment, out_dir, cfg, video_every, seed):
     rl_name = cfg['expert']
     policies = collections.OrderedDict()
     values = collections.OrderedDict()
+    log_dir = osp.join(out_dir, 'expert')
     for name in cfg['environments']:
-        p, v = _train_policy(rl_name, cfg['discount'], name, seed, out_dir)
+        p, v = _train_policy(rl_name, cfg['discount'], name, seed, log_dir)
         policies[name] = p
         values[name] = v
 
@@ -75,7 +76,7 @@ def _expert_trajs(experiment, out_dir, cfg, video_every, seed):
     max_trajectories = max(cfg['num_trajectories'])
     trajectories = collections.OrderedDict(
         (name, synthetic_data(name, cfg['expert'], max_trajectories, seed,
-                              out_dir, video_every, policies[name]))
+                              log_dir, video_every, policies[name]))
         for name in cfg['environments']
     )
 
@@ -197,7 +198,7 @@ def _value(experiment, out_dir, cfg, rewards, seed):
                                            sanitize_env_name(env_name),
                                            '{}:{}:{}'.format(irl_name, m, n))
                         p = gen_policy(wrapped_env, discount=discount, log_dir=log_dir)
-                        v = compute_value(wrapped_env, p, discount=discount)
+                        v = compute_value(env, p, discount=discount)
 
                         res_by_env.setdefault(env_name, {})[rl] = v
                     res_by_m[m] = res_by_env
