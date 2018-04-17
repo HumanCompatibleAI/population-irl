@@ -5,7 +5,7 @@ import numpy as np
 from gym import utils
 from PIL import Image, ImageFont, ImageDraw
 
-from pirl.envs.tabular_mdp_env import TabularMdpEnv
+from pirl.envs.tabular_mdp import TabularMdpEnv
 
 def _create_transition(walls, noise):
     width, height = walls.shape
@@ -55,7 +55,7 @@ def create_initial_state(grid):
     return initial_state / initial_state.sum()
 
 
-class GridWorldMdp(TabularMdpEnv):
+class GridWorldMdpEnv(TabularMdpEnv):
     """A grid world where the objective is to navigate to one of many rewards.
 
     Specifies all of the static information that an agent has access to when
@@ -113,7 +113,7 @@ class GridWorldMdp(TabularMdpEnv):
         reward = _create_reward(grid, default_reward)
         initial_state = create_initial_state(grid)
         terminal = np.zeros_like(walls, dtype=bool)
-        return GridWorldMdp(walls, reward, initial_state, terminal, noise)
+        return GridWorldMdpEnv(walls, reward, initial_state, terminal, noise)
 
     def render(self, mode='human'):
         #TODO: PNG/X11 rendering?

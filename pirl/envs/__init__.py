@@ -1,10 +1,10 @@
 import numpy as np
 from gym.envs.registration import register
 
-from pirl.envs import gridworld, tabular_mdp_env
-from pirl.envs.gridworld import GridWorldMdp
-from pirl.envs.tabular_mdp_env import TabularMdpEnv
-from pirl.envs.seaquest import SeaquestPopulation
+from pirl.envs import gridworld, tabular_mdp
+from pirl.envs.gridworld import GridWorldMdpEnv
+from pirl.envs.tabular_mdp import TabularMdpEnv
+from pirl.envs.seaquest import SeaquestPopulationEnv
 
 ### Gridworlds
 
@@ -73,7 +73,7 @@ for kind, cells in cfg.items():
         reward = fn(topology)
         register(
             id='pirl/GridWorld-Jungle-{}-{}-v0'.format(scale, kind),
-            entry_point='pirl.envs:GridWorldMdp',
+            entry_point='pirl.envs:GridWorldMdpEnv',
             max_episode_steps=100,
             kwargs={
                 'walls': topology == 'X',
@@ -87,7 +87,7 @@ for kind, cells in cfg.items():
 ## Seaquest
 register(
     id='pirl/SeaquestPopulation-v0',
-    entry_point='pirl.envs:SeaquestPopulation',
+    entry_point='pirl.envs:SeaquestPopulationEnv',
     max_episode_steps=100000,
     kwargs={},
 )

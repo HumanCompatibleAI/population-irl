@@ -67,7 +67,7 @@ def fancy_reward_HoF(oxygen_fn=None, diver_reward=100, shark_reward=5, submarine
 
 AtariEnv = atari.AtariEnv
 
-class SeaquestPopulation(AtariEnv):
+class SeaquestPopulationEnv(AtariEnv):
     def __init__(self, reward_fn=fancy_reward_HoF(), obs_type='ram'):
         """Creates a sequest environment that supports varying rewards. Wraps the
         standard gym Atari environment and adds support for custom reward functions
