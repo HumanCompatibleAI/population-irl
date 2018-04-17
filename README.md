@@ -14,6 +14,11 @@ There are some binary libraries that some Python packages required that are not 
 
 Alternately, if you wish to configure your own container, the dependencies are RLLab, Python 3, NumPy, PyTorch and OpenAI Gym.
 
+## Troubleshooting
+
+This codebase sometimes triggers a double-free error, which seems to be due to an interaction between jemalloc and TensorFlow, see e.g. https://github.com/tensorflow/tensorflow/issues/6968 If you run into this issue, you can workaround it by using tcmalloc:
+	LD_PRELOAD=/usr/lib/x86_64-linux-gnu/libtcmalloc.so.4:$LD_PRELOAD
+
 ## Usage
 
 To check everything works, you can run:

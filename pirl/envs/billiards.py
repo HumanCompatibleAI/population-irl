@@ -105,10 +105,11 @@ class BilliardsEnv(MujocoEnv, utils.EzPickle):
         self.particle_size = particle_size
         with model.asfile() as f:
             MujocoEnv.__init__(self, f.name, 5)
+            utils.EzPickle.__init__(self, params, num_balls, particle_size, seed)
 
     def step(self, a):
         done = False
-        reward = 0
+        reward = np.float64(0.0)
 
         starting_state = (self.data.qpos == 0).all()  # before reset_model()
         self.do_simulation(a, self.frame_skip)
@@ -117,9 +118,9 @@ class BilliardsEnv(MujocoEnv, utils.EzPickle):
         if num_contacts > 0 and not starting_state:
             for contact in self.sim.data.contact[:num_contacts]:
                 if contact.geom1 == AGENT_ID:
-                    opp = contact.geom2 - AGENT_ID
+                    opp = contact.geom2 - (AGENT_ID + 1)
                 elif contact.geom2 == AGENT_ID:
-                    opp = contact.geom1 - AGENT_ID
+                    opp = contact.geom1 - (AGENT_ID + 1)
                 else:  # collision didn't involve agent
                     continue
                 if 0 <= opp < self.cats.shape[1]:
@@ -143,7 +144,11 @@ class BilliardsEnv(MujocoEnv, utils.EzPickle):
 
     def reset_model(self):
         num_balls = self.cats.shape[1] + 1
-        qpos = random_pos(num_balls, self.particle_size, self.np_random)
+        # particles must be at least diameter = self.particle_size * 2 apart
+        # to avoid contact at initialization; add some extra margin as MuJoCo
+        # has some numerical error in contact detection.
+        gap = self.particle_size * 2.1
+        qpos = random_pos(num_balls, gap, self.np_random)
         qpos = np.array(qpos).flatten()
         qvel = np.zeros(2 * num_balls)
         self.set_state(qpos, qvel)
