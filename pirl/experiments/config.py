@@ -225,7 +225,7 @@ EXPERIMENTS['dummy-continuous-test-slow'] = {
     'expert': 'ppo_cts',
     'eval': ['ppo_cts'],
     'irl': ['airls'],
-    'num_trajectories': [10, 20],
+    'num_trajectories': [10, 100, 1000],
 }
 
 # Jungle gridworld experiments
