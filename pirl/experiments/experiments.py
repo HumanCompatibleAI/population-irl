@@ -3,6 +3,7 @@ import functools
 import itertools
 import joblib
 import logging
+import os
 import os.path as osp
 
 from joblib import Memory
@@ -61,25 +62,37 @@ def synthetic_data(env_name, rl, num_trajectories, seed,
     return [(observations, actions) for (observations, actions, rewards) in samples]
 
 
-def _expert_trajs(experiment, out_dir, cfg, video_every, seed):
-    logger.debug('%s: generating synthetic data: training', experiment)
-    rl_name = cfg['expert']
-    policies = collections.OrderedDict()
-    values = collections.OrderedDict()
-    log_dir = osp.join(out_dir, 'expert')
-    for name in cfg['environments']:
-        p, v = _train_policy(rl_name, cfg['discount'], name, seed, log_dir)
-        policies[name] = p
-        values[name] = v
+@utils.log_errors
+def _expert_trajs(env_name, experiment, rl_name, discount, seed, num_trajectories,
+                  video_every, log_dir):
+    logger.debug('%s: training %s on %s', experiment, rl_name, env_name)
+    policy, value = _train_policy(rl_name, discount, env_name, seed, log_dir)
 
-    logger.debug('%s: generating synthetic data: sampling', experiment)
-    _, sample, _ = make_rl_algo(cfg['expert'])
+    logger.debug('%s: sampling from %s', experiment, env_name)
+    _, sample, _ = make_rl_algo(rl_name)
+    trajectories = synthetic_data(env_name, rl_name, num_trajectories, seed,
+                                  log_dir, video_every, policy)
+
+    return trajectories, value
+
+
+def expert_trajs(experiment, out_dir, cfg, pool, video_every, seed):
+    logger.debug('%s: generating synthetic data: training', experiment)
+    log_dir = osp.join(out_dir, 'expert')
+    os.makedirs(log_dir)
     max_trajectories = max(cfg['num_trajectories'])
-    trajectories = collections.OrderedDict(
-        (name, synthetic_data(name, cfg['expert'], max_trajectories, seed,
-                              log_dir, video_every, policies[name]))
-        for name in cfg['environments']
-    )
+
+    f = functools.partial(_expert_trajs, experiment=experiment,
+                          rl_name=cfg['expert'], discount=cfg['discount'],
+                          seed=seed, num_trajectories=max_trajectories,
+                          video_every=video_every, log_dir=log_dir)
+    results = pool.map(f, cfg['environments'], chunksize=1)
+
+    trajectories = collections.OrderedDict()
+    values = collections.OrderedDict()
+    for name, (traj, val) in zip(cfg['environments'], results):
+        trajectories[name] = traj
+        values[name] = val
 
     return trajectories, values
 
@@ -97,6 +110,7 @@ def _run_irl(irl_name, n, m, small_env, experiment,
         log_dir = osp.join(log_root, sanitize_env_name(small_env), '{}:{}'.format(m, n))
     else:
         log_dir = osp.join(log_root, '{}'.format(n))
+    os.makedirs(log_dir)
     envs = {k: gym.make(k) for k in env_names}
     rewards, policies = irl_algo(envs, subset, discount=discount, log_dir=log_dir)
 
@@ -164,7 +178,7 @@ def run_few_shot_irl(experiment, out_dir, cfg, pool, trajectories):
     return rewards, values
 
 
-def _value(experiment, out_dir, cfg, rewards, seed):
+def value(experiment, out_dir, cfg, rewards, seed):
     '''
     Compute the expected value of (a) policies optimized on inferred reward,
     and (b) optimal policies for the ground truth reward. Policies will be
@@ -251,17 +265,15 @@ def run_experiment(experiment, pool, out_dir, video_every, seed):
     cfg = config.EXPERIMENTS[experiment]
 
     # Generate synthetic data
-    logger.debug('%s: creating environments %s', experiment, cfg['environments'])
-    # I use sorted collections to make experiments (closer to) deterministicJ
-    expert_trajs, expert_vals = _expert_trajs(experiment, out_dir, cfg,
-                                              video_every, seed)
+    trajs, expert_vals = expert_trajs(experiment, out_dir, cfg, pool,
+                                      video_every, seed)
 
     # Run IRL
     fn = run_few_shot_irl if 'few_shot' in cfg else run_irl
-    rewards, irl_values = fn(experiment, out_dir, cfg, pool, expert_trajs)
+    rewards, irl_values = fn(experiment, out_dir, cfg, pool, trajs)
 
     # Evaluate IRL by reoptimizing in cfg['evals']
-    values, ground_truth = _value(experiment, out_dir, cfg, rewards, seed)
+    values, ground_truth = value(experiment, out_dir, cfg, rewards, seed)
 
     # Add in the value obtained by the expert policy & IRL policy
     for name, val in expert_vals.items():
@@ -273,7 +285,7 @@ def run_experiment(experiment, pool, out_dir, video_every, seed):
                     values[irl_name][n][m][env]['irl'] = val
 
     return {
-        'trajectories': expert_trajs,
+        'trajectories': trajs,
         'rewards': rewards,
         'values': values,
         'ground_truth': expert_vals,
