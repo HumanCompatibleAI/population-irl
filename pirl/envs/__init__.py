@@ -5,6 +5,7 @@ from pirl.envs import gridworld, tabular_mdp
 from pirl.envs.gridworld import GridWorldMdpEnv
 from pirl.envs.tabular_mdp import TabularMdpEnv
 from pirl.envs.seaquest import SeaquestPopulationEnv
+from pirl.envs.billiards import BilliardsEnv
 
 ### Gridworlds
 
@@ -92,3 +93,17 @@ register(
     kwargs={},
 )
 
+## Billiards
+register(
+    id='pirl/Billiards-v0',
+    entry_point='pirl.envs:BilliardsEnv',
+    max_episode_steps=1000,
+    kwargs={
+        'params': [
+            (0, 1),
+            (1, 1),
+            (5, 2),
+            (-10, 1),
+        ]
+    },
+)
