@@ -12,7 +12,7 @@ from pirl.envs.billiards import BilliardsEnv
 ## Only intended for testing code, entirely unrealistic
 register(
     id='pirl/GridWorld-Simple-v0',
-    entry_point='pirl.envs:GridWorldMdp.from_string',
+    entry_point='pirl.envs:GridWorldMdpEnv.from_string',
     max_episode_steps=100,
     kwargs={
         'grid': ['A X1',
@@ -26,7 +26,7 @@ register(
 
 register(
     id='pirl/GridWorld-Simple-Deterministic-v0',
-    entry_point='pirl.envs:GridWorldMdp.from_string',
+    entry_point='pirl.envs:GridWorldMdpEnv.from_string',
     max_episode_steps=100,
     kwargs={
         'grid': ['A X1',
