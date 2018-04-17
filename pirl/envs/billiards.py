@@ -109,7 +109,7 @@ class BilliardsEnv(MujocoEnv, utils.EzPickle):
 
     def step(self, a):
         done = False
-        reward = np.float64(0.0)
+        reward = -np.square(a).sum()  # control cost
 
         starting_state = (self.data.qpos == 0).all()  # before reset_model()
         self.do_simulation(a, self.frame_skip)
@@ -128,7 +128,7 @@ class BilliardsEnv(MujocoEnv, utils.EzPickle):
                     # picking the first one in the list may lead to chaotic
                     # behavior.
                     done = True
-                    reward = self.rewards.dot(self.cats[:, opp])
+                    reward += self.rewards.dot(self.cats[:, opp])
 
         ob = self._get_obs()
         return ob, reward, done, {}
