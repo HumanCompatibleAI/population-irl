@@ -219,6 +219,14 @@ EXPERIMENTS['dummy-continuous-test'] = {
     'irl': ['airl_quicks'],
     'num_trajectories': [10, 20],
 }
+EXPERIMENTS['dummy-continuous-test-slow'] = {
+    'environments': ['Reacher-v2'],
+    'discount': 0.99,
+    'expert': 'ppo_cts',
+    'eval': ['ppo_cts'],
+    'irl': ['airls'],
+    'num_trajectories': [10, 20],
+}
 
 # Jungle gridworld experiments
 EXPERIMENTS['jungle'] = {
@@ -301,6 +309,18 @@ EXPERIMENTS['few-jungle-small'] = {
     ],
     'num_trajectories': [1000],
     'few_shot': [1, 2, 5, 10, 20, 50, 100],
+}
+
+# Continuous control
+EXPERIMENTS['billiards'] = {
+    'environments': ['pirl/Billiards-seed{}-v0'.format(i) for i in range(4)],
+    'discount': 0.99,
+    'expert': 'ppo_cts',
+    'eval': ['ppo_cts'],
+    'irl': [
+        'airls',
+    ],
+    'num_trajectories': [1000],
 }
 
 def validate_config():

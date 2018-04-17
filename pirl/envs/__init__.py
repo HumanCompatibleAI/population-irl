@@ -94,16 +94,18 @@ register(
 )
 
 ## Billiards
-register(
-    id='pirl/Billiards-v0',
-    entry_point='pirl.envs:BilliardsEnv',
-    max_episode_steps=1000,
-    kwargs={
-        'params': [
-            (0, 1),
-            (1, 1),
-            (5, 2),
-            (-10, 1),
-        ]
-    },
-)
+for seed in range(10):
+    register(
+        id='pirl/Billiards-seed{}-v0'.format(seed),
+        entry_point='pirl.envs:BilliardsEnv',
+        max_episode_steps=200,
+        kwargs={
+            'params': [
+                (0, 1),
+                (1, 1),
+                (5, 2),
+                (-10, 1),
+            ],
+            'seed': seed,
+        },
+    )
