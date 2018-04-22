@@ -36,6 +36,7 @@ def logging(identifier):
                 'class': 'logging.StreamHandler',
             },
             'file': {
+                'level': 'DEBUG',
                 'formatter': 'standard',
                 'filename': 'logs/pirl-{}.log'.format(identifier),
                 'maxBytes': 100 * 1024 * 1024,

@@ -60,6 +60,7 @@ def parse_args():
 def init_worker(timestamp):
     current_process().name = current_process().name.replace('ForkPoolWorker-', 'worker')
     logging.config.dictConfig(config.logging(timestamp))
+    logger.debug('Worker started')
 
 def git_hash():
     repo = git.Repo(path=os.path.realpath(__file__),
