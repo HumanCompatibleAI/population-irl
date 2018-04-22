@@ -1,6 +1,6 @@
 import numpy as np
 
-def value(sample, env, policy, discount, num_episodes=10, seed=0):
+def value(sample, env, policy, discount, num_episodes=100, seed=0):
     '''Test policy saved in blog_dir on num_episodes in env.
         Return average reward.'''
     # TODO: does this belong in PPO or a more general class?

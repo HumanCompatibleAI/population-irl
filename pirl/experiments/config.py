@@ -90,14 +90,14 @@ RL_ALGORITHMS = {
 ppo_cts_pol = functools.partial(agents.ppo.train_continuous,
                                 tf_config=TENSORFLOW,
                                 num_timesteps=1e6)
-ppo_cts_sample = functools.partial(agents.ppo.sample, tf_config=TENSORFLOW)
-ppo_cts_value = functools.partial(agents.continuous.value, ppo_cts_sample)
-RL_ALGORITHMS['ppo_cts'] = (ppo_cts_pol, ppo_cts_sample, ppo_cts_value)
+ppo_sample = functools.partial(agents.ppo.sample, tf_config=TENSORFLOW)
+ppo_value = functools.partial(agents.continuous.value, ppo_sample)
+RL_ALGORITHMS['ppo_cts'] = (ppo_cts_pol, ppo_sample, ppo_value)
 
 ppo_cts_pol_quick = functools.partial(agents.ppo.train_continuous,
                                       tf_config=TENSORFLOW,
                                       num_timesteps=1e4)
-RL_ALGORITHMS['ppo_cts_quick'] = (ppo_cts_pol_quick, ppo_cts_sample, ppo_cts_value)
+RL_ALGORITHMS['ppo_cts_quick'] = (ppo_cts_pol_quick, ppo_sample, ppo_value)
 
 # IRL Algorithms
 def traditional_to_single(fs):
