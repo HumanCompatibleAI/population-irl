@@ -4,6 +4,8 @@ import logging
 import random
 import traceback
 import time
+from collections import __init__
+from multiprocessing import pool
 
 from gym.utils import seeding
 import numpy as np
@@ -112,3 +114,20 @@ def log_errors(f):
             logger.error('Error in subprocess: %s', traceback.format_exc())
             raise e
     return helper
+
+
+def nested_async_get(x, fn=lambda y: y):
+    '''Invoked on a recursive data structure consisting of dicts and lists,
+       returns the same-shaped data structure mapping a leaf node x to
+       fn(x.get()) if x is an AsyncResult and fn(x) otherwise.'''
+    if isinstance(x, dict):
+        return {k: nested_async_get(v, fn) for k, v in x.items()}
+    elif isinstance(x, collections.OrderedDict):
+        res = [(k, nested_async_get(v, fn)) for k, v in x.items()]
+        return collections.OrderedDict(res)
+    elif isinstance(x, list):
+        return [nested_async_get(v, fn) for v in x]
+    elif isinstance(x, pool.AsyncResult):
+        return fn(x.get())
+    else:
+        return fn(x)

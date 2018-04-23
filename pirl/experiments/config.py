@@ -100,38 +100,17 @@ ppo_cts_pol_quick = functools.partial(agents.ppo.train_continuous,
 RL_ALGORITHMS['ppo_cts_quick'] = (ppo_cts_pol_quick, ppo_sample, ppo_value)
 
 # IRL Algorithms
-def traditional_to_single(fs):
-    irl_algo, reward_wrapper, compute_value = fs
-    @functools.wraps(irl_algo)
-    def helper(envs, trajectories, **kwargs):
-        #SOMEDAY: parallelize
-        res = {k: irl_algo(envs[k], v, **kwargs) for k, v in trajectories.items()}
-        rewards = {k: v[0] for k, v in res.items()}
-        policies = {k: v[1] for k, v in res.items()}
-        return rewards, policies
-    return helper, reward_wrapper, compute_value
 
+## Single environment IRL algorithms (not population)
 
-def traditional_to_concat(fs):
-    irl_algo, reward_wrapper, compute_value = fs
-    @functools.wraps(irl_algo)
-    def helper(envs, trajectories, **kwargs):
-        concat_trajectories = list(itertools.chain(*trajectories.values()))
-        # Pick an environment arbitrarily. In the typical use case,
-        # they are all the same up to reward anyway.
-        env = list(envs.values())[0]
-        reward, policy = irl_algo(env, concat_trajectories, **kwargs)
-        rewards = {k: reward for k in trajectories.keys()}
-        policies = {k: policy for k in trajectories.keys()}
-        return rewards, policies
-    return helper, reward_wrapper, compute_value
-
-
-TRADITIONAL_IRL_ALGORITHMS = {
+SINGLE_IRL_ALGORITHMS = {
     # Maximum Causal Entropy (Ziebart 2010)
     'mce': (irl.tabular_maxent.irl,
             agents.tabular.TabularRewardWrapper,
             agents.tabular.value_of_policy),
+    'mce_quick': (functools.partial(irl.tabular_maxent.irl, num_iter=500),
+                  agents.tabular.TabularRewardWrapper,
+                  agents.tabular.value_of_policy),
     # Maximum Entropy (Ziebart 2008)
     'me': (functools.partial(irl.tabular_maxent.irl, planner=irl.tabular_maxent.max_ent_policy),
            agents.tabular.TabularRewardWrapper,
@@ -143,18 +122,10 @@ airl_quick_irl = functools.partial(airl_irl, irl_cfg={'n_itr': 10})
 airl_reward = functools.partial(irl.airl.AIRLRewardWrapper, tf_cfg=TENSORFLOW)
 airl_value = functools.partial(agents.continuous.value,
                 functools.partial(irl.airl.sample, tf_cfg=TENSORFLOW))
-TRADITIONAL_IRL_ALGORITHMS['airl'] = (airl_irl, airl_reward, airl_value)
-TRADITIONAL_IRL_ALGORITHMS['airl_quick'] = (airl_quick_irl, airl_reward, airl_value)
+SINGLE_IRL_ALGORITHMS['airl'] = (airl_irl, airl_reward, airl_value)
+SINGLE_IRL_ALGORITHMS['airl_quick'] = (airl_quick_irl, airl_reward, airl_value)
 
-MY_IRL_ALGORITHMS = dict()
-for reg in range(-2,3):
-    fn = functools.partial(irl.tabular_maxent.population_irl,
-                           individual_reg=10 ** reg)
-    MY_IRL_ALGORITHMS['mcep_reg1e{}'.format(reg)] = fn, agents.tabular.value_of_policy
-MY_IRL_ALGORITHMS['mcep_reg0'] = (
-    functools.partial(irl.tabular_maxent.population_irl, individual_reg=0),
-    agents.tabular.TabularRewardWrapper,
-    agents.tabular.value_of_policy)
+## Population IRL algorithms
 
 # Values take the form: (irl, reward_wrapper, compute_value).
 #
@@ -177,11 +148,38 @@ MY_IRL_ALGORITHMS['mcep_reg0'] = (
 # - discount is a float in [0,1].
 # It returns (mean, se) where mean is the estimated reward and se is the
 # standard error (0 for exact methods).
-IRL_ALGORITHMS = dict()
-IRL_ALGORITHMS.update(MY_IRL_ALGORITHMS)
-for name, algo in TRADITIONAL_IRL_ALGORITHMS.items():
-    IRL_ALGORITHMS[name + 's'] = traditional_to_single(algo)
-    IRL_ALGORITHMS[name + 'c'] = traditional_to_concat(algo)
+POPULATION_IRL_ALGORITHMS = dict()
+for reg in range(-2,3):
+    fn = functools.partial(irl.tabular_maxent.population_irl,
+                           individual_reg=10 ** reg)
+    POPULATION_IRL_ALGORITHMS['mcep_reg1e{}'.format(reg)] = fn, agents.tabular.TabularRewardWrapper, agents.tabular.value_of_policy
+POPULATION_IRL_ALGORITHMS['mcep_reg0'] = (
+    functools.partial(irl.tabular_maxent.population_irl, individual_reg=0),
+    agents.tabular.TabularRewardWrapper,
+    agents.tabular.value_of_policy)
+POPULATION_IRL_ALGORITHMS['mcep_quick_reg0'] = (
+    functools.partial(irl.tabular_maxent.population_irl, individual_reg=0, num_iter=500),
+    agents.tabular.TabularRewardWrapper,
+    agents.tabular.value_of_policy)
+
+def traditional_to_concat(fs):
+    irl_algo, reward_wrapper, compute_value = fs
+    @functools.wraps(irl_algo)
+    def helper(envs, trajectories, **kwargs):
+        concat_trajectories = list(itertools.chain(*trajectories.values()))
+        # Pick an environment arbitrarily. In the typical use case,
+        # they are all the same up to reward anyway.
+        env = list(envs.values())[0]
+        reward, policy = irl_algo(env, concat_trajectories, **kwargs)
+        rewards = {k: reward for k in trajectories.keys()}
+        policies = {k: policy for k in trajectories.keys()}
+        return rewards, policies
+    return helper, reward_wrapper, compute_value
+
+for name, algo in SINGLE_IRL_ALGORITHMS.items():
+    POPULATION_IRL_ALGORITHMS[name + 'c'] = traditional_to_concat(algo)
+
+# Experiments
 
 EXPERIMENTS = {}
 
@@ -191,7 +189,7 @@ EXPERIMENTS['dummy-test'] = {
     'discount': 1.00,
     'expert': 'value_iteration',
     'eval': ['value_iteration'],
-    'irl': ['mcep_reg0', 'mces'],
+    'irl': ['mcep_quick_reg0', 'mce_quick'],
     'num_trajectories': [20, 10],
 }
 EXPERIMENTS['few-dummy-test'] = {
@@ -200,7 +198,7 @@ EXPERIMENTS['few-dummy-test'] = {
     'discount': 1.00,
     'expert': 'value_iteration',
     'eval': ['value_iteration'],
-    'irl': ['mces', 'mcec', 'mcep_reg0'],
+    'irl': ['mce_quick', 'mce_quickc', 'mcep_quick_reg0'],
     'num_trajectories': [20],
     'few_shot': [1, 5],
 }
@@ -209,7 +207,7 @@ EXPERIMENTS['dummy-test-deterministic'] = {
     'discount': 1.00,
     'expert': 'value_iteration',
     'eval': ['value_iteration'],
-    'irl': ['mces', 'mcep_reg0'],
+    'irl': ['mce_quick', 'mcep_quick_reg0'],
     'num_trajectories': [20, 10],
 }
 EXPERIMENTS['dummy-continuous-test'] = {
@@ -217,7 +215,7 @@ EXPERIMENTS['dummy-continuous-test'] = {
     'discount': 0.99,
     'expert': 'ppo_cts_quick',
     'eval': ['ppo_cts_quick'],
-    'irl': ['airl_quicks'],
+    'irl': ['airl_quick'],
     'num_trajectories': [10, 20],
 }
 EXPERIMENTS['dummy-continuous-test-slow'] = {
@@ -225,7 +223,7 @@ EXPERIMENTS['dummy-continuous-test-slow'] = {
     'discount': 0.99,
     'expert': 'ppo_cts',
     'eval': ['ppo_cts'],
-    'irl': ['airls'],
+    'irl': ['airl'],
     'num_trajectories': [10, 100, 1000],
 }
 
@@ -237,7 +235,7 @@ EXPERIMENTS['jungle'] = {
     'expert': 'max_causal_ent',
     'eval': ['value_iteration'],
     'irl': [
-        'mces',
+        'mce',
         'mcec',
         'mcep_reg0',
         'mcep_reg1e-2',
@@ -253,7 +251,7 @@ EXPERIMENTS['jungle-small'] = {
     'expert': 'max_causal_ent',
     'eval': ['value_iteration'],
     'irl': [
-        'mces',
+        'mce',
         'mcec',
         'mcep_reg0',
         'mcep_reg1e-2',
@@ -270,8 +268,8 @@ EXPERIMENTS['unexpected-optimal'] = {
     'expert': 'max_causal_ent',
     'eval': ['value_iteration'],
     'irl': [
-        'mces',
-        'mes',
+        'mce',
+        'me',
     ],
     'num_trajectories': [200],
 }
@@ -284,7 +282,7 @@ EXPERIMENTS['few-jungle'] = {
     'expert': 'max_causal_ent',
     'eval': ['value_iteration'],
     'irl': [
-        'mces',
+        'mce',
         'mcec',
         'mcep_reg0',
         'mcep_reg1e-2',
@@ -301,7 +299,7 @@ EXPERIMENTS['few-jungle-small'] = {
     'expert': 'max_causal_ent',
     'eval': ['value_iteration'],
     'irl': [
-        'mces',
+        'mce',
         'mcec',
         'mcep_reg0',
         'mcep_reg1e-2',
@@ -319,7 +317,7 @@ EXPERIMENTS['billiards'] = {
     'expert': 'ppo_cts',
     'eval': ['ppo_cts'],
     'irl': [
-        'airls',
+        'airl',
     ],
     'num_trajectories': [1000],
 }
@@ -332,8 +330,14 @@ def validate_config():
             RL_ALGORITHMS[v['expert']]
             for rl in v.get(eval, []):
                 RL_ALGORITHMS[rl]
+            intersect = set(POPULATION_IRL_ALGORITHMS.keys()).intersection(SINGLE_IRL_ALGORITHMS.keys())
+            for irl, algo in SINGLE_IRL_ALGORITHMS.items():
+                assert len(algo) == 3, k
+            for irl, algo in POPULATION_IRL_ALGORITHMS.items():
+                assert len(algo) == 3, k
+            assert len(intersect) == 0
             for irl in v['irl']:
-                IRL_ALGORITHMS[irl]
+                assert (irl in POPULATION_IRL_ALGORITHMS or irl in SINGLE_IRL_ALGORITHMS)
             [int(t) for t in v['num_trajectories']]
             [int(t) for t in v.get('few_shot', [])]
         except Exception as e:
