@@ -33,7 +33,7 @@ def __train_policy(rl, discount, env_name, seed, out_dir):
     env = gym.make(env_name)
     env.seed(seed)
     p = gen_policy(env, discount=discount, log_dir=log_dir)
-    v = compute_value(env, p, discount=discount)
+    v = compute_value(env, p, discount=1.00)
     env.close()
 
     return p, v
@@ -119,7 +119,8 @@ def _run_population_irl(irl_name, n, m, small_env, experiment,
     joblib.dump(rewards, osp.join(log_dir, 'rewards.pkl'))
     joblib.dump(policies, osp.join(log_dir, 'policies.pkl'))
 
-    values = {k: compute_value(envs[k], p, discount) for k, p in policies.items()}
+    values = {k: compute_value(envs[k], p, discount=1.00)
+              for k, p in policies.items()}
     for env in envs.values():
         env.close()
 
@@ -141,7 +142,7 @@ def _run_single_irl(irl_name, n, env_name,
     joblib.dump(reward, osp.join(log_dir, 'reward.pkl'))
     joblib.dump(policy, osp.join(log_dir, 'policy.pkl'))
 
-    value = compute_value(env, policy, discount)
+    value = compute_value(env, policy, discount=1.00)
     env.close()
 
     return reward, value
@@ -270,7 +271,7 @@ def _value(experiment, irl_name, rl_name, env_name, log_dir, reward, discount, s
     wrapped_env = reward_wrapper(env, reward)
     env.seed(seed)
     p = gen_policy(wrapped_env, discount=discount, log_dir=log_dir)
-    v = compute_value(env, p, discount=discount)
+    v = compute_value(env, p, discount=1.00)
     env.close()
 
     return v
