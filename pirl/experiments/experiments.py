@@ -172,11 +172,12 @@ def run_irl(experiment, out_dir, cfg, pool, trajectories):
         kwds.update({'irl_name': irl_name, 'n': n})
         if irl_name in config.SINGLE_IRL_ALGORITHMS:
             for env in cfg['environments']:
-                kwds.update({
+                env_kwds = kwds.copy()
+                env_kwds.update({
                     'env_name': env,
                     'trajectories': trajectories[env],
                 })
-                delayed = pool.apply_async(_run_single_irl, kwds=kwds)
+                delayed = pool.apply_async(_run_single_irl, kwds=env_kwds)
                 setdef(setdef(setdef(res, irl_name), n), n)[env] = delayed
         elif irl_name in config.POPULATION_IRL_ALGORITHMS:
             kwds.update({
