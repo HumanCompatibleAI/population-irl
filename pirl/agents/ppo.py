@@ -30,9 +30,7 @@ def train_continuous(env, discount, log_dir, tf_config, num_timesteps):
     '''Policy with hyperparameters optimized for continuous control environments
        (e.g. MuJoCo). Returns log_dir, where the trained policy is saved.'''
     #TODO: should we set a seed from within here, or is it ok to rely on caller?
-
-    blog_dir = osp.join(log_dir, 'ppo')
-    blogger.configure(dir=blog_dir)
+    blogger.configure(dir=log_dir)
     #TODO: Do I want to use this for all algorithms?
     env = bench.Monitor(env, blogger.get_dir())
     train_graph = tf.Graph()

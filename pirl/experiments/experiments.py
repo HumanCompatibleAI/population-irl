@@ -28,7 +28,7 @@ def sanitize_env_name(env_name):
 
 def __train_policy(rl, discount, env_name, seed, out_dir):
     gen_policy, _sample, compute_value = config.RL_ALGORITHMS[rl]
-    log_dir = osp.join(out_dir, sanitize_env_name(env_name))
+    log_dir = osp.join(out_dir, sanitize_env_name(env_name), rl)
 
     env = gym.make(env_name)
     env.seed(seed)
@@ -39,6 +39,7 @@ def __train_policy(rl, discount, env_name, seed, out_dir):
     return p, v
 # avoid name clash in pickling
 _train_policy = memory.cache(ignore=['out_dir'])(__train_policy)
+
 
 @memory.cache(ignore=['out_dir', 'video_every', 'policy'])
 def synthetic_data(env_name, rl, num_trajectories, seed,
@@ -123,6 +124,7 @@ def _run_population_irl(irl_name, n, m, small_env, experiment,
         env.close()
 
     return rewards, values
+
 
 @utils.log_errors
 def _run_single_irl(irl_name, n, env_name,
@@ -302,7 +304,8 @@ def value(experiment, out_dir, cfg, pool, rewards, seed):
                         r = reward_by_env[env_name]
                         log_dir = osp.join(out_dir, 'eval',
                                            sanitize_env_name(env_name),
-                                           '{}:{}:{}'.format(irl_name, m, n))
+                                           '{}:{}:{}'.format(irl_name, m, n),
+                                           rl)
                         args = (experiment, irl_name, rl, env_name, log_dir, r,
                                 discount, seed)
                         delayed = pool.apply_async(_value, args)
