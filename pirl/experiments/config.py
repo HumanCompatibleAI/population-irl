@@ -311,14 +311,36 @@ EXPERIMENTS['few-jungle-small'] = {
 }
 
 # Continuous control
+EXPERIMENTS['continuous-baselines-easy'] = {
+    'environments': [
+        'Reacher-v2',
+        'InvertedPendulum-v2',
+        'InvertedDoublePendulum-v2'
+    ],
+    'discount': 0.99,
+    'expert': 'ppo_cts',
+    'eval': ['ppo_cts'],
+    'irl': ['airl'],
+    'num_trajectories': [1000],
+}
+EXPERIMENTS['continuous-baselines-medium'] = {
+    'environments': [
+        'Swimmer-v2',
+        'Hopper-v2',
+        'HalfCheetah-v2',
+    ],
+    'discount': 0.99,
+    'expert': 'ppo_cts',
+    'eval': ['ppo_cts'],
+    'irl': ['airl'],
+    'num_trajectories': [1000],
+}
 EXPERIMENTS['billiards'] = {
     'environments': ['pirl/Billiards-seed{}-v0'.format(i) for i in range(4)],
     'discount': 0.99,
     'expert': 'ppo_cts',
     'eval': ['ppo_cts'],
-    'irl': [
-        'airl',
-    ],
+    'irl': ['airl'],
     'num_trajectories': [1000],
 }
 
