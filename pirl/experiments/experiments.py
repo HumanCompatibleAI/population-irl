@@ -33,6 +33,7 @@ def __train_policy(rl, discount, env_name, seed, out_dir):
     env = gym.make(env_name)
     env.seed(seed)
     p = gen_policy(env, discount=discount, log_dir=log_dir)
+    joblib.dump(p, osp.join(log_dir, 'policy.pkl'))  # save for debugging
     v = compute_value(env, p, discount=1.00)
     env.close()
 
