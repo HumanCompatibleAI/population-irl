@@ -5,11 +5,14 @@ from gym.envs.mujoco import mujoco_env
 
 from rllab.misc import logger
 
-from airl.envs.dynamic_mjc.mjc_models import point_mass_maze
+
 from airl.envs.dynamic_mjc.model_builder import MJCModel
 
 
-def point_mass_maze(direction=RIGHT, length=1.2, borders=True, nlava = 1):
+LEFT = 0
+RIGHT = 1
+
+def point_mass_maze(direction=RIGHT, length=1.2, borders=True, nlava = 4, lavasize = 5):
     mjcmodel = MJCModel('twod_maze')
     mjcmodel.root.compiler(inertiafromgeom="true", angle="radian", coordinate="local")
     mjcmodel.root.option(timestep="0.01", gravity="0 0 0", iterations="20", integrator="Euler")
@@ -27,17 +30,17 @@ def point_mass_maze(direction=RIGHT, length=1.2, borders=True, nlava = 1):
     for i in range(nlava):
         # We may have to set seed here.
         lavaindex[i] = [random.random()*length,random.random()*length,0]
-        lavasize[i] = [random.random()*length/(2*nlava), random.random()*length/(2*nlava), 0]
-        lava[i] = worldbody.body(name='lava' + str(i), pos=lavaindex[i])
-        lava[i].geom(name='lava_geom', conaffinity=2, type='box', size=lavasize[i], rgba=[0.2,0.2,0.8,1]) #Should last dimension be 0
+        lavasize[i] = [random.random()*length/(lavasize*nlava), random.random()*length/(lavasize*nlava), 0.05]
+        exec("lava{} = worldbody.body(name='lava' + str({}), pos=lavaindex[{}])".format(i, i, i)) 
+        exec("lava{}.geom(name='lava_geom'+ str({}), conaffinity=2, type='box', size=lavasize[{}], rgba=[0.2,0.2,0.8,1]) ".format(i, i, i)) 
 
     # We should ranomize the 
     fal = [] #Colect all failed point
-    points = np.array([(random.random()*length, random.random()*length, 0) for i in range(1000)])
+    points = np.array([(random.random()*(length -0.04) + 0.02, random.random()*(length-0.04) + 0.02, 0) for i in range(1000)])
     for i in range(nlava):
-        ur = np.add(np.array(lavaindex[i]), np.array(lavasize[i])/2, np.array([length/10, length/10,, 0])) #Upper Right
-        ll = np.array(lavaindex[i]) - np.array(lavasize[i])/2 - np.array([length/10,, length/10,, 0])
-        fal = list(set(np.all(np.logical_and(ll <= pts, pts <= ur), axis=1)) | set(fal))
+        ur = np.add(np.array(lavaindex[i]), np.array(lavasize[i])/2, np.array([length/10, length/10, 0])) #Upper Right
+        ll = np.array(lavaindex[i]) - np.array(lavasize[i])/2 - np.array([length/10, length/10, 0])
+        fal = np.all(np.logical_and(ll <= points, points <= ur), axis=1)
 
     outbox = points[np.logical_not(fal)].tolist()
     particle = worldbody.body(name='particle', pos=outbox[0])
@@ -47,6 +50,9 @@ def point_mass_maze(direction=RIGHT, length=1.2, borders=True, nlava = 1):
     particle.joint(name='ball_y', type='slide', pos=[0,0,0], axis=[0,1,0])
 
     #We should randomize it within some region
+    for i in range(1, len(outbox)):
+        if np.linalg.norm(np.asarray(outbox[i])-np.asarray(outbox[0]) )> 0.03:
+            break
     target = worldbody.body(name='target', pos=outbox[1])
     target.geom(name='target_geom', conaffinity=2, type='sphere', size=0.02, rgba=[0,0.9,0.1,1])
 
@@ -83,14 +89,14 @@ def point_mass_maze(direction=RIGHT, length=1.2, borders=True, nlava = 1):
 
 
 class PointMazeEnv(mujoco_env.MujocoEnv, utils.EzPickle):
-    def __init__(self, direction=1, maze_length=0.6, sparse_reward=False, no_reward=False, episode_length=100):
+    def __init__(self, direction=1, maze_length=0.6, sparse_reward=False, no_reward=False, episode_length=100, nlava = 4, lavasize = 5, ctrpar = 0.01, lavapar = 1):
         utils.EzPickle.__init__(self)
         self.sparse_reward = sparse_reward
         self.no_reward = no_reward
         self.max_episode_length = episode_length
         self.direction = direction
         self.length = maze_length
-
+        self.nlava = nlava
         self.episode_length = 0
 
         model = point_mass_maze(direction=self.direction, length=self.length)
@@ -103,15 +109,15 @@ class PointMazeEnv(mujoco_env.MujocoEnv, utils.EzPickle):
 
         reward_dist = - np.linalg.norm(vec_dist)  # particle to target
         reward_ctrl = - np.square(a).sum()
-
+        #print(reward_ctrl)
         #Penalty for close to or inside the lava:
         reward_lava = 0
-        for i in lava:
-            dist = np.linalg.norm(self.get_body_com("particle") - self.get_body_com(lava[i])) # Not sure how to call a list here
-            while dist < 0.001:
+        for i in range(self.nlava) :
+            #print(i)
+            dist = np.linalg.norm(self.get_body_com("particle") - self.get_body_com("lava" + str(i))) # Not sure how to call a list here
+            #print(dist)
+            if dist < 0.001:
                 reward_lava += (0.001 - dist)
-
-
 
         reward_live = self.episode_length * 0.01 #
         if self.no_reward:
@@ -122,12 +128,14 @@ class PointMazeEnv(mujoco_env.MujocoEnv, utils.EzPickle):
             else:
                 reward = 0
         else:
-            reward = reward_dist + 0.001 * reward_ctrl - 0.001*reward_lava  - reward_live
+            reward = reward_dist + ctrpar * reward_ctrl - lavapar*reward_lava  - reward_live
 
-        self.do_simulation(a, self.frame_skip)
+        self.do_simulation(10*a, self.frame_skip)
         ob = self._get_obs()
         self.episode_length += 1
-        done = self.episode_length >= self.max_episode_length
+        done = np.linalg.norm(vec_dist) < 0.3
+        if done:
+            print("Hehe")
         return ob, reward, done, dict(reward_dist=reward_dist, reward_ctrl=reward_ctrl)
 
     
@@ -163,3 +171,4 @@ class PointMazeEnv(mujoco_env.MujocoEnv, utils.EzPickle):
         logger.record_tabular('AvgObjectToGoalDist', -np.mean(rew_dist.mean()))
         logger.record_tabular('AvgControlCost', -np.mean(rew_ctrl.mean()))
         logger.record_tabular('AvgMinToGoalDist', np.mean(np.min(-rew_dist, axis=1)))
+

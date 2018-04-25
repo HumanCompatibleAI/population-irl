@@ -93,6 +93,14 @@ register(
     kwargs={},
 )
 
+## Point maze
+register(
+    id='point_maze_env-v3',
+    entry_point='gym_maze.envs:PointMazeEnv',
+    timestep_limit=10000,
+)
+
+
 ## Billiards
 for seed in range(10):
     register(
