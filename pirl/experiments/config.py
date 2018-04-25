@@ -87,17 +87,15 @@ RL_ALGORITHMS = {
     ),
 }
 
-ppo_cts_pol = functools.partial(agents.ppo.train_continuous,
-                                tf_config=TENSORFLOW,
-                                num_timesteps=1e6)
+def ppo_cts_pol(num_timesteps):
+    return functools.partial(agents.ppo.train_continuous,
+                             tf_config=TENSORFLOW,
+                             num_timesteps=num_timesteps)
 ppo_sample = functools.partial(agents.ppo.sample, tf_config=TENSORFLOW)
 ppo_value = functools.partial(agents.continuous.value, ppo_sample)
-RL_ALGORITHMS['ppo_cts'] = (ppo_cts_pol, ppo_sample, ppo_value)
-
-ppo_cts_pol_quick = functools.partial(agents.ppo.train_continuous,
-                                      tf_config=TENSORFLOW,
-                                      num_timesteps=1e4)
-RL_ALGORITHMS['ppo_cts_quick'] = (ppo_cts_pol_quick, ppo_sample, ppo_value)
+RL_ALGORITHMS['ppo_cts'] = (ppo_cts_pol(1e6), ppo_sample, ppo_value)
+RL_ALGORITHMS['ppo_cts_short'] = (ppo_cts_pol(1e5), ppo_sample, ppo_value)
+RL_ALGORITHMS['ppo_cts_shortest'] = (ppo_cts_pol(1e4), ppo_sample, ppo_value)
 
 # IRL Algorithms
 
@@ -213,10 +211,18 @@ EXPERIMENTS['dummy-test-deterministic'] = {
 EXPERIMENTS['dummy-continuous-test'] = {
     'environments': ['Reacher-v2'],
     'discount': 0.99,
-    'expert': 'ppo_cts_quick',
-    'eval': ['ppo_cts_quick'],
+    'expert': 'ppo_cts_shortest',
+    'eval': ['ppo_cts_shortest'],
     'irl': ['airl_quick'],
     'num_trajectories': [10, 20],
+}
+EXPERIMENTS['dummy-continuous-test-medium'] = {
+    'environments': ['Reacher-v2'],
+    'discount': 0.99,
+    'expert': 'ppo_cts_short',
+    'eval': ['ppo_cts_short'],
+    'irl': ['airl'],
+    'num_trajectories': [10, 100, 1000],
 }
 EXPERIMENTS['dummy-continuous-test-slow'] = {
     'environments': ['Reacher-v2'],

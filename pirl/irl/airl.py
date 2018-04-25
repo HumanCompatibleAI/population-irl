@@ -113,8 +113,12 @@ class AIRLRewardWrapper(gym.Wrapper):
                 self.irl_model.set_params(reward_params)
         super().__init__(env)
 
-    def step(self, a):
-        obs, old_reward, done, info = self.env.step(a)
-        feed_dict = {self.irl_model.act_t: np.array([a]), self.irl_model.obs_t: np.array([obs])}
-        new_reward = self.sess.run(self.irl_model.reward, feed_dict=feed_dict)[0][0]
-        return obs, new_reward, done, info
+    def step(self, action):
+        obs, old_reward, done, info = self.env.step(action)
+        feed_dict = {self.irl_model.act_t: np.array([action]),
+                     self.irl_model.obs_t: np.array([obs])}
+        new_reward = self.sess.run(self.irl_model.reward, feed_dict=feed_dict)
+        return obs, new_reward[0][0], done, info
+
+    def reset(self, **kwargs):
+        return self.env.reset(**kwargs)

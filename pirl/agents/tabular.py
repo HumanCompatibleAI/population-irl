@@ -139,3 +139,6 @@ class TabularRewardWrapper(gym.Wrapper):
     @property
     def reward(self):
         return self.new_reward
+
+    def reset(self, **kwargs):
+        return self.env.reset(**kwargs)
