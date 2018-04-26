@@ -47,7 +47,7 @@ def parse_args():
     parser = argparse.ArgumentParser(description=desc)
     parser.add_argument('--data_dir', metavar='dir', default='./data',
                         type=writable_dir)
-    parser.add_argument('--seed', metavar='N', default=1234, type=int)
+    parser.add_argument('--seed', metavar='STR', default='foobar', type=str)
     parser.add_argument('--video-every', metavar='N', default=100, type=int,
                         help='video every N episodes; 0 to disable.')
     parser.add_argument('--num-cores', metavar='N', default=None, type=int)

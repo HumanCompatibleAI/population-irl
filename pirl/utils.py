@@ -4,7 +4,6 @@ import logging
 import random
 import traceback
 import time
-from collections import __init__
 from multiprocessing import pool
 
 from gym.utils import seeding
@@ -32,11 +31,13 @@ def getattr_unwrapped(env, attr):
         else:
             return getattr_unwrapped(env.env, attr)
 
+def create_seed(seed=None, max_bytes=8):
+    return seeding.create_seed(seed, max_bytes=max_bytes)
 
 def random_seed(seed=None):
-    seed = seeding.create_seed(seed)
+    seed = create_seed(seed + 'main')
     random.seed(seed)
-    np.random.seed(seed)
+    np.random.seed(seeding._int_list_from_bigint(seed))
     torch.manual_seed(seed)
     torch.cuda.manual_seed(seed)
     tf.set_random_seed(seed)
