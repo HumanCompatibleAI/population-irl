@@ -14,22 +14,28 @@ LEFT = 0
 RIGHT = 1
 
 def point_mass_maze(direction=RIGHT, length=1.2, borders=True, nlava = 4, nWater = 1, nTrees =1):
+    '''
+    We are creating a the Two-d maze conatins objects like Trees and Waters. They are both cylinder. We also conatins
+    Lavas which looks like boxes.
+    '''
     mjcmodel = MJCModel('twod_maze')
     mjcmodel.root.compiler(inertiafromgeom="true", angle="radian", coordinate="local")
     mjcmodel.root.option(timestep="0.01", gravity="0 0 0", iterations="20", integrator="Euler")
     default = mjcmodel.root.default()
     default.joint(damping=1, limited='false')
     default.geom(friction=".5 .1 .1", density="1000", margin="0.002", condim="1", contype="2", conaffinity="1")
-
     worldbody = mjcmodel.root.worldbody()
-    #We just randomize position
+    
+
+    #We create index and size to keep track of sizes
     lavaindex = {}
     lavasize = {}
     Waterindex = {}
     Watersize = {}
     Treesindex = {}
     Treessize = {}
-    # We have a bounch of lava in a fixed region and it can be customized
+
+    # We have a bounch of lava in a fixed region and it can be customized by its numbers(nlava)
     #Should length be square
     for i in range(nlava):
         # We may have to set seed here.
@@ -38,9 +44,10 @@ def point_mass_maze(direction=RIGHT, length=1.2, borders=True, nlava = 4, nWater
         exec("lava{} = worldbody.body(name='lava' + str({}), pos=lavaindex[{}])".format(i, i, i)) 
         exec("lava{}.geom(name='lava_geom'+ str({}), conaffinity=2, type='box', size=lavasize[{}], rgba=[0.2,0.2,0.8,1]) ".format(i, i, i)) 
 
-    # We should ranomize the 
-    fal = [] #Colect all failed point
+    
+
     points = np.array([(random.random()*(length -0.04) + 0.02, random.random()*(length-0.04) + 0.02, 0) for i in range(1000)])
+    #To make sure all those potential target and particle are outside of the lava region
     for i in range(nlava):
         ur = np.add(np.array(lavaindex[i]), np.array(lavasize[i])/2, np.array([length/10, length/10, 0])) #Upper Right
         ll = np.array(lavaindex[i]) - np.array(lavasize[i])/2 - np.array([length/10, length/10, 0])
@@ -48,26 +55,30 @@ def point_mass_maze(direction=RIGHT, length=1.2, borders=True, nlava = 4, nWater
 
     points = points[np.logical_not(fal3)]
 
+
+    # We have a bounch of waters in a fixed region and it can be customized by its numbers(nWater)
     for i in range(nWater):
         # We may have to set seed here.
         Waterindex[i] = [random.random()*length,random.random()*length,0]
-        Watersize[i] = [random.random()*length/(5*nWater), random.random()*length/(5*nWater),0 ]
+        Watersize[i] = [random.random()*length/(3*nWater), random.random()*length/(10*nWater),0 ]
         exec("Water{} = worldbody.body(name='Water' + str({}), pos=Waterindex[{}])".format(i, i, i)) 
         exec("Water{}.geom(name='Water_geom'+ str({}), conaffinity=2, type='cylinder', size=Watersize[{}], rgba=[0.1,0.9,0.9,1]) ".format(i, i, i)) 
     
     
 
-    # We should ranomize the 
+
     for i in range(nWater):
         ur = np.add(np.array(lavaindex[i]), np.array(lavasize[i])/2, np.array([length/10, length/10, 0])) #Upper Right
         ll = np.array(lavaindex[i]) - np.array(lavasize[i])/2 - np.array([length/10, length/10, 0])
         fal2 = np.all(np.logical_and(ll <= points, points <= ur), axis=1)
     points = points[np.logical_not(fal2)]
 
+
+    # We have a bounch of trees in a fixed region and it can be customized by its numbers(nTrees)
     for i in range(nTrees):
         # We may have to set seed here.
         Treesindex[i] = [random.random()*length,random.random()*length,0]
-        Treessize[i] = [random.random()*length/(5*nTrees), random.random()*length/(5*nTrees), 0]
+        Treessize[i] = [random.random()*length/(10*nTrees), random.random()*length/(3*nTrees), 0]
         exec("Trees{} = worldbody.body(name='Trees' + str({}), pos=Treesindex[{}])".format(i, i, i)) 
         exec("Trees{}.geom(name='Trees_geom'+ str({}), conaffinity=2, type='cylinder', size=Treessize[{}], rgba=[0.1,0.9,0.3,1]) ".format(i, i, i)) 
 
@@ -78,7 +89,7 @@ def point_mass_maze(direction=RIGHT, length=1.2, borders=True, nlava = 4, nWater
         ll = np.array(Treesindex[i]) - np.array(Treessize[i])/2 - np.array([length/10, length/10, 0])
         fal1 = np.all(np.logical_and(ll <= points, points <= ur), axis=1)
 
-    print(points)
+
     outbox = points[np.logical_not(fal1)].tolist()
     particle = worldbody.body(name='particle', pos=outbox[0])
     particle.geom(name='particle_geom', type='sphere', size='0.03', rgba='0.0 0.0 1.0 1', contype=1)
@@ -137,6 +148,7 @@ class PointMazeEnv(mujoco_env.MujocoEnv, utils.EzPickle):
         self.nWater = nWater
         self.nTrees = nTrees
         self.episode_length = 0
+        #The dictionary we use to keep track of rewards
         self.reward = {}
 
         model = point_mass_maze(direction=self.direction, length=self.length)
@@ -149,10 +161,11 @@ class PointMazeEnv(mujoco_env.MujocoEnv, utils.EzPickle):
 
         reward_dist = - np.linalg.norm(vec_dist)  # particle to target
         reward_ctrl = - np.square(a).sum()
-        #print(reward_ctrl)
         #Penalty for close to or inside the lava:
         reward_lava = 0
+        #Reward for close to or inside the water:
         reward_water = 0
+        #Reward for close to or inside the Trees:
         reward_tree = 0
         for i in range(self.nlava) :
             #print(i)
@@ -164,10 +177,11 @@ class PointMazeEnv(mujoco_env.MujocoEnv, utils.EzPickle):
 
             dist = np.linalg.norm(self.get_body_com("particle") - self.get_body_com("lava" + str(i))) # Not sure how to call a list here
 
+            #We give a penalty whenever it is closed to lava
             if dist < 0.01:
 
 
-                reward_lava += (0.001 - dist)
+                reward_lava += (0.01 - dist)
         
         for i in range(self.nWater) :
             #print(i)
@@ -180,10 +194,12 @@ class PointMazeEnv(mujoco_env.MujocoEnv, utils.EzPickle):
             dist = np.linalg.norm(self.get_body_com("particle") - self.get_body_com("Water" + str(i))) # Not sure how to call a list here
 
             if dist < 0.01:
+                # We just give it rewards the first time it hits water
+                reward_water += self.reward["Water" + str(i)]
                 self.reward["Water" + str(i)] = 0
 
 
-                reward_water += (0.01 - dist)
+                
 
         for i in range(self.nTrees) :
             #print(i)
@@ -196,8 +212,10 @@ class PointMazeEnv(mujoco_env.MujocoEnv, utils.EzPickle):
             dist = np.linalg.norm(self.get_body_com("particle") - self.get_body_com("Trees" + str(i))) # Not sure how to call a list here
 
             if dist < 0.01:
+                reward_tree += self.reward["Trees" + str(i)]
+                # We just give it rewards the first time it hits trees
                 self.reward["Trees" + str(i)] = 0
-                reward_tree += (0.01 - dist)
+
 
         reward_live = self.episode_length * 0.01 #
         if self.no_reward:
