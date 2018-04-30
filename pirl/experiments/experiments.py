@@ -29,6 +29,7 @@ def sanitize_env_name(env_name):
 def __train_policy(rl, discount, env_name, seed, out_dir):
     gen_policy, _sample, compute_value = config.RL_ALGORITHMS[rl]
     log_dir = osp.join(out_dir, sanitize_env_name(env_name), rl)
+    os.makedirs(log_dir)
 
     env = gym.make(env_name)
     train_seed = utils.create_seed(seed + 'train')
@@ -120,7 +121,7 @@ def _run_population_irl(irl_name, n, m, small_env, experiment,
 
     envs = {k: gym.make(k) for k in env_names}
     irl_seed = utils.create_seed(seed + 'irl')
-    for env in envs:
+    for env in envs.values():
         env.seed(irl_seed)
     rewards, policies = irl_algo(envs, subset, discount=discount, log_dir=log_dir)
 

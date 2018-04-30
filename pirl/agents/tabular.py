@@ -87,7 +87,7 @@ def env_wrapper(f):
     return helper
 
 
-def value_of_policy(env, policy, discount):
+def value_of_policy(env, policy, discount, seed):
     '''Exact value of a tabular policy in environment env with given discount.
        Returns (value, 0), where 0 represents the standard error.'''
     T = getattr_unwrapped(env, 'transition')
