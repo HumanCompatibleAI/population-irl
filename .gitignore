@@ -5,6 +5,8 @@
 *.npz
 *.pkl
 *.pdf
+*.mp4
+*.png
 
 
 # Byte-compiled / optimized / DLL files
@@ -26,3 +28,4 @@ __pycache__/
 logs/
 
 data/*
+figs/*
