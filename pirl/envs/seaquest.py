@@ -73,8 +73,7 @@ class SeaquestPopulationEnv(AtariEnv):
         standard gym Atari environment and adds support for custom reward functions
 
         Args:
-            reward_fn (function (ram, reward, image, action, lives, (prev_ram, prev_image, prev_lives)) -> reward): Function that takes in a complete ram state
-            and the original reward and maps it to a new reward
+            reward_fn (function (ram, reward, image, action, lives, (prev_ram, prev_image, prev_lives)) -> reward): Function that takes in a complete ram state and the original reward and maps it to a new reward
             obs_type: Whether to render pixels ('image') or return the state of the ram ('ram')
         """
         super().__init__(game='seaquest', obs_type=obs_type, frameskip=2)

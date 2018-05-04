@@ -6,6 +6,7 @@ from pirl.envs.gridworld import GridWorldMdpEnv
 from pirl.envs.tabular_mdp import TabularMdpEnv
 from pirl.envs.seaquest import SeaquestPopulationEnv
 from pirl.envs.billiards import BilliardsEnv
+from pirl.envs.reacher import ReacherPopulationEnv
 
 ### Gridworlds
 
@@ -107,5 +108,43 @@ for seed in range(10):
                 (-10, 1),
             ],
             'seed': seed,
+        },
+    )
+
+## Reacher
+for seed in range(10):
+    register(
+        id='pirl/Reacher-baseline-seed{}-v0'.format(seed),
+        entry_point='pirl.envs:ReacherPopulationEnv',
+        max_episode_steps=50,
+        kwargs={
+            'seed': seed,
+            'start_variance': 0.1,
+            'goal_state_pos': 'variable',
+            'goal_state_access': True,
+        }
+    )
+
+    register(
+        id='pirl/Reacher-variable-hidden-goal-seed{}-v0'.format(seed),
+        entry_point='pirl.envs:ReacherPopulationEnv',
+        max_episode_steps=50,
+        kwargs={
+            'seed': seed,
+            'start_variance': 0.1,
+            'goal_state_pos': 'variable',
+            'goal_state_access': False,
+        },
+    )
+
+    register(
+        id='pirl/Reacher-fixed-hidden-goal-seed{}-v0'.format(seed),
+        entry_point='pirl.envs:ReacherPopulationEnv',
+        max_episode_steps=50,
+        kwargs={
+            'seed': seed,
+            'start_variance': 0.1,
+            'goal_state_pos': 'fixed',
+            'goal_state_access': False,
         },
     )
