@@ -352,7 +352,7 @@ EXPERIMENTS['billiards'] = {
 EXPERIMENTS['reacher-env-comparisons'] = {
     'environments': ['Reacher-v2', 'pirl/Reacher-baseline-seed0-v0',
                      'pirl/Reacher-variable-hidden-goal-seed0-v0',
-                     'pirl/Reacher-fixed-hidden-goal-seed{}-v0'],
+                     'pirl/Reacher-fixed-hidden-goal-seed0-v0'],
     'discount': 0.99,
     'expert': 'ppo_cts',
     'eval': ['ppo_cts'],
