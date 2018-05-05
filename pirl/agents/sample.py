@@ -1,6 +1,8 @@
 import gym
 import numpy as np
 
+from baselines.common.vec_env import VecEnvWrapper
+
 def value(sample, env, policy, discount, num_episodes=100, seed=0):
     '''Test policy saved in blog_dir on num_episodes in env.
         Return average reward.'''
@@ -41,6 +43,47 @@ class SampleMonitor(gym.Wrapper):
         ob = self.env.reset(**kwargs)
         self.observations.append(ob)
         return ob
+
+    @property
+    def trajectories(self):
+        return self._trajectories
+
+class SampleVecMonitor(VecEnvWrapper):
+    def __init__(self, envs):
+        self._trajectories = []
+        self.observations = None
+        self.actions = None
+        self.rewards = None
+        super(SampleVecMonitor, self).__init__(envs)
+
+    def step_async(self, actions):
+        for i, a in enumerate(actions):
+            self.actions[i].append(a)
+        return self.venv.step_async(actions)
+
+    def step_wait(self):
+        obs, rews, dones, infos = self.venv.step_wait()
+        for i, (o, r, d) in enumerate(zip(obs, rews, dones)):
+            self.rewards[i].append(r)
+            if d:
+                traj = (self.observations[i], self.actions[i], self.rewards[i])
+                self._trajectories.append(traj)
+                self.observations[i] = [o]
+                self.actions[i] = []
+                self.rewards[i] = []
+            else:
+                self.observations[i].append(o)
+        return obs, rews, dones, infos
+
+    def reset(self):
+        obs = self.venv.reset()
+        num_envs = len(obs)
+        self.observations = [[] for _i in range(num_envs)]
+        self.actions = [[] for _i in range(num_envs)]
+        self.rewards = [[] for _i in range(num_envs)]
+        for i, o in enumerate(obs):
+            self.observations[i].append(o)
+        return obs
 
     @property
     def trajectories(self):

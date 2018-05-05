@@ -73,17 +73,17 @@ RL_ALGORITHMS = {
     'value_iteration': (
         agents.tabular.env_wrapper(agents.tabular.q_iteration_policy),
         agents.tabular.sample,
-        agents.tabular.value_of_policy,
+        agents.tabular.value_in_env,
     ),
     'max_ent': (
         agents.tabular.env_wrapper(irl.tabular_maxent.max_ent_policy),
         agents.tabular.sample,
-        agents.tabular.value_of_policy,
+        agents.tabular.value_in_env,
     ),
     'max_causal_ent': (
         agents.tabular.env_wrapper(irl.tabular_maxent.max_causal_ent_policy),
         agents.tabular.sample,
-        agents.tabular.value_of_policy,
+        agents.tabular.value_in_env,
     ),
 }
 
@@ -105,14 +105,14 @@ SINGLE_IRL_ALGORITHMS = {
     # Maximum Causal Entropy (Ziebart 2010)
     'mce': (irl.tabular_maxent.irl,
             agents.tabular.TabularRewardWrapper,
-            agents.tabular.value_of_policy),
+            agents.tabular.value_in_mdp),
     'mce_quick': (functools.partial(irl.tabular_maxent.irl, num_iter=500),
                   agents.tabular.TabularRewardWrapper,
-                  agents.tabular.value_of_policy),
+                  agents.tabular.value_in_mdp),
     # Maximum Entropy (Ziebart 2008)
     'me': (functools.partial(irl.tabular_maxent.irl, planner=irl.tabular_maxent.max_ent_policy),
            agents.tabular.TabularRewardWrapper,
-           agents.tabular.value_of_policy),
+           agents.tabular.value_in_mdp),
 }
 
 airl_irl = functools.partial(irl.airl.irl, tf_cfg=TENSORFLOW)
@@ -150,15 +150,15 @@ POPULATION_IRL_ALGORITHMS = dict()
 for reg in range(-2,3):
     fn = functools.partial(irl.tabular_maxent.population_irl,
                            individual_reg=10 ** reg)
-    POPULATION_IRL_ALGORITHMS['mcep_reg1e{}'.format(reg)] = fn, agents.tabular.TabularRewardWrapper, agents.tabular.value_of_policy
+    POPULATION_IRL_ALGORITHMS['mcep_reg1e{}'.format(reg)] = fn, agents.tabular.TabularRewardWrapper, agents.tabular.value_in_mdp
 POPULATION_IRL_ALGORITHMS['mcep_reg0'] = (
     functools.partial(irl.tabular_maxent.population_irl, individual_reg=0),
     agents.tabular.TabularRewardWrapper,
-    agents.tabular.value_of_policy)
+    agents.tabular.value_in_mdp)
 POPULATION_IRL_ALGORITHMS['mcep_quick_reg0'] = (
     functools.partial(irl.tabular_maxent.population_irl, individual_reg=0, num_iter=500),
     agents.tabular.TabularRewardWrapper,
-    agents.tabular.value_of_policy)
+    agents.tabular.value_in_mdp)
 
 def traditional_to_concat(fs):
     irl_algo, reward_wrapper, compute_value = fs
@@ -210,6 +210,7 @@ EXPERIMENTS['dummy-test-deterministic'] = {
 }
 EXPERIMENTS['dummy-continuous-test'] = {
     'environments': ['Reacher-v2'],
+    'parallel_rollouts': 4,
     'discount': 0.99,
     'expert': 'ppo_cts_shortest',
     'eval': ['ppo_cts_shortest'],
@@ -218,6 +219,7 @@ EXPERIMENTS['dummy-continuous-test'] = {
 }
 EXPERIMENTS['dummy-continuous-test-medium'] = {
     'environments': ['Reacher-v2'],
+    'parallel_rollouts': 4,
     'discount': 0.99,
     'expert': 'ppo_cts_short',
     'eval': ['ppo_cts_short'],
@@ -226,6 +228,7 @@ EXPERIMENTS['dummy-continuous-test-medium'] = {
 }
 EXPERIMENTS['dummy-continuous-test-slow'] = {
     'environments': ['Reacher-v2'],
+    'parallel_rollouts': 4,
     'discount': 0.99,
     'expert': 'ppo_cts',
     'eval': ['ppo_cts'],
@@ -323,6 +326,7 @@ EXPERIMENTS['continuous-baselines-easy'] = {
         'InvertedPendulum-v2',
         'InvertedDoublePendulum-v2'
     ],
+    'parallel_rollouts': 4,
     'discount': 0.99,
     'expert': 'ppo_cts',
     'eval': ['ppo_cts'],
@@ -335,6 +339,7 @@ EXPERIMENTS['continuous-baselines-medium'] = {
         'Hopper-v2',
         'HalfCheetah-v2',
     ],
+    'parallel_rollouts': 4,
     'discount': 0.99,
     'expert': 'ppo_cts',
     'eval': ['ppo_cts'],
@@ -343,6 +348,7 @@ EXPERIMENTS['continuous-baselines-medium'] = {
 }
 EXPERIMENTS['billiards'] = {
     'environments': ['pirl/Billiards-seed{}-v0'.format(i) for i in range(4)],
+    'parallel_rollouts': 4,
     'discount': 0.99,
     'expert': 'ppo_cts',
     'eval': ['ppo_cts'],
@@ -353,12 +359,30 @@ EXPERIMENTS['reacher-env-comparisons'] = {
     'environments': ['Reacher-v2', 'pirl/Reacher-baseline-seed0-v0',
                      'pirl/Reacher-variable-hidden-goal-seed0-v0',
                      'pirl/Reacher-fixed-hidden-goal-seed0-v0'],
+    'parallel_rollouts': 4,
     'discount': 0.99,
     'expert': 'ppo_cts',
     'eval': ['ppo_cts'],
     'irl': [],
     'num_trajectories': [1000],
 }
+
+# Test of RL parallelism
+for n in [1, 4, 8, 16]:
+    EXPERIMENTS['parallel-cts-easy-{}'.format(n)] = {
+        'environments': [
+            'Reacher-v2',
+            'InvertedPendulum-v2',
+            'InvertedDoublePendulum-v2'
+        ],
+        'parallel_rollouts': n,
+        'discount': 0.99,
+        'expert': 'ppo_cts',
+        'eval': ['ppo_cts'],
+        'irl': [],
+        'num_trajectories': [1000],
+    }
+
 
 def validate_config():
     for k, v in EXPERIMENTS.items():

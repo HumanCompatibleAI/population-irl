@@ -77,32 +77,38 @@ def q_iteration_policy(T, R, H, discount):
 
 def env_wrapper(f):
     @functools.wraps(f)
-    def helper(env, log_dir=None, reward=None, *args, **kwargs):
+    def helper(env_fns, log_dir=None, reward=None, *args, **kwargs):
         # log_dir is not used but is needed to match function signature.
-        T = getattr_unwrapped(env, 'transition')
+        mdp = env_fns[0]()
+        T = getattr_unwrapped(mdp, 'transition')
         if reward is None:
-            reward = getattr_unwrapped(env, 'reward')
-        H = getattr_unwrapped(env, '_max_episode_steps')
+            reward = getattr_unwrapped(mdp, 'reward')
+        H = getattr_unwrapped(mdp, '_max_episode_steps')
         return f(T, reward, H, *args, **kwargs)
     return helper
 
 
-def value_of_policy(env, policy, discount, seed):
-    '''Exact value of a tabular policy in environment env with given discount.
-       Returns (value, 0), where 0 represents the standard error.'''
-    T = getattr_unwrapped(env, 'transition')
-    R = getattr_unwrapped(env, 'reward')
-    H = getattr_unwrapped(env, '_max_episode_steps')
+def value_in_mdp(mdp, policy, discount, seed):
+    T = getattr_unwrapped(mdp, 'transition')
+    R = getattr_unwrapped(mdp, 'reward')
+    H = getattr_unwrapped(mdp, '_max_episode_steps')
     Q, info = q_iteration(T, R, H, discount, policy=policy)
     V = Q.sum(1)
-    initial_states = getattr_unwrapped(env, 'initial_states')
+    initial_states = getattr_unwrapped(mdp, 'initial_states')
     value = np.sum(V * initial_states)
     return value, 0
 
 
-def sample(env, policy, num_episodes, seed):
-    # Seed to make results reproducible
-    env.seed(seed)
+def value_in_env(env_fns, policy, discount, seed):
+    '''Exact value of a tabular policy in environment env with given discount.
+       Returns (value, 0), where 0 represents the standard error.'''
+    mdp = env_fns[0]()
+    return value_in_mdp(mdp, policy, discount, seed)
+
+
+def sample(env_fns, policy, num_episodes, seed):
+    env = env_fns[0]()  # step() is cheap, so no point parallelizing
+    # seed to make results reproducible
     rng, _ = seeding.np_random(seed)
 
     def helper():

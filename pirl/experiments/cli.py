@@ -11,7 +11,8 @@ import argparse
 from datetime import datetime
 import functools
 import logging.config
-from multiprocessing import Pool, current_process
+import multiprocessing
+from multiprocessing import Pool, Process, current_process
 import os
 import pickle
 import tempfile
@@ -20,6 +21,21 @@ import git
 from pirl.experiments import config, experiments
 
 logger = logging.getLogger('pirl.experiments.cli')
+
+class NoDaemonProcess(multiprocessing.Process):
+    '''Make daemon attribute always return false.'''
+    def _get_daemon(self):
+        return False
+    def _set_daemon(self, value):
+        pass
+    daemon = property(_get_daemon, _set_daemon)
+
+class NoDaemonPool(multiprocessing.pool.Pool):
+    '''A multiprocessing Pool whose processes do not have the daemon attribute
+       set. This lets one have nested Pool's of processes. This is needed as
+       this outer pool is used to run experiments in parallel, whereas an inner
+       pool is used to perform rollouts in a given environment in parallel.'''
+    Process = NoDaemonProcess
 
 def _check_in(cats, kind):
     def f(s):
@@ -58,7 +74,7 @@ def parse_args():
 
 
 def init_worker(timestamp):
-    current_process().name = current_process().name.replace('ForkPoolWorker-', 'worker')
+    current_process().name = current_process().name.replace('NoDaemonPoolWorker-', 'worker')
     logging.config.dictConfig(config.logging(timestamp))
     logger.debug('Worker started')
 
@@ -66,7 +82,6 @@ def git_hash():
     repo = git.Repo(path=os.path.realpath(__file__),
                     search_parent_directories=True)
     return repo.head.object.hexsha
-
 
 ISO_TIMESTAMP = "%Y%m%d_%H%M%S"
 
@@ -85,8 +100,8 @@ if __name__ == '__main__':
 
     # Pool
     logger.info('Starting pool')
-    pool = Pool(args.num_cores,
-                initializer=functools.partial(init_worker, timestamp))
+    pool = NoDaemonPool(args.num_cores,
+                        initializer=functools.partial(init_worker, timestamp))
 
     # Experiment loop
     for experiment in args.experiments:

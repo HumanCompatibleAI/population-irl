@@ -25,21 +25,28 @@ def make_irl_algo(algo):
 def sanitize_env_name(env_name):
     return env_name.replace('/', '_')
 
+def _parallel_envs(env_name, parallel, base_seed, wrapper=None):
+    def helper(i):
+        env = gym.make(env_name)
+        if wrapper is not None:
+            env = wrapper(env)
+        env.seed(base_seed + i)
+        return env
+    return [functools.partial(helper, i) for i in range(parallel)]
 
-def __train_policy(rl, discount, env_name, seed, out_dir):
+def __train_policy(rl, discount, env_name, parallel, seed, out_dir):
     gen_policy, _sample, compute_value = config.RL_ALGORITHMS[rl]
     log_dir = osp.join(out_dir, sanitize_env_name(env_name), rl)
     os.makedirs(log_dir)
 
-    env = gym.make(env_name)
     train_seed = utils.create_seed(seed + 'train')
-    env.seed(train_seed)
-    p = gen_policy(env, discount=discount, log_dir=log_dir)
+    env_fns = _parallel_envs(env_name, parallel, train_seed)
+    p = gen_policy(env_fns, discount=discount, log_dir=log_dir)
     joblib.dump(p, osp.join(log_dir, 'policy.pkl'))  # save for debugging
 
     eval_seed = utils.create_seed(seed + 'eval')
-    v = compute_value(env, p, discount=1.00, seed=eval_seed)
-    env.close()
+    env_fns = _parallel_envs(env_name, parallel, eval_seed)
+    v = compute_value(env_fns, p, discount=1.00, seed=eval_seed)
 
     return p, v
 # avoid name clash in pickling
@@ -47,7 +54,7 @@ _train_policy = memory.cache(ignore=['out_dir'])(__train_policy)
 
 
 @memory.cache(ignore=['out_dir', 'video_every', 'policy'])
-def synthetic_data(env_name, rl, num_trajectories, seed,
+def synthetic_data(env_name, rl, num_trajectories, parallel, seed,
                    out_dir, video_every, policy):
     '''Precondition: policy produced by RL algorithm rl.'''
     _, sample, _ = config.RL_ALGORITHMS[rl]
@@ -57,28 +64,26 @@ def synthetic_data(env_name, rl, num_trajectories, seed,
         video_callable = lambda x: False
     else:
         video_callable = lambda x: x % video_every == 0
-    env = gym.make(env_name)
-    env = gym.wrappers.Monitor(env,
-                               video_dir,
-                               video_callable=video_callable,
-                               force=True)
+    def  monitor(env):
+        return gym.wrappers.Monitor(env, video_dir,
+                                    video_callable=video_callable, force=True)
     data_seed = utils.create_seed(seed + 'data')
-    samples = sample(env, policy, num_trajectories, data_seed)
-    env.close()
+    env_fns = _parallel_envs(env_name, parallel, data_seed, wrapper=monitor)
+    samples = sample(env_fns, policy, num_trajectories, data_seed)
     #TODO: numpy array rather than Python list?
     return [(observations, actions) for (observations, actions, rewards) in samples]
 
 
 @utils.log_errors
-def _expert_trajs(env_name, experiment, rl_name, discount, seed, num_trajectories,
-                  video_every, log_dir):
+def _expert_trajs(env_name, experiment, rl_name, discount, parallel,
+                  seed, num_trajectories, video_every, log_dir):
     logger.debug('%s: training %s on %s', experiment, rl_name, env_name)
-    policy, value = _train_policy(rl_name, discount, env_name, seed, log_dir)
+    policy, value = _train_policy(rl_name, discount, env_name, parallel, seed, log_dir)
 
     logger.debug('%s: sampling from %s', experiment, env_name)
     _, sample, _ = config.RL_ALGORITHMS[rl_name]
-    trajectories = synthetic_data(env_name, rl_name, num_trajectories, seed,
-                                  log_dir, video_every, policy)
+    trajectories = synthetic_data(env_name, rl_name, num_trajectories, parallel,
+                                  seed, log_dir, video_every, policy)
 
     return trajectories, value
 
@@ -87,11 +92,13 @@ def expert_trajs(experiment, out_dir, cfg, pool, video_every, seed):
     logger.debug('%s: generating synthetic data: training', experiment)
     log_dir = osp.join(out_dir, 'expert')
     os.makedirs(log_dir)
+    parallel = cfg.get('parallel_rollouts', 1)
     max_trajectories = max(cfg['num_trajectories'])
 
     f = functools.partial(_expert_trajs, experiment=experiment,
                           rl_name=cfg['expert'], discount=cfg['discount'],
-                          seed=seed, num_trajectories=max_trajectories,
+                          parallel=parallel, seed=seed,
+                          num_trajectories=max_trajectories,
                           video_every=video_every, log_dir=log_dir)
     results = pool.map(f, cfg['environments'], chunksize=1)
 
@@ -278,19 +285,24 @@ def run_few_shot_irl(experiment, out_dir, cfg, pool, trajectories, seed):
 
 
 @utils.log_errors
-def _value(experiment, irl_name, rl_name, env_name, log_dir, reward, discount, seed):
+def _value(experiment, irl_name, rl_name, env_name, parallel,
+           log_dir, reward, discount, seed):
     logger.debug('%s: evaluating %s on %s (writing to %s)',
                  experiment, irl_name, env_name, log_dir)
     gen_policy, _sample, compute_value = config.RL_ALGORITHMS[rl_name]
-    _, reward_wrapper, _ = make_irl_algo(irl_name)
 
-    env = gym.make(env_name)
-    wrapped_env = reward_wrapper(env, reward)
-    eval_seed = utils.create_seed(seed + 'eval')
-    env.seed(eval_seed)
-    p = gen_policy(wrapped_env, discount=discount, log_dir=log_dir)
-    v = compute_value(env, p, discount=1.00, seed=eval_seed)
-    env.close()
+    _, reward_wrapper, _ = make_irl_algo(irl_name)
+    rw = functools.partial(reward_wrapper, new_reward=reward)
+
+    train_seed = utils.create_seed(seed + 'eval_train')
+    env_fns = _parallel_envs(env_name, parallel, train_seed, wrapper=rw)
+    p = gen_policy(env_fns, discount=discount, log_dir=log_dir)
+
+    logger.debug('%s: reoptimized %s on %s, sampling to estimate value',
+                 experiment, irl_name, env_name)
+    eval_seed = utils.create_seed(seed + 'eval_eval')
+    env_fns = _parallel_envs(env_name, parallel, eval_seed)
+    v = compute_value(env_fns, p, discount=1.00, seed=eval_seed)
 
     return v
 
@@ -311,6 +323,7 @@ def value(experiment, out_dir, cfg, pool, rewards, seed):
         an RL algorithm in cfg['eval'] to a scalar value.
     '''
     discount = cfg['discount']
+    parallel = cfg.get('parallel_rollouts', 1)
     value = collections.OrderedDict()
     ground_truth = {}
     for rl in cfg['eval']:
@@ -325,8 +338,8 @@ def value(experiment, out_dir, cfg, pool, rewards, seed):
                                            sanitize_env_name(env_name),
                                            '{}:{}:{}'.format(irl_name, m, n),
                                            rl)
-                        args = (experiment, irl_name, rl, env_name, log_dir, r,
-                                discount, seed)
+                        args = (experiment, irl_name, rl, env_name, parallel,
+                                log_dir, r, discount, seed)
                         delayed = pool.apply_async(_value, args)
                         res_by_env.setdefault(env_name, {})[rl] = delayed
                     res_by_m[m] = res_by_env
@@ -335,7 +348,7 @@ def value(experiment, out_dir, cfg, pool, rewards, seed):
 
         log_dir = osp.join(out_dir, 'eval', 'gt')
         for env_name in cfg['environments']:
-            args = (rl, discount, env_name, seed, log_dir)
+            args = (rl, discount, env_name, parallel, seed, log_dir)
             delayed = pool.apply_async(_train_policy, args)
             ground_truth.setdefault(env_name, {})[rl] = delayed
 
