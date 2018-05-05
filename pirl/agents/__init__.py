@@ -1,1 +1,1 @@
-from pirl.agents import continuous, tabular, ppo
+from pirl.agents import sample, tabular, ppo

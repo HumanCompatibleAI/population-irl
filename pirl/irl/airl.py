@@ -14,6 +14,8 @@ from airl.algos.irl_trpo import IRLTRPO
 from airl.models.airl_state import AIRL
 from airl.utils.log_utils import rllab_logdir
 
+from pirl.agents.sample import SampleMonitor
+
 def _convert_trajectories(trajs):
     '''Convert trajectories from format used in PIRL to that expected in AIRL.
 
@@ -23,7 +25,8 @@ def _convert_trajectories(trajs):
     Returns: trajectories in AIRL format.
         A list of dictionaries, containing keys 'observations' and 'actions', with values that are equal-length
         numpy arrays.'''
-    return [{'observations': np.array(obs), 'actions': np.array(actions)} for obs, actions in trajs]
+    return [{'observations': np.array(obs), 'actions': np.array(actions)}
+            for obs, actions in trajs]
 
 
 def irl(env, trajectories, discount, log_dir, tf_cfg, fusion=False,
@@ -79,25 +82,16 @@ def sample(env, policy_pkl, num_episodes, seed, tf_cfg):
             tf.set_random_seed(seed)
 
             policy = pickle.loads(policy_pkl)
+            env = SampleMonitor(env)
 
-            def helper():
-                '''Samples from environment for an entire episode.'''
-                observations = []
-                actions = []
-                rewards = []
-
+            for i in range(num_episodes):
                 obs = env.reset()
                 done = False
                 while not done:
-                    observations.append(obs[0])
                     a, _info = policy.get_action(obs)
-                    actions.append(a)
-                    obs, r, done, info = env.step(a)
-                    rewards.append(r)
+                    obs, _r, done, _info = env.step(a)
 
-                return observations, actions, rewards
-
-            return [helper() for i in range(num_episodes)]
+            return env.trajectories
 
 
 class AIRLRewardWrapper(gym.Wrapper):

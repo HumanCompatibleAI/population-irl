@@ -320,8 +320,7 @@ def value(experiment, out_dir, cfg, pool, rewards, seed):
                 res_by_m = collections.OrderedDict()
                 for m, reward_by_env in reward_by_small_size.items():
                     res_by_env = {}
-                    for env_name in cfg['environments']:
-                        r = reward_by_env[env_name]
+                    for env_name,r  in reward_by_env.items():
                         log_dir = osp.join(out_dir, 'eval',
                                            sanitize_env_name(env_name),
                                            '{}:{}:{}'.format(irl_name, m, n),

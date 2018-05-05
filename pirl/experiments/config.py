@@ -92,7 +92,7 @@ def ppo_cts_pol(num_timesteps):
                              tf_config=TENSORFLOW,
                              num_timesteps=num_timesteps)
 ppo_sample = functools.partial(agents.ppo.sample, tf_config=TENSORFLOW)
-ppo_value = functools.partial(agents.continuous.value, ppo_sample)
+ppo_value = functools.partial(agents.sample.value, ppo_sample)
 RL_ALGORITHMS['ppo_cts'] = (ppo_cts_pol(1e6), ppo_sample, ppo_value)
 RL_ALGORITHMS['ppo_cts_short'] = (ppo_cts_pol(1e5), ppo_sample, ppo_value)
 RL_ALGORITHMS['ppo_cts_shortest'] = (ppo_cts_pol(1e4), ppo_sample, ppo_value)
@@ -118,8 +118,8 @@ SINGLE_IRL_ALGORITHMS = {
 airl_irl = functools.partial(irl.airl.irl, tf_cfg=TENSORFLOW)
 airl_quick_irl = functools.partial(airl_irl, irl_cfg={'n_itr': 10})
 airl_reward = functools.partial(irl.airl.AIRLRewardWrapper, tf_cfg=TENSORFLOW)
-airl_value = functools.partial(agents.continuous.value,
-                functools.partial(irl.airl.sample, tf_cfg=TENSORFLOW))
+airl_value = functools.partial(agents.sample.value,
+                               functools.partial(irl.airl.sample, tf_cfg=TENSORFLOW))
 SINGLE_IRL_ALGORITHMS['airl'] = (airl_irl, airl_reward, airl_value)
 SINGLE_IRL_ALGORITHMS['airl_quick'] = (airl_quick_irl, airl_reward, airl_value)
 
