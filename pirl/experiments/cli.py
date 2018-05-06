@@ -34,7 +34,10 @@ class NoDaemonPool(multiprocessing.pool.Pool):
     '''A multiprocessing Pool whose processes do not have the daemon attribute
        set. This lets one have nested Pool's of processes. This is needed as
        this outer pool is used to run experiments in parallel, whereas an inner
-       pool is used to perform rollouts in a given environment in parallel.'''
+       pool is used to perform rollouts in a given environment in parallel.
+
+       This has the negative effect that these processes don't automatically die
+       with the main process -- best to not use this unless you need to.'''
     Process = NoDaemonProcess
 
 def _check_in(cats, kind):
@@ -119,3 +122,6 @@ if __name__ == '__main__':
                     experiment, res['values'], path)
         with open('{}/results.pkl'.format(path), 'wb') as f:
             pickle.dump(res, f)
+
+    pool.close()
+    pool.join()
