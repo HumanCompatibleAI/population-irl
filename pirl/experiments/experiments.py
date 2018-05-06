@@ -110,10 +110,9 @@ def expert_trajs(experiment, out_dir, cfg, pool, video_every, seed):
 
     return trajectories, values
 
-
 @utils.log_errors
-def _run_population_irl(irl_name, n, m, small_env, experiment,
-                        out_dir, env_names, parallel, trajectories, discount, seed):
+def __run_population_irl(irl_name, n, m, small_env, experiment,
+                         out_dir, env_names, parallel, trajectories, discount, seed):
     logger.debug('%s: running IRL algo: %s [%s=%s/%s]',
                  experiment, irl_name, small_env, m, n)
     irl_algo, _reward_wrapper, compute_value = config.POPULATION_IRL_ALGORITHMS[irl_name]
@@ -140,11 +139,11 @@ def _run_population_irl(irl_name, n, m, small_env, experiment,
               for k, p in policies.items()}
 
     return rewards, values
-
+_run_population_irl = memory.cache(ignore=['out_dir'])(__run_population_irl)
 
 @utils.log_errors
-def _run_single_irl(irl_name, n, env_name, parallel,
-                    experiment, out_dir, trajectories, discount, seed):
+def __run_single_irl(irl_name, n, env_name, parallel,
+                     experiment, out_dir, trajectories, discount, seed):
     logger.debug('%s: running IRL algo: %s [%s]', experiment, irl_name, n)
     irl_algo, _reward_wrapper, compute_value = config.SINGLE_IRL_ALGORITHMS[irl_name]
     subset = trajectories[:n]
@@ -164,6 +163,7 @@ def _run_single_irl(irl_name, n, env_name, parallel,
     value = compute_value(env_fns, policy, discount=1.00, seed=eval_seed)
 
     return reward, value
+_run_single_irl = memory.cache(ignore=['out_dir'])(__run_single_irl)
 
 
 def setdef(d, k):

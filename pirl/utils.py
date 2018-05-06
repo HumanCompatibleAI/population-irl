@@ -1,5 +1,5 @@
 import collections
-import functools
+from decorator import decorate
 import logging
 import random
 import traceback
@@ -102,19 +102,26 @@ class TrainingIterator(object):
     def record(self, k, v):
         self._vals.setdefault(k, collections.OrderedDict())[self._i] = v
 
+
+def _log_errors(f, *args, **kwargs):
+    try:
+        return f(*args, **kwargs)
+    except Exception as e:
+        logger.error('Error in subprocess: %s', traceback.format_exc())
+        raise e
+
+
 def log_errors(f):
     '''For use with multiprocessing. If an exception occurs, log it immediately
        and then reraise it. This gives early warning in the event of an error
        (by default, multiprocessing will wait on all other executions before
         raising or in any way reporting the exception).'''
-    @functools.wraps(f)
-    def helper(*args, **kwargs):
-        try:
-            return f(*args, **kwargs)
-        except Exception as e:
-            logger.error('Error in subprocess: %s', traceback.format_exc())
-            raise e
-    return helper
+    # Use the decorator module to preseve function signature.
+    # In Python 3.5+, functools.wraps also preserves the signature returned by
+    # inspect.signature, but not the (deprecated) inspect.getargspec.
+    # Unfortunately, some other modules e.g. joblib that we depend on still use
+    # the deprecated module.
+    return decorate(f, _log_errors)
 
 
 def nested_async_get(x, fn=lambda y: y):
