@@ -89,7 +89,7 @@ default_scheduler = {
     ),
 }
 
-def irl(mdp, trajectories, discount, log_dir=None, demo_counts=None, horizon=None,
+def irl(env_fns, trajectories, discount, log_dir=None, demo_counts=None, horizon=None,
         planner=max_causal_ent_policy, optimizer=None, scheduler=None,
         num_iter=5000, log_every=100, log_expensive_every=1000):
     """
@@ -118,6 +118,7 @@ def irl(mdp, trajectories, discount, log_dir=None, demo_counts=None, horizon=Non
         reward(list): estimated reward for each state in the MDP.
         policy(array): array of dimensions S * A, describing a stochastic policy.
     """
+    mdp = env_fns[0]()
     transition = getattr_unwrapped(mdp, 'transition')
     initial_states = getattr_unwrapped(mdp, 'initial_states')
     nS, _, _ = transition.shape
@@ -157,7 +158,7 @@ def irl(mdp, trajectories, discount, log_dir=None, demo_counts=None, horizon=Non
     return reward.data.numpy(), pol
 
 
-def population_irl(mdps, trajectories, discount, log_dir=None, planner=max_causal_ent_policy,
+def population_irl(env_fns, trajectories, discount, log_dir=None, planner=max_causal_ent_policy,
                    individual_reg=1e-2, optimizer=None, scheduler=None,
                    num_iter=5000, log_every=100, log_expensive_every=1000):
     """
@@ -189,6 +190,7 @@ def population_irl(mdps, trajectories, discount, log_dir=None, planner=max_causa
                                stochastic policy.
 
     """
+    mdps = {k: fn[0]() for k, fn in env_fns.items()}
     assert mdps.keys() == trajectories.keys()
 
     transitions = {}

@@ -113,7 +113,7 @@ def expert_trajs(experiment, out_dir, cfg, pool, video_every, seed):
 
 @utils.log_errors
 def _run_population_irl(irl_name, n, m, small_env, experiment,
-                        out_dir, env_names, trajectories, discount, seed):
+                        out_dir, env_names, parallel, trajectories, discount, seed):
     logger.debug('%s: running IRL algo: %s [%s=%s/%s]',
                  experiment, irl_name, small_env, m, n)
     irl_algo, _reward_wrapper, compute_value = config.POPULATION_IRL_ALGORITHMS[irl_name]
@@ -126,27 +126,24 @@ def _run_population_irl(irl_name, n, m, small_env, experiment,
         log_dir = osp.join(log_root, '{}'.format(n))
     os.makedirs(log_dir)
 
-    envs = {k: gym.make(k) for k in env_names}
     irl_seed = utils.create_seed(seed + 'irl')
-    for env in envs.values():
-        env.seed(irl_seed)
-    rewards, policies = irl_algo(envs, subset, discount=discount, log_dir=log_dir)
+    env_fns = {k: _parallel_envs(k, parallel, irl_seed) for k in env_names}
+    rewards, policies = irl_algo(env_fns, subset, discount=discount, log_dir=log_dir)
 
     # Save learnt reward & policy for debugging purposes
     joblib.dump(rewards, osp.join(log_dir, 'rewards.pkl'))
     joblib.dump(policies, osp.join(log_dir, 'policies.pkl'))
 
     eval_seed = utils.create_seed(seed + 'eval')
-    values = {k: compute_value(envs[k], p, discount=1.00, seed=eval_seed)
+    env_fns = {k: _parallel_envs(k, parallel, eval_seed) for k in env_names}
+    values = {k: compute_value(env_fns[k], p, discount=1.00, seed=eval_seed)
               for k, p in policies.items()}
-    for env in envs.values():
-        env.close()
 
     return rewards, values
 
 
 @utils.log_errors
-def _run_single_irl(irl_name, n, env_name,
+def _run_single_irl(irl_name, n, env_name, parallel,
                     experiment, out_dir, trajectories, discount, seed):
     logger.debug('%s: running IRL algo: %s [%s]', experiment, irl_name, n)
     irl_algo, _reward_wrapper, compute_value = config.SINGLE_IRL_ALGORITHMS[irl_name]
@@ -154,18 +151,17 @@ def _run_single_irl(irl_name, n, env_name,
     log_dir = osp.join(out_dir, 'irl', irl_name, env_name, '{}'.format(n))
     os.makedirs(log_dir)
 
-    env = gym.make(env_name)
     irl_seed = utils.create_seed(seed + 'irl')
-    env.seed(irl_seed)
-    reward, policy = irl_algo(env, subset, discount=discount, log_dir=log_dir)
+    env_fns = _parallel_envs(env_name, parallel, irl_seed)
+    reward, policy = irl_algo(env_fns, subset, discount=discount, log_dir=log_dir)
 
     # Save learnt reward & policy for debugging purposes
     joblib.dump(reward, osp.join(log_dir, 'reward.pkl'))
     joblib.dump(policy, osp.join(log_dir, 'policy.pkl'))
 
     eval_seed = utils.create_seed(seed + 'eval')
-    value = compute_value(env, policy, discount=1.00, seed=eval_seed)
-    env.close()
+    env_fns = _parallel_envs(env_name, parallel, eval_seed)
+    value = compute_value(env_fns, policy, discount=1.00, seed=eval_seed)
 
     return reward, value
 
@@ -187,6 +183,7 @@ def run_irl(experiment, out_dir, cfg, pool, trajectories, seed):
     kwargs = {
         'experiment': experiment,
         'out_dir': out_dir,
+        'parallel': cfg.get('parallel_rollouts', 1),
         'discount': cfg['discount'],
         'seed': seed,
     }
@@ -226,6 +223,7 @@ def run_few_shot_irl(experiment, out_dir, cfg, pool, trajectories, seed):
     kwargs = {
         'experiment': experiment,
         'out_dir': out_dir,
+        'parallel': cfg.get('parallel_rollouts', 1),
         'discount': cfg['discount'],
         'seed': seed,
     }
@@ -403,7 +401,7 @@ def run_experiment(experiment, pool, out_dir, video_every, seed):
         for n, d2 in d1.items():
             for m, d3 in d2.items():
                 for env, val in d3.items():
-                    values[irl_name][n][m][env]['irl'] = val
+                    setdef(setdef(setdef(setdef(values, irl_name), n), m), env)['irl'] = val
 
     return {
         'trajectories': trajs,

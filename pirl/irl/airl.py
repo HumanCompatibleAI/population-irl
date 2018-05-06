@@ -1,20 +1,103 @@
 import pickle
 
+from baselines.common.vec_env import VecEnvWrapper
+from baselines.common.vec_env.dummy_vec_env import DummyVecEnv
+from baselines.common.vec_env.subproc_vec_env import SubprocVecEnv
 import cloudpickle
 import gym
 import numpy as np
 import tensorflow as tf
 
-from sandbox.rocky.tf.policies.gaussian_mlp_policy import GaussianMLPPolicy
+from rllab.envs.base import Env, Step
 from sandbox.rocky.tf.envs.base import TfEnv
 from rllab.baselines.linear_feature_baseline import LinearFeatureBaseline
-from rllab.envs.gym_env import GymEnv
+from rllab.envs.gym_env import convert_gym_space
+from sandbox.rocky.tf.misc import tensor_utils
 
+from sandbox.rocky.tf.policies.gaussian_mlp_policy import GaussianMLPPolicy
 from airl.algos.irl_trpo import IRLTRPO
 from airl.models.airl_state import AIRL
 from airl.utils.log_utils import rllab_logdir
 
-from pirl.agents.sample import SampleMonitor
+from pirl.agents.sample import SampleVecMonitor
+
+
+class VecInfo(VecEnvWrapper):
+    def reset(self):
+        return self.venv.reset()
+
+    def step_wait(self):
+        obs, rewards, dones, env_infos = self.venv.step_wait()
+        env_infos = tensor_utils.stack_tensor_dict_list(env_infos)
+        return obs, rewards, dones, env_infos
+
+    def terminate(self):
+        return self.close()
+
+
+def _set_max_path_length(orig_env, max_path_length):
+    env = orig_env
+    while True:
+        if isinstance(env, gym.Wrapper):
+            if env.class_name() == 'TimeLimit':
+                env._max_episode_steps = max_path_length
+                return orig_env
+            env = env.env
+        else:
+            return gym.wrappers.TimeLimit(orig_env, max_episode_steps=max_path_length)
+
+def _make_vec_env(env_fns, parallel):
+    if parallel and len(env_fns) > 1:
+        return SubprocVecEnv(env_fns)
+    else:
+        return DummyVecEnv(env_fns)
+
+
+class VecGymEnv(Env):
+    def __init__(self, env_fns, parallel):
+        self.env_fns = env_fns
+        self.parallel = parallel
+        env = env_fns[0]()
+        self.env = env
+        self._observation_space = convert_gym_space(env.observation_space)
+        self._action_space = convert_gym_space(env.action_space)
+        self._horizon = env._max_episode_steps
+
+    @property
+    def observation_space(self):
+        return self._observation_space
+
+    @property
+    def action_space(self):
+        return self._action_space
+
+    @property
+    def horizon(self):
+        return self._horizon
+
+    def reset(self):
+        return self.env.reset()
+
+    def step(self, action):
+        next_obs, reward, done, info = self.env.step(action)
+        return Step(next_obs, reward, done, **info)
+
+    def render(self):
+        self.env.render()
+
+    def terminate(self):
+        self.env.close()
+
+    @property
+    def vectorized(self):
+        return True
+
+    def vec_env_executor(self, n_envs, max_path_length):
+        assert n_envs <= len(self.env_fns)
+        env_fns = [lambda: _set_max_path_length(fn(), max_path_length)
+                   for fn in self.env_fns[:n_envs]]
+        return VecInfo(_make_vec_env(env_fns, self.parallel))
+
 
 def _convert_trajectories(trajs):
     '''Convert trajectories from format used in PIRL to that expected in AIRL.
@@ -29,10 +112,11 @@ def _convert_trajectories(trajs):
             for obs, actions in trajs]
 
 
-def irl(env, trajectories, discount, log_dir, tf_cfg, fusion=False,
-        policy_cfg={}, irl_cfg={}):
+def irl(env_fns, trajectories, discount, log_dir, tf_cfg, fusion=False,
+        parallel=True, policy_cfg={}, irl_cfg={}):
     experts = _convert_trajectories(trajectories)
-    env = GymEnv(env, record_video=False, record_log=False)
+    num_envs = len(env_fns)
+    env = VecGymEnv(env_fns, parallel)
     env = TfEnv(env)
     make_irl_model = lambda : AIRL(env=env, expert_trajs=experts,
                                    state_only=True, fusion=fusion, max_itrs=10)
@@ -56,6 +140,7 @@ def irl(env, trajectories, discount, log_dir, tf_cfg, fusion=False,
             policy=policy,
             irl_model=irl_model,
             discount=discount,
+            sampler_args=dict(n_envs=num_envs),
             store_paths=True,
             zero_environment_reward=True,
             baseline=LinearFeatureBaseline(env_spec=env.spec),
@@ -68,30 +153,32 @@ def irl(env, trajectories, discount, log_dir, tf_cfg, fusion=False,
                 reward_params = irl_model.get_params()
                 policy_pkl = pickle.dumps(policy)
 
+    env.terminate()
+
     reward = cloudpickle.dumps(make_irl_model), reward_params
     return reward, policy_pkl
 
 
-def sample(env, policy_pkl, num_episodes, seed, tf_cfg):
+def sample(env_fns, policy_pkl, num_episodes, seed, tf_cfg, parallel=True):
+    venv = _make_vec_env(env_fns, parallel)
+    venv = SampleVecMonitor(venv)
+
     infer_graph = tf.Graph()
     with infer_graph.as_default():
+        tf.set_random_seed(seed)  # seed to make results reproducible
         with tf.Session(config=tf_cfg):
-            # Seed to make results reproducible
-            seed = gym.utils.seeding.create_seed(seed)
-            env.seed(seed)
-            tf.set_random_seed(seed)
-
             policy = pickle.loads(policy_pkl)
-            env = SampleMonitor(env)
 
-            for i in range(num_episodes):
-                obs = env.reset()
-                done = False
-                while not done:
-                    a, _info = policy.get_action(obs)
-                    obs, _r, done, _info = env.step(a)
+            completed = 0
+            obs = venv.reset()
+            while completed < num_episodes:
+                a, _info = policy.get_actions(obs)
+                obs, _r, dones, _info = venv.step(a)
+                completed += np.sum(dones)
 
-            return env.trajectories
+            return venv.trajectories
+
+    venv.close()
 
 
 class AIRLRewardWrapper(gym.Wrapper):
@@ -116,3 +203,7 @@ class AIRLRewardWrapper(gym.Wrapper):
 
     def reset(self, **kwargs):
         return self.env.reset(**kwargs)
+
+    def close(self):
+        self.sess.close()
+        self.env.close()

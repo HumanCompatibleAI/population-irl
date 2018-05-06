@@ -165,7 +165,7 @@ def sample(env_fns, policy, num_episodes, seed, tf_config, parallel=True, const_
 
             obs = norm_envs.reset()
             states = model.initial_state
-            dones = np.zeros(len(env_fns), dtype='bool')
+            dones = np.zeros(num_envs, dtype='bool')
             completed = 0
             while completed < num_episodes:
                 a, v, states, neglogp = model.step(obs, states, dones)

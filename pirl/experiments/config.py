@@ -96,6 +96,9 @@ ppo_value = functools.partial(agents.sample.value, ppo_sample)
 RL_ALGORITHMS['ppo_cts'] = (ppo_cts_pol(1e6), ppo_sample, ppo_value)
 RL_ALGORITHMS['ppo_cts_short'] = (ppo_cts_pol(1e5), ppo_sample, ppo_value)
 RL_ALGORITHMS['ppo_cts_shortest'] = (ppo_cts_pol(1e4), ppo_sample, ppo_value)
+RL_ALGORITHMS['ppo_cts_shortest_serial'] = (functools.partial(ppo_cts_pol(1e4), parallel=False),
+                                            ppo_sample, ppo_value)
+
 
 # IRL Algorithms
 
@@ -105,23 +108,25 @@ SINGLE_IRL_ALGORITHMS = {
     # Maximum Causal Entropy (Ziebart 2010)
     'mce': (irl.tabular_maxent.irl,
             agents.tabular.TabularRewardWrapper,
-            agents.tabular.value_in_mdp),
+            agents.tabular.value_in_env),
     'mce_quick': (functools.partial(irl.tabular_maxent.irl, num_iter=500),
                   agents.tabular.TabularRewardWrapper,
-                  agents.tabular.value_in_mdp),
+                  agents.tabular.value_in_env),
     # Maximum Entropy (Ziebart 2008)
     'me': (functools.partial(irl.tabular_maxent.irl, planner=irl.tabular_maxent.max_ent_policy),
            agents.tabular.TabularRewardWrapper,
-           agents.tabular.value_in_mdp),
+           agents.tabular.value_in_env),
 }
 
 airl_irl = functools.partial(irl.airl.irl, tf_cfg=TENSORFLOW)
 airl_quick_irl = functools.partial(airl_irl, irl_cfg={'n_itr': 10})
+airl_quick_serial_irl = functools.partial(airl_irl, parallel=False, irl_cfg={'n_itr': 10})
 airl_reward = functools.partial(irl.airl.AIRLRewardWrapper, tf_cfg=TENSORFLOW)
 airl_value = functools.partial(agents.sample.value,
                                functools.partial(irl.airl.sample, tf_cfg=TENSORFLOW))
 SINGLE_IRL_ALGORITHMS['airl'] = (airl_irl, airl_reward, airl_value)
 SINGLE_IRL_ALGORITHMS['airl_quick'] = (airl_quick_irl, airl_reward, airl_value)
+SINGLE_IRL_ALGORITHMS['airl_quick_serial'] = (airl_quick_serial_irl, airl_reward, airl_value)
 
 ## Population IRL algorithms
 
@@ -150,15 +155,15 @@ POPULATION_IRL_ALGORITHMS = dict()
 for reg in range(-2,3):
     fn = functools.partial(irl.tabular_maxent.population_irl,
                            individual_reg=10 ** reg)
-    POPULATION_IRL_ALGORITHMS['mcep_reg1e{}'.format(reg)] = fn, agents.tabular.TabularRewardWrapper, agents.tabular.value_in_mdp
+    POPULATION_IRL_ALGORITHMS['mcep_reg1e{}'.format(reg)] = fn, agents.tabular.TabularRewardWrapper, agents.tabular.value_in_env
 POPULATION_IRL_ALGORITHMS['mcep_reg0'] = (
     functools.partial(irl.tabular_maxent.population_irl, individual_reg=0),
     agents.tabular.TabularRewardWrapper,
-    agents.tabular.value_in_mdp)
+    agents.tabular.value_in_env)
 POPULATION_IRL_ALGORITHMS['mcep_quick_reg0'] = (
     functools.partial(irl.tabular_maxent.population_irl, individual_reg=0, num_iter=500),
     agents.tabular.TabularRewardWrapper,
-    agents.tabular.value_in_mdp)
+    agents.tabular.value_in_env)
 
 def traditional_to_concat(fs):
     irl_algo, reward_wrapper, compute_value = fs
@@ -329,7 +334,7 @@ EXPERIMENTS['continuous-baselines-easy'] = {
     'parallel_rollouts': 4,
     'discount': 0.99,
     'expert': 'ppo_cts',
-    'eval': ['ppo_cts'],
+    'eval': [],#['ppo_cts'],
     'irl': ['airl'],
     'num_trajectories': [1000],
 }
@@ -342,7 +347,7 @@ EXPERIMENTS['continuous-baselines-medium'] = {
     'parallel_rollouts': 4,
     'discount': 0.99,
     'expert': 'ppo_cts',
-    'eval': ['ppo_cts'],
+    'eval': [],#['ppo_cts'],
     'irl': ['airl'],
     'num_trajectories': [1000],
 }
@@ -378,9 +383,99 @@ for n in [1, 4, 8, 16]:
         'parallel_rollouts': n,
         'discount': 0.99,
         'expert': 'ppo_cts',
-        'eval': ['ppo_cts'],
-        'irl': [],
+        'eval': [],#['ppo_cts'],
+        'irl': ['airl'],
         'num_trajectories': [1000],
+    }
+    EXPERIMENTS['parallel-cts-easy-fast-{}'.format(n)] = {
+        'environments': [
+            'Reacher-v2',
+            'InvertedPendulum-v2',
+            'InvertedDoublePendulum-v2'
+        ],
+        'parallel_rollouts': n,
+        'discount': 0.99,
+        'expert': 'ppo_cts',
+        'eval': [],
+        'irl': ['airl_quick'],
+        'num_trajectories': [1000],
+    }
+    EXPERIMENTS['parallel-cts-reacher-{}'.format(n)] = {
+        'environments': [
+            'Reacher-v2',
+        ],
+        'parallel_rollouts': n,
+        'discount': 0.99,
+        'expert': 'ppo_cts',
+        'eval': [],
+        'irl': ['airl'],
+        'num_trajectories': [1000],
+    }
+    EXPERIMENTS['parallel-cts-reacher-fast-{}'.format(n)] = {
+        'environments': [
+            'Reacher-v2',
+        ],
+        'parallel_rollouts': n,
+        'discount': 0.99,
+        'expert': 'ppo_cts',
+        'eval': [],
+        'irl': ['airl_quick'],
+        'num_trajectories': [1000],
+    }
+    EXPERIMENTS['parallel-cts-reacher-fast-serial-{}'.format(n)] = {
+        'environments': [
+            'Reacher-v2',
+        ],
+        'parallel_rollouts': n,
+        'discount': 0.99,
+        'expert': 'ppo_cts',
+        'eval': [],
+        'irl': ['airl_quick_serial'],
+        'num_trajectories': [1000],
+    }
+    EXPERIMENTS['parallel-cts-reacher-fast-rl-{}'.format(n)] = {
+        'environments': [
+            'Reacher-v2',
+        ],
+        'parallel_rollouts': n,
+        'discount': 0.99,
+        'expert': 'ppo_cts_shortest',
+        'eval': [],
+        'irl': [],
+        'num_trajectories': [10],
+    }
+    EXPERIMENTS['parallel-cts-reacher-fast-rl-serial-{}'.format(n)] = {
+        'environments': [
+            'Reacher-v2',
+        ],
+        'parallel_rollouts': n,
+        'discount': 0.99,
+        'expert': 'ppo_cts_shortest_serial',
+        'eval': [],
+        'irl': [],
+        'num_trajectories': [10],
+    }
+    EXPERIMENTS['parallel-cts-humanoid-fast-rl-{}'.format(n)] = {
+        'environments': [
+            'Humanoid-v2',
+        ],
+        'parallel_rollouts': n,
+        'discount': 0.99,
+        'expert': 'ppo_cts_shortest',
+        'eval': [],
+        'irl': [],
+        'num_trajectories': [10],
+    }
+    EXPERIMENTS['parallel-cts-humanoid-fast-rl-serial-{}'.format(n)] = {
+        'environments': [
+            'Humanoid-v2',
+        ],
+        'parallel_rollouts': n,
+        'discount': 0.99,
+        'expert': 'ppo_cts_shortest_serial',
+        'eval': [],
+        'irl': [],
+        'num_trajectories': [10],
     }
 
 
