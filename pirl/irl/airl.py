@@ -112,28 +112,31 @@ def _convert_trajectories(trajs):
             for obs, actions in trajs]
 
 
-def irl(env_fns, trajectories, discount, log_dir, tf_cfg, fusion=False,
-        parallel=True, policy_cfg={}, irl_cfg={}):
-    experts = _convert_trajectories(trajectories)
+def irl(env_fns, trajectories, discount, log_dir, tf_cfg, parallel=True,
+        model_cfg={}, policy_cfg={}, training_cfg={}):
     num_envs = len(env_fns)
     env = VecGymEnv(env_fns, parallel)
     env = TfEnv(env)
-    make_irl_model = lambda : AIRL(env=env, expert_trajs=experts,
-                                   state_only=True, fusion=fusion, max_itrs=10)
+
+    experts = _convert_trajectories(trajectories)
+    model_kwargs = {'state_only': True, 'max_itrs': 10}
+    model_kwargs.update(model_cfg)
+    make_irl_model = lambda : AIRL(env=env, expert_trajs=experts, **model_kwargs)
+
     train_graph = tf.Graph()
     with train_graph.as_default():
         policy_kwargs = {'hidden_sizes': (32, 32)}
         policy_kwargs.update(policy_cfg)
         policy = GaussianMLPPolicy(name='policy', env_spec=env.spec, **policy_kwargs)
 
-        irl_kwargs = {
+        training_kwargs = {
             'n_itr': 1000,
             'batch_size': 10000,
             'max_path_length': 500,
             'irl_model_wt': 1.0,
             'entropy_weight': 0.1,
         }
-        irl_kwargs.update(irl_cfg)
+        training_kwargs.update(training_cfg)
         irl_model = make_irl_model()
         algo = IRLTRPO(
             env=env,
@@ -144,7 +147,7 @@ def irl(env_fns, trajectories, discount, log_dir, tf_cfg, fusion=False,
             store_paths=True,
             zero_environment_reward=True,
             baseline=LinearFeatureBaseline(env_spec=env.spec),
-            **irl_kwargs
+            **training_kwargs
         )
         with rllab_logdir(algo=algo, dirname=log_dir):
             with tf.Session(config=tf_cfg):
