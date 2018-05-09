@@ -103,25 +103,26 @@ if __name__ == '__main__':
 
     # Pool
     logger.info('Starting pool')
-    pool = NoDaemonPool(args.num_cores,
-                        initializer=functools.partial(init_worker, timestamp))
+    try:
+        pool = NoDaemonPool(args.num_cores,
+                            initializer=functools.partial(init_worker, timestamp))
 
-    # Experiment loop
-    for experiment in args.experiments:
-        # reseed so does not matter which order experiments are run in
-        timestamp = datetime.now().strftime(ISO_TIMESTAMP)
-        version = git_hash()
-        out_dir = '{}-{}-{}'.format(experiment, timestamp, version)
-        path = os.path.join(args.data_dir, out_dir)
-        os.makedirs(path)
+        # Experiment loop
+        for experiment in args.experiments:
+            # reseed so does not matter which order experiments are run in
+            timestamp = datetime.now().strftime(ISO_TIMESTAMP)
+            version = git_hash()
+            out_dir = '{}-{}-{}'.format(experiment, timestamp, version)
+            path = os.path.join(args.data_dir, out_dir)
+            os.makedirs(path)
 
-        res = experiments.run_experiment(experiment, pool, path,
-                                         video_every, args.seed)
+            res = experiments.run_experiment(experiment, pool, path,
+                                             video_every, args.seed)
 
-        logger.info('Experiment %s completed. Outcome:\n %s. Saving to %s.',
-                    experiment, res['values'], path)
-        with open('{}/results.pkl'.format(path), 'wb') as f:
-            pickle.dump(res, f)
-
-    pool.close()
-    pool.join()
+            logger.info('Experiment %s completed. Outcome:\n %s. Saving to %s.',
+                        experiment, res['values'], path)
+            with open('{}/results.pkl'.format(path), 'wb') as f:
+                pickle.dump(res, f)
+    finally:
+        pool.close()
+        pool.join()
