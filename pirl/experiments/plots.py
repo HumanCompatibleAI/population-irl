@@ -5,18 +5,23 @@ import os
 import os.path as osp
 
 import gym
-# import matplotlib
-# matplotlib.use('Agg')
+import matplotlib as mpl
 import matplotlib.pyplot as plt
+import matplotlib.gridspec as gridspec
 import matplotlib.animation as manimation
 import pandas as pd
 import numpy as np
+import scipy.stats
 import seaborn as sns
 
 logger = logging.getLogger('pirl.experiments.plots')
 
-THIS_DIR = os.path.join(os.path.dirname(os.path.realpath(__file__)))
-plt.style.use(os.path.join(THIS_DIR, 'default.mplstyle'))
+THIS_DIR = osp.join(os.path.dirname(os.path.realpath(__file__)))
+
+def style(name):
+    return osp.join(THIS_DIR, '{}.mplstyle'.format(name))
+
+plt.style.use(style('default'))
 
 def nested_dicts_to_df(ds, idxs, transform):
     if len(idxs) == 2:
@@ -41,13 +46,16 @@ def extract_value(data):
     sorted_idx = ['env', 'n', 'm', 'eval', 'type']
     values = values.reorder_levels(sorted_idx)
 
-    ground_truth = pd.DataFrame(unpack_mean_sd_tuple(data['ground_truth']))
+    idx =  ['env', 'eval', 'type']
+    ground_truth = nested_dicts_to_df(data['ground_truth'], idx, unpack_mean_sd_tuple)
+    ground_truth = ground_truth.stack().unstack('eval')
+    ground_truth = ground_truth.reorder_levels(['env', 'type'])
+
     def get_gt(k):
         env, _, _, _, kind = k
-        return ground_truth.loc[kind, env]
-    values['expert'] = list(map(get_gt, values.index))
-
-    return values
+        return ground_truth.loc[(env, kind), :]
+    values_gt = pd.DataFrame(list(map(get_gt, values.index)), index=values.index)
+    return pd.concat([values, values_gt], axis=1)
 
 
 def _gridworld_heatmap(reward, shape, walls=None, **kwargs):
@@ -142,6 +150,127 @@ def gridworld_heatmap_movie(out_dir, reward, shape,
                 fig.clf()
                 logger.debug('%s: written frame %d', fname, i)
         plt.close(fig)
+
+
+def gridworld_ground_truth(envs, shape):
+    data = {}
+    rmin = 1e10
+    rmax = -1e10
+    for nickname, env_name in envs.items():
+        env = gym.make(env_name)
+        reward = env.unwrapped.reward
+        walls = env.unwrapped.walls
+        env.close()
+
+        data[nickname] = (reward, walls)
+        rmin = min(rmin, np.min(reward))
+        rmax = max(rmax, np.max(reward))
+
+    num_envs = len(envs)
+    width, height = mpl.rcParams['figure.figsize']
+    height = width / num_envs
+    figsize = (width, height)
+
+    width_ratios = [10] * num_envs + [1]
+    fig = plt.figure(figsize=figsize)
+    gs = gridspec.GridSpec(1, num_envs + 1, width_ratios=width_ratios, wspace=0.2)
+
+    first_ax = plt.subplot(gs[0])
+    for i, (nickname, (reward, walls)) in enumerate(data.items()):
+        if i == 0:
+            ax = first_ax
+        else:
+            ax = plt.subplot(gs[i], sharex=first_ax, sharey=first_ax)
+            plt.setp(ax.get_yticklabels(), visible=False)
+        if i == num_envs - 1:
+            kwargs = {'cbar': True, 'cbar_ax': plt.subplot(gs[num_envs])}
+        else:
+            kwargs = {'cbar': False}
+        _gridworld_heatmap(reward, shape, walls, vmin=rmin, vmax=rmax,
+                           ax=ax, **kwargs)
+        ax.set_title(nickname)
+
+    return fig
+
+
+def value_bar_chart(values, alpha=0.05, relative=None, **kwargs):
+    '''Takes DataFrame with columns corresponding to algorithms, and
+       a MultiIndex with levels [n, type] where n is the number of trajectories
+       and type is either 'mean' or 'se'. It outputs a stacked bar graph.'''
+    mean = values.xs('mean', level='type')
+    se = values.xs('se', level='type')
+    z = scipy.stats.norm.ppf(1 - (alpha / 2))
+    err = se * z
+    if relative is not None:
+        y = -mean.sub(mean[relative], 0)
+        y = y.drop(relative, axis=1)
+    else:
+        y = mean
+    y.plot.bar(yerr=err, **kwargs)
+
+
+def value_bar_chart_by_env(values, envs=None, **kwargs):
+    legend_height = 0.1
+    legend_pad = 0.28
+    fig_top = 1 - (legend_height + legend_pad)
+
+    if envs is None:
+        envs = values.index.levels[0]
+    num_envs = len(envs)
+    width, height = mpl.rcParams['figure.figsize']
+    height = width / num_envs
+    figsize = (width, height)
+    fig, axs = plt.subplots(1, num_envs, figsize=figsize,
+                            sharex=True, sharey=True,
+                            gridspec_kw={'top': fig_top})
+
+    for env, ax in zip(envs, axs):
+        value_bar_chart(values.xs(env, level='env'), ax=ax, legend=False, **kwargs)
+        ax.set_xlabel('Trajectories')
+        ax.set_ylabel('Expected Value')
+        ax.set_title(env)
+
+    handles, labels = ax.get_legend_handles_labels()
+    leftmost = axs[0].xaxis.get_minpos()
+    rightmost = axs[-1].get_position().xmax
+    max_width = rightmost - leftmost
+    x0 = leftmost + 0.05 * max_width
+    x1 = rightmost - 0.05 * max_width
+    num_algos = len(values.columns)
+    fig.legend(handles, labels,
+               loc='lower left', bbox_to_anchor=(x0, 0.9, x1 - x0, legend_height),
+               mode='expand', ncol=num_algos, borderaxespad=0.)
+
+    return fig
+
+def value_latex_table(values, dps=2, relative=None, envs=None):
+    df = values.xs('mean', level='type')
+    if relative is not None:
+        df = df.sub(df[relative], axis=0)
+        df = df.drop(relative, axis=1)
+
+    df = df.round(dps)
+    df.columns.name = 'algo'
+    df = df.unstack('m')
+
+    def bold_group(group):
+        best_idx = group.idxmax()
+        best_idx_per_row = group.unstack().apply(pd.Series.idxmax)
+
+        group = group.apply(str)
+        for m, env in best_idx_per_row.iteritems():
+            idx = env, m
+            if idx != best_idx:
+                group.loc[idx] = r'\textit{' + group.loc[idx] + '}'
+        group[best_idx] = r'\textbf{' + group[best_idx] + '}'
+        return group
+    df = df.transform(bold_group, axis=1)
+    df = df.stack('m').unstack('env')
+    df.columns = df.columns.reorder_levels(['env', 'algo'])
+    if envs is None:
+        envs = df.columns.levels[0]
+    df = pd.concat([df.loc[:, [x]] for x in envs], axis=1)
+    return df.to_latex(escape=False)
 
 
 def save_figs(figs, prefix):

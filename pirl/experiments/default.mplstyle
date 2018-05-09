@@ -1,4 +1,4 @@
-font.family  : 'serif'
-font.size : 8
-legend.fontsize : 8
-figure.figsize : 5.39, 4.04
+font.serif : Times New Roman
+font.family  : serif
+font.size : 10
+legend.fontsize : 10
