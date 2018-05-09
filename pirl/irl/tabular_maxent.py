@@ -196,6 +196,7 @@ def population_irl(env_fns, trajectories, discount, log_dir=None, planner=max_ca
     transitions = {}
     initial_states = {}
     rewards = {}
+    horizons = {}
     transition_shape = None
     initial_shape = None
     for name, mdp in mdps.items():
@@ -212,11 +213,10 @@ def population_irl(env_fns, trajectories, discount, log_dir=None, planner=max_ca
         nS, _, _ = trans.shape
         rewards[name] = Variable(torch.zeros(nS), requires_grad=True)
 
-    horizons = {}
-    demo_counts = {}
-    for name, trajectory in trajectories.items():
-        horizons[name] = max([len(states) for states, actions in trajectory])
-        demo_counts[name] = empirical_counts(nS, trajectory, discount)
+        horizons[name] = getattr_unwrapped(mdp, '_max_episode_steps')
+
+    demo_counts = {name: empirical_counts(nS, trajectory, discount)
+                   for name, trajectory in trajectories.items()}
 
     if optimizer is None:
         optimizer = default_optimizer
@@ -242,10 +242,15 @@ def population_irl(env_fns, trajectories, discount, log_dir=None, planner=max_ca
         common_reward = np.mean([v.data.numpy() for v in rewards.values()], axis=0)
 
         for name in mdps.keys():
-            scale = individual_reg / len(trajectories[name])
             delta = rewards[name].data.numpy() - common_reward
-            g = grads[name] + scale * delta
+            num_trajs = len(trajectories[name])
+            if num_trajs > 0:
+                scale = individual_reg / len(trajectories[name])
+                g = grads[name] + scale * delta
+            else:
+                g = delta
             rewards[name].grad = Variable(torch.Tensor(g))
+
 
         optimizer.step()
         scheduler.step()

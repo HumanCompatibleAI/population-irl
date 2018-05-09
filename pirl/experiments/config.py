@@ -207,7 +207,7 @@ EXPERIMENTS['few-dummy-test'] = {
     'eval': ['value_iteration'],
     'irl': ['mce_quick', 'mce_quickc', 'mcep_quick_reg0'],
     'num_trajectories': [20],
-    'few_shot': [1, 5],
+    'few_shot': [0, 1, 5],
 }
 EXPERIMENTS['dummy-test-deterministic'] = {
     'environments': ['pirl/GridWorld-Simple-Deterministic-v0'],
@@ -308,7 +308,7 @@ EXPERIMENTS['few-jungle'] = {
         'mcep_reg1e0',
     ],
     'num_trajectories': [1000],
-    'few_shot': [1, 2, 5, 10, 20, 50, 100],
+    'few_shot': [0, 1, 2, 5, 10, 20, 50, 100],
 }
 EXPERIMENTS['few-jungle-small'] = {
     'environments': ['pirl/GridWorld-Jungle-4x4-{}-v0'.format(k)

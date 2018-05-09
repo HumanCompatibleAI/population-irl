@@ -140,6 +140,7 @@ def __run_population_irl(irl_name, n, m, small_env, experiment,
 
     return rewards, values
 _run_population_irl = memory.cache(ignore=['out_dir'])(__run_population_irl)
+#_run_population_irl = __run_population_irl
 
 @utils.log_errors
 def __run_single_irl(irl_name, n, env_name, parallel,
@@ -164,6 +165,7 @@ def __run_single_irl(irl_name, n, env_name, parallel,
 
     return reward, value
 _run_single_irl = memory.cache(ignore=['out_dir'])(__run_single_irl)
+#_run_single_irl = __run_single_irl
 
 
 def setdef(d, k):
@@ -232,6 +234,8 @@ def run_few_shot_irl(experiment, out_dir, cfg, pool, trajectories, seed):
     sin_res = {}
     for irl_name, m, env in itertools.product(*sin_args):
         if irl_name in config.SINGLE_IRL_ALGORITHMS:
+            if m == 0:
+                continue
             kwds = kwargs.copy()
             kwds.update({
                 'irl_name': irl_name,
@@ -266,10 +270,10 @@ def run_few_shot_irl(experiment, out_dir, cfg, pool, trajectories, seed):
         for m, d2 in d.items():
             for env, (r, v) in d2.items():
                 for n in num_traj:
-                    if n > m:
+                    if m > n:
                         break
-                    setdef(setdef(setdef(rewards, irl_name), m), m)[env] = r
-                    setdef(setdef(setdef(values, irl_name), m), m)[env] = v
+                    setdef(setdef(setdef(rewards, irl_name), n), m)[env] = r
+                    setdef(setdef(setdef(values, irl_name), n), m)[env] = v
 
     pop_res = utils.nested_async_get(pop_res)
     for irl_name, d in pop_res.items():
@@ -407,5 +411,5 @@ def run_experiment(experiment, pool, out_dir, video_every, seed):
         'trajectories': trajs,
         'rewards': rewards,
         'values': values,
-        'ground_truth': expert_vals,
+        'ground_truth': ground_truth,
     }
