@@ -193,23 +193,40 @@ def gridworld_ground_truth(envs, shape):
     return fig
 
 
-def value_bar_chart(values, alpha=0.05, relative=None, **kwargs):
+def value_bar_chart(values, alpha=0.05, relative=None,
+                    error=False, ax=None, **kwargs):
     '''Takes DataFrame with columns corresponding to algorithms, and
        a MultiIndex with levels [n, type] where n is the number of trajectories
        and type is either 'mean' or 'se'. It outputs a stacked bar graph.'''
-    mean = values.xs('mean', level='type')
+    if ax is None:
+        ax = plt.gca()
+    y = values.xs('mean', level='type')
     se = values.xs('se', level='type')
     z = scipy.stats.norm.ppf(1 - (alpha / 2))
     err = se * z
+
     if relative is not None:
-        y = -mean.sub(mean[relative], 0)
+        if error:
+            y = -y.sub(y[relative], 0)
+        else:
+            rel = y[relative]
+
         y = y.drop(relative, axis=1)
-    else:
-        y = mean
-    y.plot.bar(yerr=err, **kwargs)
+    y.plot.bar(yerr=err, ax=ax, **kwargs)
+
+    ax.set_xlabel('Trajectories')
+    ax.set_ylabel('Expected Value')
+    if relative is not None:
+        if error:
+            ax.set_ylabel('Error')
+        else:
+            color = 'C{}'.format(len(y.columns))
+            ax.axhline(rel.iloc[0], xmin=0, xmax=1,
+                       linestyle=':', linewidth=0.5,
+                       color=color, label=relative)
 
 
-def value_bar_chart_by_env(values, envs=None, **kwargs):
+def value_bar_chart_by_env(values, envs=None, relative=None, **kwargs):
     legend_height = 0.1
     legend_pad = 0.28
     fig_top = 1 - (legend_height + legend_pad)
@@ -225,12 +242,15 @@ def value_bar_chart_by_env(values, envs=None, **kwargs):
                             gridspec_kw={'top': fig_top})
 
     for env, ax in zip(envs, axs):
-        value_bar_chart(values.xs(env, level='env'), ax=ax, legend=False, **kwargs)
-        ax.set_xlabel('Trajectories')
-        ax.set_ylabel('Expected Value')
+        value_bar_chart(values.xs(env, level='env'), ax=ax,
+                        legend=False, relative=relative, **kwargs)
         ax.set_title(env)
 
     handles, labels = ax.get_legend_handles_labels()
+    if labels[0] == relative:
+        # make relative label always go at the end
+        labels = labels[1:] + [labels[0]]
+        handles = handles[1:] + [handles[0]]
     leftmost = axs[0].xaxis.get_minpos()
     rightmost = axs[-1].get_position().xmax
     max_width = rightmost - leftmost
