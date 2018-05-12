@@ -15,6 +15,7 @@ import numpy as np
 import scipy.stats
 import seaborn as sns
 
+
 logger = logging.getLogger('pirl.experiments.plots')
 
 THIS_DIR = osp.join(os.path.dirname(os.path.realpath(__file__)))
