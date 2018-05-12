@@ -63,9 +63,9 @@ def extract_value(data):
 def _gridworld_heatmap(reward, shape, walls=None, **kwargs):
     reward = reward.reshape(shape)
     kwargs.setdefault('fmt', '.0f')
-    kwargs.setdefault('annot', False)
+    kwargs.setdefault('annot', True)
     kwargs.setdefault('annot_kws', {'fontsize': 'smaller'})
-    kwargs.setdefault('cmap', ListedColormap(['#e15759', '#9c755f', '#59a14f', '#edc948']))
+    kwargs.setdefault('cmap', 'YlGnBu')
     sns.heatmap(reward, mask=walls, **kwargs)
 
 
@@ -134,14 +134,14 @@ def gridworld_heatmap(reward, shape, num_cols=3, figsize=(11.6, 8.6),
 def gridworld_heatmap_movie(out_dir, reward, shape,
                             prefix=None, share_scale=False, fps=1, dpi=300):
     envs = list(list(reward.values())[0].values())[0].keys()
-    get_ax = lambda n: fig.gca()
+    get_ax = lambda n: fig.gca() 
     os.makedirs(out_dir, exist_ok=True)
     for env_name in envs:
         logger.debug('Generating movie for %s', env_name)
         FFMpegWriter = manimation.writers['ffmpeg']
         metadata = dict(title='Reward Heatmap', artist='matplotlib')
         writer = FFMpegWriter(fps=fps, metadata=metadata)
-
+    
         fig = plt.figure()
         fname = osp.join(out_dir, env_name.replace('/', '_') + '.mp4')
         with writer.saving(fig, fname, dpi):
@@ -154,6 +154,14 @@ def gridworld_heatmap_movie(out_dir, reward, shape,
         plt.close(fig)
 
 
+def _gridworld_catmap(reward, shape, walls=None, **kwargs):
+    reward = reward.reshape(shape)
+    kwargs.setdefault('fmt', '.0f')
+    kwargs.setdefault('annot', False)
+    kwargs.setdefault('annot_kws', {'fontsize': 'smaller'})
+    kwargs.setdefault('cmap', ListedColormap(['#e15759', '#e15759', '#e15759', '#e15759', '#e15759', '#e15759', '#e15759', '#e15759', '#9c755f', '#59a14f','#bab0ac', '#edc948']))
+    sns.heatmap(reward, mask=walls, **kwargs)
+
 def gridworld_ground_truth(envs, shape):
     data = {}
     rmin = 1e10
@@ -161,6 +169,8 @@ def gridworld_ground_truth(envs, shape):
     for nickname, env_name in envs.items():
         env = gym.make(env_name)
         reward = env.unwrapped.reward
+        reward[0][6] = 2
+        reward[7][7] = 2
         walls = env.unwrapped.walls
         env.close()
 
@@ -188,12 +198,11 @@ def gridworld_ground_truth(envs, shape):
             kwargs = {'cbar': True, 'cbar_ax': plt.subplot(gs[num_envs])}
         else:
             kwargs = {'cbar': False}
-        _gridworld_heatmap(reward, shape, walls, vmin=rmin, vmax=rmax,
+        _gridworld_catmap(reward, shape, walls, vmin=rmin, vmax=rmax,
                            ax=ax, **kwargs)
         ax.set_title(nickname)
 
     return fig
-
 
 def value_bar_chart(values, alpha=0.05, relative=None,
                     error=False, ax=None, **kwargs):
