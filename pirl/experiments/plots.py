@@ -9,6 +9,7 @@ import matplotlib as mpl
 import matplotlib.pyplot as plt
 import matplotlib.gridspec as gridspec
 import matplotlib.animation as manimation
+from matplotlib.colors import ListedColormap
 import pandas as pd
 import numpy as np
 import scipy.stats
@@ -61,9 +62,9 @@ def extract_value(data):
 def _gridworld_heatmap(reward, shape, walls=None, **kwargs):
     reward = reward.reshape(shape)
     kwargs.setdefault('fmt', '.0f')
-    kwargs.setdefault('annot', True)
+    kwargs.setdefault('annot', False)
     kwargs.setdefault('annot_kws', {'fontsize': 'smaller'})
-    kwargs.setdefault('cmap', 'YlGnBu')
+    kwargs.setdefault('cmap', ListedColormap(['#e15759', '#9c755f', '#59a14f', '#edc948'])
     sns.heatmap(reward, mask=walls, **kwargs)
 
 
