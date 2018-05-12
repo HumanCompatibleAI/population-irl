@@ -15,6 +15,8 @@ import numpy as np
 import scipy.stats
 import seaborn as sns
 
+from pirl.envs import jungle_topology
+
 
 logger = logging.getLogger('pirl.experiments.plots')
 
@@ -63,9 +65,9 @@ def extract_value(data):
 def _gridworld_heatmap(reward, shape, walls=None, **kwargs):
     reward = reward.reshape(shape)
     kwargs.setdefault('fmt', '.0f')
-    kwargs.setdefault('annot', False)
+    kwargs.setdefault('annot', True)
     kwargs.setdefault('annot_kws', {'fontsize': 'smaller'})
-    kwargs.setdefault('cmap', ListedColormap(['#e15759', '#9c755f', '#59a14f', '#edc948']))
+    kwargs.setdefault('cmap', 'YlGnBu')
     sns.heatmap(reward, mask=walls, **kwargs)
 
 
@@ -194,6 +196,30 @@ def gridworld_ground_truth(envs, shape):
 
     return fig
 
+
+def gridworld_cartoon(shape, **kwargs):
+    fig = plt.figure()
+    kind_to_colors = {
+        'X': '#000000', # 'wall' (unnreachable)
+        'A': '#9c755f',  # start state/'dirt' (-1 reward)
+        ' ': '#9c755f',  # default cell/'dirt' (-1 reward)
+        'R': '#59a14f', # grass (0 reward)
+        'L': '#ff0000', # lava (-10 reward)
+        'S': '#C0C0C0', # silver (+1 reward)
+        'W': '#ffd700', # gold (+1 reward)
+    }
+    kind_to_colors = list(kind_to_colors.items())
+    kind_to_idx = {k: i for i, (k, color) in enumerate(kind_to_colors)}
+    colors = [color for (k, color) in kind_to_colors]
+    cmap = ListedColormap(colors)
+
+    topology = jungle_topology['{}x{}'.format(shape[0], shape[1])]
+    idx = np.vectorize(kind_to_idx.get)(topology)
+
+    kwargs.setdefault('cbar', False)
+    kwargs.setdefault('cmap', cmap)
+    sns.heatmap(idx, **kwargs)
+    return fig
 
 def value_bar_chart(values, alpha=0.05, relative=None,
                     error=False, ax=None, **kwargs):
