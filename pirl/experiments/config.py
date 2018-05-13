@@ -357,7 +357,7 @@ EXPERIMENTS['continuous-baselines-medium'] = {
 }
 EXPERIMENTS['billiards'] = {
     'environments': ['pirl/Billiards{}-seed{}-v0'.format(n, i)
-                     for n in [2,3,4] for i in range(0)],
+                     for n in [2,3,4] for i in range(1)],
     'parallel_rollouts': 4,
     'discount': 0.99,
     'expert': 'ppo_cts',

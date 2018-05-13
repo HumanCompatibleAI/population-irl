@@ -138,15 +138,14 @@ class BilliardsEnv(MujocoEnv, utils.EzPickle):
     def _get_obs(self):
         our_pos = self.sim.data.qpos.flat[0:2]
         our_vel = self.sim.data.qvel.flat[0:2]
-        target_pos = self.sim.data.qpos.flat[2:]
-        live_targets = np.array(target_pos >= 0, dtype=bool)
-        # SOMEDAY: should dead targets be -1 or 0?
-        target_pos = np.where(live_targets, target_pos, -1)
+        target_pos = self.sim.data.qpos.flat[2:].reshape(-1, 2)
+        live_targets = np.array(target_pos >= 0, dtype=bool).all(1, keepdims=True)
+        target_pos = np.where(live_targets, target_pos, 0.5)
         return np.concatenate([
             our_pos,
             our_vel,
-            target_pos,
-            live_targets,
+            target_pos.flat,
+            live_targets.flat,
         ])
 
     def reset_model(self):
