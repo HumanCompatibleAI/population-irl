@@ -365,6 +365,16 @@ EXPERIMENTS['billiards'] = {
     'irl': ['airl_so'],
     'num_trajectories': [1000],
 }
+EXPERIMENTS['billiards-3'] = {
+    'environments': ['pirl/Billiards{}-seed{}-v0'.format(n, i)
+                     for n in [3] for i in range(1)],
+    'parallel_rollouts': 4,
+    'discount': 0.99,
+    'expert': 'ppo_cts',
+    'eval': [],
+    'irl': [],
+    'num_trajectories': [1000],
+}
 EXPERIMENTS['reacher-env-comparisons'] = {
     'environments': ['Reacher-v2', 'pirl/Reacher-baseline-seed0-v0',
                      'pirl/Reacher-variable-hidden-goal-seed0-v0',
