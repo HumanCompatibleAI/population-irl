@@ -26,3 +26,7 @@ To check everything works, you can run:
 
 	python -m pirl.experiments.cli dummy-test few-dummy-test dummy-continuous-test
 	pytest
+
+## Jupyter notebooks
+
+There are some Jupyter notebooks in analysis/ that are used for ad-hoc tests/figure generation. Note since these are in a subdirectory, you'll need to set an appropriate PYTHONPATH (which should be an absolute, not relative, path).
