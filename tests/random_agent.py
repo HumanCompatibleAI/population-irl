@@ -1,11 +1,10 @@
 import argparse
-import sys
 import time
 
 import gym
 from gym import logger, wrappers 
 
-from pirl import envs
+from pirl import envs  # needed for side effect of registering environments
 
 # Loosely adapted from example in OpenAI Gym
 

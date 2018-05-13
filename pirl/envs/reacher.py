@@ -58,10 +58,15 @@ class ReacherPopulationEnv(mujoco_env.MujocoEnv, utils.EzPickle):
 
     def _get_obs(self):
         theta = self.sim.data.qpos.flat[:2]
-        return np.concatenate([
+        obs = np.concatenate([
             np.cos(theta),
             np.sin(theta),
-            self.sim.data.qpos.flat[2:] if self._goal_state_access else [],
             self.sim.data.qvel.flat[:2],
-            self.get_body_com("fingertip") - self.get_body_com("target")
         ])
+        if self._goal_state_access:
+            obs = np.concatenate([
+                obs,
+                self.sim.data.qpos.flat[2:],
+                self.get_body_com("fingertip") - self.get_body_com("target"),
+            ])
+        return obs
