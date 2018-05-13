@@ -19,7 +19,7 @@ from baselines.common.vec_env import VecEnvWrapper
 from baselines.common.vec_env.vec_normalize import VecNormalize
 from baselines.common.vec_env.dummy_vec_env import DummyVecEnv
 from baselines.common.vec_env.subproc_vec_env import SubprocVecEnv
-from baselines.ppo2.policies import MlpPolicy
+from baselines.ppo2.policies import MlpPolicyMore
 
 from pirl.agents.sample import SampleVecMonitor
 
@@ -110,7 +110,7 @@ def train_continuous(env_fns, discount, log_dir, tf_config, num_timesteps,
         with tf.Session(config=make_config(tf_config)):
             norm_envs = make_vec_normalize(envs)
 
-            policy = MlpPolicy
+            policy = MlpPolicyMore
             nsteps = 2048 // num_envs
             learner = ppo2.learn(
                 policy=policy, env=norm_envs, nsteps=nsteps, nminibatches=32,
