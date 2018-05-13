@@ -15,12 +15,6 @@ from pirl.experiments import config
 logger = logging.getLogger('pirl.experiments.experiments')
 memory = Memory(cachedir=config.CACHE_DIR, verbose=0)
 
-def make_irl_algo(algo):
-    if algo in config.SINGLE_IRL_ALGORITHMS:
-        return config.SINGLE_IRL_ALGORITHMS[algo]
-    else:
-        return config.POPULATION_IRL_ALGORITHMS[algo]
-
 
 def sanitize_env_name(env_name):
     return env_name.replace('/', '_')
@@ -75,8 +69,8 @@ def synthetic_data(env_name, rl, num_trajectories, parallel, seed,
 
 
 @utils.log_errors
-def _expert_trajs(env_name, experiment, rl_name, discount, parallel,
-                  seed, num_trajectories, video_every, log_dir):
+def _expert_trajs(env_name, num_trajectories, experiment, rl_name, discount,
+                  parallel, seed, video_every, log_dir):
     logger.debug('%s: training %s on %s', experiment, rl_name, env_name)
     policy, value = _train_policy(rl_name, discount, env_name, parallel, seed, log_dir)
 
@@ -93,50 +87,62 @@ def expert_trajs(experiment, out_dir, cfg, pool, video_every, seed):
     log_dir = osp.join(out_dir, 'expert')
     os.makedirs(log_dir)
     parallel = cfg.get('parallel_rollouts', 1)
-    max_trajectories = max(cfg['num_trajectories'])
+
+    num_traj = collections.OrderedDict()
+    for k in ['train', 'test']:
+        n = max(cfg.get('{}_trajectories'.format(k), cfg.get('trajectories')))
+        envs = cfg.get('{}_environments'.format(k), cfg.get('environments'))
+        for env in envs:
+            num_traj[env] = max(n, num_traj.get(env, 0))
 
     f = functools.partial(_expert_trajs, experiment=experiment,
                           rl_name=cfg['expert'], discount=cfg['discount'],
                           parallel=parallel, seed=seed,
-                          num_trajectories=max_trajectories,
                           video_every=video_every, log_dir=log_dir)
-    results = pool.map(f, cfg['environments'], chunksize=1)
+    results = pool.starmap(f, num_traj.items(), chunksize=1)
 
     trajectories = collections.OrderedDict()
     values = collections.OrderedDict()
-    for name, (traj, val) in zip(cfg['environments'], results):
+    for name, (traj, val) in zip(num_traj.keys(), results):
         trajectories[name] = traj
         values[name] = val
 
     return trajectories, values
 
 @utils.log_errors
-def __run_population_irl(irl_name, n, m, small_env, experiment,
-                         out_dir, env_names, parallel, trajectories, discount, seed):
-    logger.debug('%s: running IRL algo: %s [%s=%s/%s]',
-                 experiment, irl_name, small_env, m, n)
-    irl_algo, _reward_wrapper, compute_value = config.POPULATION_IRL_ALGORITHMS[irl_name]
-    subset = {k: v[:n] for k, v in trajectories.items()}
-    log_root = osp.join(out_dir, 'irl', irl_name)
-    if small_env is not None:
-        subset[small_env] = subset[small_env][:m]
-        log_dir = osp.join(log_root, sanitize_env_name(small_env), '{}:{}'.format(m, n))
-    else:
-        log_dir = osp.join(log_root, '{}'.format(n))
+def __run_population_irl(irl_name, train_envs, n, test_envs, m, experiment,
+                         out_dir, parallel, trajectories, discount, seed):
+    logger.debug('%s: running IRL algo: %s [%s/%s]',
+                 experiment, irl_name, m, n)
+    log_dir = osp.join(out_dir, 'irl', irl_name, '{}:{}'.format(m, n))
     os.makedirs(log_dir)
+    train, finetune, _reward_wrapper, compute_value = config.POPULATION_IRL_ALGORITHMS[irl_name]
 
-    irl_seed = utils.create_seed(seed + 'irl')
-    env_fns = {k: _parallel_envs(k, parallel, irl_seed) for k in env_names}
-    rewards, policies = irl_algo(env_fns, subset, discount=discount, log_dir=log_dir)
+    irl_seed = utils.create_seed(seed + 'irlmeta')
+    train_env_fns = {k: _parallel_envs(k, parallel, irl_seed) for k in train_envs}
+    train_subset = {k: trajectories[k][:n] for k in train_envs}
+    metainit = train(train_env_fns, train_subset,
+                     discount=discount, log_dir=log_dir)
+    joblib.dump(metainit, osp.join(log_dir, 'metainit.pkl'))  # for debugging
+
+    finetune_seed = utils.create_seed(seed + 'irlfinetune')
+    test_env_fns = {k: _parallel_envs(k, parallel, finetune_seed)
+                    for k in test_envs}
+    test_subset = {k: trajectories[k][:m] for k in test_envs}
+    #SOMEDAY: parallize this step?
+    res = collections.OrderedDict([
+        (k, finetune(metainit, test_env_fns[k], test_subset[k], discount=discount))
+        for k in test_envs
+    ])
+    rewards = collections.OrderedDict([(k, r) for k, (r, p) in res.items()])
+    policies = collections.OrderedDict([(k, p) for k, (r, p) in res.items()])
+    eval_seed = utils.create_seed(seed + 'eval')
+    values = {k: compute_value(test_env_fns[k], p, discount=1.00, seed=eval_seed)
+              for k, p in policies.items()}
 
     # Save learnt reward & policy for debugging purposes
     joblib.dump(rewards, osp.join(log_dir, 'rewards.pkl'))
     joblib.dump(policies, osp.join(log_dir, 'policies.pkl'))
-
-    eval_seed = utils.create_seed(seed + 'eval')
-    env_fns = {k: _parallel_envs(k, parallel, eval_seed) for k in env_names}
-    values = {k: compute_value(env_fns[k], p, discount=1.00, seed=eval_seed)
-              for k, p in policies.items()}
 
     return rewards, values
 _run_population_irl = memory.cache(ignore=['out_dir'])(__run_population_irl)
@@ -189,50 +195,18 @@ def run_irl(experiment, out_dir, cfg, pool, trajectories, seed):
         'discount': cfg['discount'],
         'seed': seed,
     }
-    res = collections.OrderedDict()
-    for irl_name, n in itertools.product(cfg['irl'], sorted(cfg['num_trajectories'])):
-        kwds = kwargs.copy()
-        kwds.update({'irl_name': irl_name, 'n': n})
-        if irl_name in config.SINGLE_IRL_ALGORITHMS:
-            for env in cfg['environments']:
-                env_kwds = kwds.copy()
-                env_kwds.update({
-                    'env_name': env,
-                    'trajectories': trajectories[env],
-                })
-                delayed = pool.apply_async(_run_single_irl, kwds=env_kwds)
-                setdef(setdef(setdef(res, irl_name), n), n)[env] = delayed
-        elif irl_name in config.POPULATION_IRL_ALGORITHMS:
-            kwds.update({
-                'env_names': cfg['environments'],
-                'trajectories': trajectories,
-                'm': None,
-                'small_env': None,
-            })
-            delayed = pool.apply_async(_run_population_irl, kwds=kwds)
-            setdef(setdef(res, irl_name), n)[n] = delayed
-        else:
-            assert False
 
-    rewards = utils.nested_async_get(res, lambda x: x[0])
-    values = utils.nested_async_get(res, lambda x: x[1])
-
-    return rewards, values
-
-
-def run_few_shot_irl(experiment, out_dir, cfg, pool, trajectories, seed):
-    '''Same spec as run_irl.'''
-    kwargs = {
-        'experiment': experiment,
-        'out_dir': out_dir,
-        'parallel': cfg.get('parallel_rollouts', 1),
-        'discount': cfg['discount'],
-        'seed': seed,
-    }
-
-    sin_args = [cfg['irl'], sorted(cfg['few_shot']), cfg['environments']]
+    if 'trajectories' in cfg:
+        sin_traj = cfg['trajectories']
+        pop_traj = [(n, n) for n in cfg['trajectories']]
+    else:
+        sin_traj = cfg['test_trajectories']
+        pop_traj = list(itertools.product(cfg['train_trajectories'],
+                                          cfg['test_trajectories']))
+        pop_traj = [(n, m) for (n, m) in pop_traj if m <= n]
+    test_envs = cfg.get('test_environments', cfg.get('environments'))
     sin_res = {}
-    for irl_name, m, env in itertools.product(*sin_args):
+    for irl_name, m, env in itertools.product(cfg['irl'], sin_traj, test_envs):
         if irl_name in config.SINGLE_IRL_ALGORITHMS:
             if m == 0:
                 continue
@@ -246,18 +220,18 @@ def run_few_shot_irl(experiment, out_dir, cfg, pool, trajectories, seed):
             delayed = pool.apply_async(_run_single_irl, kwds=kwds)
             setdef(setdef(sin_res, irl_name), m)[env] = delayed
 
-    num_traj = sorted(cfg['num_trajectories'])
     pop_res = {}
-    for n, irl_name, m, env in itertools.product(num_traj, *sin_args):
+    train_envs = cfg.get('train_environments', cfg.get('environments'))
+    for irl_name, (n, m), env in itertools.product(cfg['irl'], pop_traj, test_envs):
         if irl_name in config.POPULATION_IRL_ALGORITHMS:
             kwds = kwargs.copy()
             kwds.update({
                 'irl_name': irl_name,
                 'n': n,
                 'm': m,
-                'env_names': cfg['environments'],
+                'train_envs': train_envs,
+                'test_envs': test_envs,
                 'trajectories': trajectories,
-                'small_env': env,
             })
             delayed = pool.apply_async(_run_population_irl, kwds=kwds)
             setdef(setdef(setdef(pop_res, irl_name), n), m)[env] = delayed
@@ -267,13 +241,13 @@ def run_few_shot_irl(experiment, out_dir, cfg, pool, trajectories, seed):
 
     sin_res = utils.nested_async_get(sin_res)
     for irl_name, d in sin_res.items():
-        for m, d2 in d.items():
+        for n, m in pop_traj:
+            if m == 0:
+                continue
+            d2 = d[m]
             for env, (r, v) in d2.items():
-                for n in num_traj:
-                    if m > n:
-                        break
-                    setdef(setdef(setdef(rewards, irl_name), n), m)[env] = r
-                    setdef(setdef(setdef(values, irl_name), n), m)[env] = v
+                setdef(setdef(setdef(rewards, irl_name), n), m)[env] = r
+                setdef(setdef(setdef(values, irl_name), n), m)[env] = v
 
     pop_res = utils.nested_async_get(pop_res)
     for irl_name, d in pop_res.items():
@@ -293,7 +267,10 @@ def _value(experiment, irl_name, rl_name, env_name, parallel,
                  experiment, irl_name, env_name, log_dir)
     gen_policy, _sample, compute_value = config.RL_ALGORITHMS[rl_name]
 
-    _, reward_wrapper, _ = make_irl_algo(irl_name)
+    if irl_name in config.SINGLE_IRL_ALGORITHMS:
+        reward_wrapper = config.SINGLE_IRL_ALGORITHMS[irl_name][1]
+    else:
+        reward_wrapper = config.POPULATION_IRL_ALGORITHMS[irl_name][2]
     rw = functools.partial(reward_wrapper, new_reward=reward)
 
     train_seed = utils.create_seed(seed + 'eval_train')
@@ -349,7 +326,7 @@ def value(experiment, out_dir, cfg, pool, rewards, seed):
             value[irl_name] = res_by_n
 
         log_dir = osp.join(out_dir, 'eval', 'gt')
-        for env_name in cfg['environments']:
+        for env_name in cfg.get('test_environments', cfg.get('environments')):
             args = (rl, discount, env_name, parallel, seed, log_dir)
             delayed = pool.apply_async(_train_policy, args)
             ground_truth.setdefault(env_name, {})[rl] = delayed
@@ -392,8 +369,7 @@ def run_experiment(experiment, pool, out_dir, video_every, seed):
                                       video_every, seed)
 
     # Run IRL
-    fn = run_few_shot_irl if 'few_shot' in cfg else run_irl
-    rewards, irl_values = fn(experiment, out_dir, cfg, pool, trajs, seed)
+    rewards, irl_values = run_irl(experiment, out_dir, cfg, pool, trajs, seed)
 
     # Evaluate IRL by reoptimizing in cfg['evals']
     values, ground_truth = value(experiment, out_dir, cfg, pool, rewards, seed)
