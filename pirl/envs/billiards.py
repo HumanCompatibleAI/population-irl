@@ -7,7 +7,7 @@ import numpy as np
 
 from airl.envs.dynamic_mjc.model_builder import MJCModel
 
-def billiards_model(ball_cats, particle_size, cmap_name='Set1'):
+def billiards_model(num_cats, particle_size, cmap_name='Set1'):
     model = MJCModel('billiards')
     root = model.root
 
@@ -33,11 +33,11 @@ def billiards_model(ball_cats, particle_size, cmap_name='Set1'):
 
     # Targets the agent can hit
     cmap = cm.get_cmap(cmap_name)
-    for i, cat in enumerate(ball_cats):
+    for i in range(num_cats):
         prefix = 'target{}'.format(i)
         target = worldbody.body(name=prefix, pos=[0, 0, 0])
         target.geom(name=prefix + '_geom', type='sphere', contype=1, conaffinity=1,
-                    size=particle_size, rgba=list(cmap(cat)))
+                    size=particle_size, rgba=list(cmap(i)))
         target.joint(name='ball{}_x'.format(i), type='slide', pos=[0, 0, 0],
                      axis=[1, 0, 0])
         target.joint(name='ball{}_y'.format(i), type='slide', pos=[0, 0, 0],
@@ -91,25 +91,27 @@ def random_pos(n, gap, rng):
 
 AGENT_ID = 4
 class BilliardsEnv(MujocoEnv, utils.EzPickle):
-    def __init__(self, params, num_balls=4, particle_size=0.05, seed=0):
+    def __init__(self, params, num_balls=None, particle_size=0.05, ctrl=0.1, seed=0):
         seed = seeding.create_seed(seed)
         rng = np.random.RandomState(seed)
 
         self.rewards = create_reward(params, rng)
+        if num_balls is None:
+            num_balls = len(self.rewards)
+        self.num_targets = num_balls
+        self.particle_size = particle_size
+        self.ctrl = ctrl
+
         num_cats = len(self.rewards)
         assert num_cats >= num_balls
-        cats = rng.choice(num_cats, num_balls, replace=False)
-        self.cats = np.eye(num_cats)[:, cats]  # one hot encoded
-
-        model = billiards_model(cats, particle_size=particle_size)
-        self.particle_size = particle_size
+        model = billiards_model(num_cats, particle_size=particle_size)
         with model.asfile() as f:
             MujocoEnv.__init__(self, f.name, 5)
             utils.EzPickle.__init__(self, params, num_balls, particle_size, seed)
 
     def step(self, a):
         done = False
-        reward = -np.square(a).sum()  # control cost
+        reward = -self.ctrl * np.square(a).sum()  # control cost
 
         starting_state = (self.data.qpos == 0).all()  # before reset_model()
         self.do_simulation(a, self.frame_skip)
@@ -123,34 +125,50 @@ class BilliardsEnv(MujocoEnv, utils.EzPickle):
                     opp = contact.geom1 - (AGENT_ID + 1)
                 else:  # collision didn't involve agent
                     continue
-                if 0 <= opp < self.cats.shape[1]:
+                if 0 <= opp < len(self.rewards):
                     # SOMEDAY: for collisions involving multiple balls,
                     # picking the first one in the list may lead to chaotic
                     # behavior.
                     done = True
-                    reward += self.rewards.dot(self.cats[:, opp])
+                    reward += self.rewards[opp]
 
         ob = self._get_obs()
         return ob, reward, done, {}
 
     def _get_obs(self):
-        #SOMEDAY: input encoding that will be consistent as # of balls varies?
-        #SOMEDAY: input encoding that blows up less than one-hot?
+        our_pos = self.sim.data.qpos.flat[0:2]
+        our_vel = self.sim.data.qvel.flat[0:2]
+        target_pos = self.sim.data.qpos.flat[2:]
+        live_targets = np.array(target_pos >= 0, dtype=bool)
+        # SOMEDAY: should dead targets be -1 or 0?
+        target_pos = np.where(live_targets, target_pos, -1)
         return np.concatenate([
-            self.sim.data.qpos.flat,  # agent & target positions
-            self.sim.data.qvel.flat,  # agent & target velocities
-            self.cats.flatten(),  # categories of target balls
+            our_pos,
+            our_vel,
+            target_pos,
+            live_targets,
         ])
 
     def reset_model(self):
-        num_balls = self.cats.shape[1] + 1
+        num_cats = len(self.rewards)
+        active_cats = self.np_random.choice(num_cats, self.num_targets, replace=False)
+
         # particles must be at least diameter = self.particle_size * 2 apart
         # to avoid contact at initialization; add some extra margin as MuJoCo
         # has some numerical error in contact detection.
         gap = self.particle_size * 2.1
-        qpos = random_pos(num_balls, gap, self.np_random)
+        active_pos = random_pos(self.num_targets + 1, gap, self.np_random)
+        active_pos = np.array(active_pos)
+
+        qpos = np.zeros((num_cats + 1, 2))
+        # inactive target balls, space them out to avoid contact forces
+        qpos[:, :] = (-np.arange(num_cats + 1) - 1).reshape(-1, 1)
+        qpos[0, :] = active_pos[0]  # agent ball
+        for i in range(self.num_targets):  # active target balls
+            cat = active_cats[i]
+            qpos[cat + 1] = active_pos[i + 1]
         qpos = np.array(qpos).flatten()
-        qvel = np.zeros(2 * num_balls)
+        qvel = np.zeros(2 * (num_cats + 1))
         self.set_state(qpos, qvel)
         return self._get_obs()
 

@@ -356,11 +356,12 @@ EXPERIMENTS['continuous-baselines-medium'] = {
     'num_trajectories': [1000],
 }
 EXPERIMENTS['billiards'] = {
-    'environments': ['pirl/Billiards-seed{}-v0'.format(i) for i in range(4)],
+    'environments': ['pirl/Billiards{}-seed{}-v0'.format(n, i)
+                     for n in [2,3,4] for i in range(0)],
     'parallel_rollouts': 4,
     'discount': 0.99,
     'expert': 'ppo_cts',
-    'eval': ['ppo_cts'],
+    'eval': [],
     'irl': ['airl_so'],
     'num_trajectories': [1000],
 }

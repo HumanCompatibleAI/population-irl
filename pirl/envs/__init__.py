@@ -95,21 +95,24 @@ register(
 )
 
 ## Billiards
+billiard_params = [
+    (0, 1),
+    (1, 1),
+    (5, 2),
+    (-10, 1)
+]
 for seed in range(10):
-    register(
-        id='pirl/Billiards-seed{}-v0'.format(seed),
-        entry_point='pirl.envs:BilliardsEnv',
-        max_episode_steps=200,
-        kwargs={
-            'params': [
-                (0, 1),
-                (1, 1),
-                (5, 2),
-                (-10, 1),
-            ],
-            'seed': seed,
-        },
-    )
+    for num_balls in range(1, len(billiard_params) + 1):
+        register(
+            id='pirl/Billiards{}-seed{}-v0'.format(num_balls, seed),
+            entry_point='pirl.envs:BilliardsEnv',
+            max_episode_steps=200,
+            kwargs={
+                'params': billiard_params,
+                'num_balls': num_balls,
+                'seed': seed,
+            },
+        )
 
 ## Reacher
 for seed in range(10):
