@@ -145,7 +145,7 @@ class BilliardsEnv(MujocoEnv, utils.EzPickle):
             our_pos,
             our_vel,
             target_pos.flat,
-            target_pos.flat - our_pos,
+            (target_pos - our_pos).flat, # Is this the best way to do this?
             live_targets.flat,
         ])
 
