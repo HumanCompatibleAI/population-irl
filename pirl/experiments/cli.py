@@ -81,7 +81,11 @@ def parse_args():
 def init_worker(timestamp):
     current_process().name = current_process().name.replace('NoDaemonPoolWorker-', 'worker')
     logging.config.dictConfig(config.logging(timestamp))
-    logger.debug('Worker started')
+    # Hack: Joblib Memory.cache uses repr() on numpy arrays for metadata.
+    # This ends up taking ~100s per call and increases space on disk by 2x.
+    # Make numpy repr() more compact.
+    np.set_printoptions(threshold=5)
+    logger.debug('Started')
 
 def git_hash():
     repo = git.Repo(path=os.path.realpath(__file__),
@@ -96,17 +100,12 @@ if __name__ == '__main__':
     # Logging
     current_process().name = 'master'
     timestamp = datetime.now().strftime(ISO_TIMESTAMP)
-    logging.config.dictConfig(config.logging(timestamp))
+    init_worker(timestamp)
 
     # Argument parsing
     args = parse_args()
     video_every = args.video_every if args.video_every != 0 else None
     logger.info('CLI args: %s', args)
-
-    # Hack: Joblib Memory.cache uses repr() on numpy arrays for metadata.
-    # This ends up taking ~100s per call and increases space on disk by 2x.
-    # Make numpy repr() more compact.
-    np.set_printoptions(threshold=5)
 
     # Pool
     logger.info('Starting pool')
