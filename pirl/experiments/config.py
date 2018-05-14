@@ -321,8 +321,8 @@ EXPERIMENTS['continuous-baselines-easy'] = {
     'parallel_rollouts': 4,
     'discount': 0.99,
     'expert': 'ppo_cts',
-    'eval': [],#['ppo_cts'],
-    'irl': ['airl_so', 'airl_sa'],
+    'eval': ['ppo_cts'],
+    'irl': ['airl_so'],
     'trajectories': [1000],
 }
 EXPERIMENTS['continuous-baselines-medium'] = {
@@ -334,8 +334,8 @@ EXPERIMENTS['continuous-baselines-medium'] = {
     'parallel_rollouts': 4,
     'discount': 0.99,
     'expert': 'ppo_cts',
-    'eval': [],#['ppo_cts'],
-    'irl': ['airl_so', 'airl_sa'],
+    'eval': ['ppo_cts'],
+    'irl': ['airl_so'],
     'trajectories': [1000],
 }
 EXPERIMENTS['billiards'] = {
