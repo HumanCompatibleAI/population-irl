@@ -126,7 +126,7 @@ def sample(env_fns, policy, num_episodes, seed):
             actions.append(action)
             state, reward, done, _ = env.step(action)
             rewards.append(reward)
-        return states, actions, rewards
+        return np.array(states), np.array(actions), np.array(rewards)
 
     return [helper() for i in range(num_episodes)]
 

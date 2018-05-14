@@ -36,6 +36,7 @@ class SampleMonitor(gym.Wrapper):
     def reset(self, **kwargs):
         if self.observations is not None:
             traj = (self.observations[:-1], self.actions, self.rewards)
+            traj = tuple(np.array(x) for x in traj)
             self._trajectories.append(traj)
         self.observations = []
         self.actions = []
@@ -67,6 +68,7 @@ class SampleVecMonitor(VecEnvWrapper):
             self.rewards[i].append(r)
             if d:
                 traj = (self.observations[i], self.actions[i], self.rewards[i])
+                traj = tuple(np.array(x) for x in traj)
                 self._trajectories.append(traj)
                 self.observations[i] = [o]
                 self.actions[i] = []
