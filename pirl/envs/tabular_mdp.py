@@ -1,4 +1,5 @@
-from gym import Env, spaces
+from gym import Env
+import gym.spaces as spaces
 from gym.utils import seeding
 
 import numpy as np

@@ -3,13 +3,12 @@ import pickle
 from baselines.common.vec_env import VecEnvWrapper
 from baselines.common.vec_env.dummy_vec_env import DummyVecEnv
 from baselines.common.vec_env.subproc_vec_env import SubprocVecEnv
-import cloudpickle
 import gym
 import numpy as np
 import tensorflow as tf
 
-from rllab.envs.base import Env, Step
-from sandbox.rocky.tf.envs.base import TfEnv
+from rllab.envs.base import Env, EnvSpec, Step
+from sandbox.rocky.tf.envs.base import TfEnv, to_tf_space
 from rllab.baselines.linear_feature_baseline import LinearFeatureBaseline
 from rllab.envs.gym_env import convert_gym_space
 from sandbox.rocky.tf.misc import tensor_utils
@@ -25,6 +24,7 @@ from airl.models.airl_state import AIRL
 from airl.utils.log_utils import rllab_logdir
 
 from pirl.agents.sample import SampleVecMonitor
+from pirl.utils import getattr_unwrapped
 
 
 class VecInfo(VecEnvWrapper):
@@ -66,7 +66,7 @@ class VecGymEnv(Env):
         self.env = env
         self._observation_space = convert_gym_space(env.observation_space)
         self._action_space = convert_gym_space(env.action_space)
-        self._horizon = env._max_episode_steps
+        self._horizon = getattr_unwrapped(env, '_max_episode_steps')
 
     @property
     def observation_space(self):
@@ -178,7 +178,6 @@ def irl(env_fns, trajectories, discount, log_dir, tf_cfg, parallel=True,
     experts = _convert_trajectories(trajectories)
     model_kwargs = {'state_only': True, 'max_itrs': 10}
     model_kwargs.update(model_cfg)
-    make_irl_model = lambda experts: AIRL(env=env, expert_trajs=experts, **model_kwargs)
 
     train_graph = tf.Graph()
     with train_graph.as_default():
@@ -195,7 +194,7 @@ def irl(env_fns, trajectories, discount, log_dir, tf_cfg, parallel=True,
             'entropy_weight': 0.1,
         }
         training_kwargs.update(training_cfg)
-        irl_model = make_irl_model(experts)
+        irl_model = AIRL(env_spec=env.spec, expert_trajs=experts, **model_kwargs)
         algo = IRLTRPO(
             env=env,
             policy=policy,
@@ -216,7 +215,7 @@ def irl(env_fns, trajectories, discount, log_dir, tf_cfg, parallel=True,
 
     env.terminate()
 
-    reward = cloudpickle.dumps(make_irl_model), reward_params
+    reward = model_kwargs, reward_params
     return reward, policy_pkl
 
 
@@ -243,13 +242,15 @@ def sample(env_fns, policy_pkl, num_episodes, seed, tf_cfg, parallel=True):
 
 
 class AIRLRewardWrapper(gym.Wrapper):
+    #TODO: vectorized version?
     """Wrapper for a gym.Env replacing with a new reward matrix."""
     def __init__(self, env, new_reward, tf_cfg):
-        make_irl_model_pkl, reward_params = new_reward
-        make_irl_model = cloudpickle.loads(make_irl_model_pkl)
+        env_spec = EnvSpec(observation_space=to_tf_space(convert_gym_space(env.observation_space)),
+                           action_space=to_tf_space(convert_gym_space(env.action_space)))
+        model_kwargs, reward_params = new_reward
         infer_graph = tf.Graph()
         with infer_graph.as_default():
-            self.irl_model = make_irl_model(None)
+            self.irl_model = AIRL(env_spec=env_spec, expert_trajs=None, **model_kwargs)
             self.sess = tf.Session(config=tf_cfg)
             with self.sess.as_default():
                 self.irl_model.set_params(reward_params)

@@ -95,11 +95,9 @@ def train_continuous(env_fns, discount, log_dir, tf_config, num_timesteps,
     checkpoint_dir = osp.join(blogger.get_dir(), 'checkpoints')
     os.makedirs(checkpoint_dir)
 
-    def bench_helper(env_fn, i):
-        return bench.Monitor(env_fn(), osp.join(log_dir, 'env{}'.format(i)))
-    env_fns = [functools.partial(bench_helper, env_fn, i)
-               for i, env_fn in enumerate(env_fns)]
     num_envs = len(env_fns)
+    # Note for PPO statistics to be reported correctly, env_fns must wrap
+    # the environments with a bench.Monitor.
     make_envs = SubprocVecEnv if (parallel and num_envs > 1) else DummyVecEnv
     make_vec_normalize = VecNormalize if norm else DummyVecNormalize
     envs = make_envs(env_fns)

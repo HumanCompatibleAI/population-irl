@@ -6,8 +6,9 @@ import logging
 import os
 import os.path as osp
 
-from joblib import Memory
+from baselines import bench
 import gym
+from joblib import Memory
 
 from pirl import utils
 from pirl.experiments import config
@@ -19,41 +20,46 @@ memory = Memory(cachedir=config.CACHE_DIR, verbose=0)
 def sanitize_env_name(env_name):
     return env_name.replace('/', '_')
 
-def _parallel_envs(env_name, parallel, base_seed, wrapper=None):
+
+def _parallel_envs(env_name, parallel, base_seed, log_prefix, wrapper=None):
     def helper(i):
         env = gym.make(env_name)
+        env = bench.Monitor(env, log_prefix + str(i), allow_early_resets=True)
         if wrapper is not None:
             env = wrapper(env)
         env.seed(base_seed + i)
         return env
     return [functools.partial(helper, i) for i in range(parallel)]
 
-def __train_policy(rl, discount, env_name, parallel, seed, out_dir):
+
+def __train_policy(rl, discount, env_name, parallel, seed, log_dir):
     gen_policy, _sample, compute_value = config.RL_ALGORITHMS[rl]
-    log_dir = osp.join(out_dir, sanitize_env_name(env_name), rl)
-    os.makedirs(log_dir)
+    mon_dir = osp.join(log_dir, 'mon')
+    os.makedirs(mon_dir, exist_ok=True)
 
     train_seed = utils.create_seed(seed + 'train')
-    env_fns = _parallel_envs(env_name, parallel, train_seed)
+    env_fns = _parallel_envs(env_name, parallel, train_seed,
+                             log_prefix=osp.join(mon_dir, 'train'))
     p = gen_policy(env_fns, discount=discount, log_dir=log_dir)
     joblib.dump(p, osp.join(log_dir, 'policy.pkl'))  # save for debugging
 
     eval_seed = utils.create_seed(seed + 'eval')
-    env_fns = _parallel_envs(env_name, parallel, eval_seed)
+    env_fns = _parallel_envs(env_name, parallel, eval_seed,
+                             log_prefix=osp.join(mon_dir, 'eval'))
     v = compute_value(env_fns, p, discount=1.00, seed=eval_seed)
 
     return p, v
 # avoid name clash in pickling
-_train_policy = memory.cache(ignore=['out_dir'])(__train_policy)
+_train_policy = memory.cache(ignore=['log_dir'])(__train_policy)
 
 
-@memory.cache(ignore=['out_dir', 'video_every', 'policy'])
+@memory.cache(ignore=['log_dir', 'video_every', 'policy'])
 def synthetic_data(env_name, rl, num_trajectories, parallel, seed,
-                   out_dir, video_every, policy):
+                   log_dir, video_every, policy):
     '''Precondition: policy produced by RL algorithm rl.'''
     _, sample, _ = config.RL_ALGORITHMS[rl]
 
-    video_dir = osp.join(out_dir, sanitize_env_name(env_name), 'videos')
+    video_dir = osp.join(log_dir, 'videos')
     if video_every is None:
         video_callable = lambda x: False
     else:
@@ -61,10 +67,16 @@ def synthetic_data(env_name, rl, num_trajectories, parallel, seed,
     def  monitor(env):
         return gym.wrappers.Monitor(env, video_dir,
                                     video_callable=video_callable, force=True)
+
+    mon_dir = osp.join(log_dir, 'mon')
+    os.makedirs(mon_dir, exist_ok=True)
+
     data_seed = utils.create_seed(seed + 'data')
-    env_fns = _parallel_envs(env_name, parallel, data_seed, wrapper=monitor)
+    env_fns = _parallel_envs(env_name, parallel, data_seed,
+                             log_prefix=osp.join(mon_dir, 'synthetic'),
+                             wrapper=monitor)
+
     samples = sample(env_fns, policy, num_trajectories, data_seed)
-    #TODO: numpy array rather than Python list?
     return [(observations, actions) for (observations, actions, rewards) in samples]
 
 
@@ -72,6 +84,7 @@ def synthetic_data(env_name, rl, num_trajectories, parallel, seed,
 def _expert_trajs(env_name, num_trajectories, experiment, rl_name, discount,
                   parallel, seed, video_every, log_dir):
     logger.debug('%s: training %s on %s', experiment, rl_name, env_name)
+    log_dir = osp.join(log_dir, sanitize_env_name(env_name), rl_name)
     policy, value = _train_policy(rl_name, discount, env_name, parallel, seed, log_dir)
 
     logger.debug('%s: sampling from %s', experiment, env_name)
@@ -119,26 +132,36 @@ def __run_population_irl(irl_name, train_envs, n, test_envs, m, experiment,
     train, finetune, _reward_wrapper, compute_value = config.POPULATION_IRL_ALGORITHMS[irl_name]
 
     irl_seed = utils.create_seed(seed + 'irlmeta')
-    train_env_fns = {k: _parallel_envs(k, parallel, irl_seed) for k in train_envs}
-    train_subset = {k: trajectories[k][:n] for k in train_envs}
-    metainit = train(train_env_fns, train_subset,
-                     discount=discount, log_dir=log_dir)
+    meta_log_dir = osp.join(log_dir, 'meta')
+    meta_mon_dir = osp.join(meta_log_dir, 'mon')
+    os.makedirs(meta_mon_dir)
+    meta_env_fns = {k: _parallel_envs(k, parallel, irl_seed,
+                                      log_prefix=osp.join(meta_mon_dir, k))
+                     for k in train_envs}
+    meta_subset = {k: trajectories[k][:n] for k in train_envs}
+    metainit = train(meta_env_fns, meta_subset,
+                     discount=discount, log_dir=meta_log_dir)
     joblib.dump(metainit, osp.join(log_dir, 'metainit.pkl'))  # for debugging
 
     finetune_seed = utils.create_seed(seed + 'irlfinetune')
-    test_env_fns = {k: _parallel_envs(k, parallel, finetune_seed)
-                    for k in test_envs}
-    test_subset = {k: trajectories[k][:m] for k in test_envs}
-    #SOMEDAY: parallize this step?
-    res = collections.OrderedDict([
-        (k, finetune(metainit, test_env_fns[k], test_subset[k], discount=discount))
-        for k in test_envs
-    ])
-    rewards = collections.OrderedDict([(k, r) for k, (r, p) in res.items()])
-    policies = collections.OrderedDict([(k, p) for k, (r, p) in res.items()])
-    eval_seed = utils.create_seed(seed + 'eval')
-    values = {k: compute_value(test_env_fns[k], p, discount=1.00, seed=eval_seed)
-              for k, p in policies.items()}
+    # SOMEDAY: parallize this step?
+    rewards = collections.OrderedDict()
+    policies = collections.OrderedDict()
+    values = collections.OrderedDict()
+    for env in test_envs:
+        finetune_log_dir = osp.join(log_dir, 'finetune', sanitize_env_name(env))
+        os.makedirs(finetune_log_dir)
+        finetune_mon_prefix = osp.join(finetune_log_dir, 'mon')
+        finetune_env_fns = _parallel_envs(env, parallel, finetune_seed,
+                                          log_prefix=finetune_mon_prefix)
+        finetune_subset = trajectories[env][:m]
+        r, p = finetune(metainit, finetune_env_fns, finetune_subset,
+                        discount=discount, log_dir=finetune_log_dir)
+        rewards[env], policies[env] = r, p
+
+        eval_seed = utils.create_seed(seed + 'eval')
+        values[env] = compute_value(finetune_env_fns, p,
+                                    discount=1.0, seed=eval_seed)
 
     # Save learnt reward & policy for debugging purposes
     joblib.dump(rewards, osp.join(log_dir, 'rewards.pkl'))
@@ -155,10 +178,12 @@ def __run_single_irl(irl_name, n, env_name, parallel,
     irl_algo, _reward_wrapper, compute_value = config.SINGLE_IRL_ALGORITHMS[irl_name]
     subset = trajectories[:n]
     log_dir = osp.join(out_dir, 'irl', irl_name, env_name, '{}'.format(n))
-    os.makedirs(log_dir)
+    mon_dir = osp.join(log_dir, 'mon')
+    os.makedirs(mon_dir)
 
     irl_seed = utils.create_seed(seed + 'irl')
-    env_fns = _parallel_envs(env_name, parallel, irl_seed)
+    env_fns = _parallel_envs(env_name, parallel, irl_seed,
+                             log_prefix=osp.join(mon_dir, 'train'))
     reward, policy = irl_algo(env_fns, subset, discount=discount, log_dir=log_dir)
 
     # Save learnt reward & policy for debugging purposes
@@ -166,7 +191,8 @@ def __run_single_irl(irl_name, n, env_name, parallel,
     joblib.dump(policy, osp.join(log_dir, 'policy.pkl'))
 
     eval_seed = utils.create_seed(seed + 'eval')
-    env_fns = _parallel_envs(env_name, parallel, eval_seed)
+    env_fns = _parallel_envs(env_name, parallel, eval_seed,
+                             log_prefix=osp.join(mon_dir, 'eval'))
     value = compute_value(env_fns, policy, discount=1.00, seed=eval_seed)
 
     return reward, value
@@ -273,14 +299,19 @@ def _value(experiment, irl_name, rl_name, env_name, parallel,
         reward_wrapper = config.POPULATION_IRL_ALGORITHMS[irl_name][2]
     rw = functools.partial(reward_wrapper, new_reward=reward)
 
+    mon_dir = osp.join(log_dir, 'mon')
+    os.makedirs(mon_dir)
+
     train_seed = utils.create_seed(seed + 'eval_train')
-    env_fns = _parallel_envs(env_name, parallel, train_seed, wrapper=rw)
+    env_fns = _parallel_envs(env_name, parallel, train_seed, wrapper=rw,
+                             log_prefix=osp.join(mon_dir, 'train'))
     p = gen_policy(env_fns, discount=discount, log_dir=log_dir)
 
     logger.debug('%s: reoptimized %s on %s, sampling to estimate value',
                  experiment, irl_name, env_name)
     eval_seed = utils.create_seed(seed + 'eval_eval')
-    env_fns = _parallel_envs(env_name, parallel, eval_seed)
+    env_fns = _parallel_envs(env_name, parallel, eval_seed,
+                             log_prefix=osp.join(mon_dir, 'eval'))
     v = compute_value(env_fns, p, discount=1.00, seed=eval_seed)
 
     return v
