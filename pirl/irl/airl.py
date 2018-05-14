@@ -121,7 +121,7 @@ def irl(env_fns, trajectories, discount, log_dir, tf_cfg, parallel=True,
     experts = _convert_trajectories(trajectories)
     model_kwargs = {'state_only': True, 'max_itrs': 10}
     model_kwargs.update(model_cfg)
-    make_irl_model = lambda : AIRL(env=env, expert_trajs=experts, **model_kwargs)
+    make_irl_model = lambda experts: AIRL(env=env, expert_trajs=experts, **model_kwargs)
 
     train_graph = tf.Graph()
     with train_graph.as_default():
@@ -137,7 +137,7 @@ def irl(env_fns, trajectories, discount, log_dir, tf_cfg, parallel=True,
             'entropy_weight': 0.1,
         }
         training_kwargs.update(training_cfg)
-        irl_model = make_irl_model()
+        irl_model = make_irl_model(experts)
         algo = IRLTRPO(
             env=env,
             policy=policy,
@@ -191,7 +191,7 @@ class AIRLRewardWrapper(gym.Wrapper):
         make_irl_model = cloudpickle.loads(make_irl_model_pkl)
         infer_graph = tf.Graph()
         with infer_graph.as_default():
-            self.irl_model = make_irl_model()
+            self.irl_model = make_irl_model(None)
             self.sess = tf.Session(config=tf_cfg)
             with self.sess.as_default():
                 self.irl_model.set_params(reward_params)
