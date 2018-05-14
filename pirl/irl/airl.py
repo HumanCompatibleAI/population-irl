@@ -14,7 +14,12 @@ from rllab.baselines.linear_feature_baseline import LinearFeatureBaseline
 from rllab.envs.gym_env import convert_gym_space
 from sandbox.rocky.tf.misc import tensor_utils
 
+from rllab.core.serializable import Serializable
+from rllab.spaces import Box
+from sandbox.rocky.tf.distributions.diagonal_gaussian import DiagonalGaussian
+from sandbox.rocky.tf.policies.base import StochasticPolicy
 from sandbox.rocky.tf.policies.gaussian_mlp_policy import GaussianMLPPolicy
+
 from airl.algos.irl_trpo import IRLTRPO
 from airl.models.airl_state import AIRL
 from airl.utils.log_utils import rllab_logdir
@@ -99,6 +104,58 @@ class VecGymEnv(Env):
         return VecInfo(_make_vec_env(env_fns, self.parallel))
 
 
+class GaussianPolicy(StochasticPolicy, Serializable):
+    def __init__(self, env_spec, name=None, mean=0.0, log_std=1.0):
+        with tf.variable_scope(name):
+            assert isinstance(env_spec.action_space, Box)
+            Serializable.quick_init(self, locals())
+
+            self.action_dim = env_spec.action_space.flat_dim
+            self._dist = DiagonalGaussian(self.action_dim)
+            self.mean = mean * np.ones(self.action_dim)
+            self.log_std = log_std * np.ones(self.action_dim)
+            self.mean_tf = tf.constant(self.mean, dtype=tf.float32)
+            self.log_std_tf = tf.constant(self.log_std, dtype=tf.float32)
+
+            self.dummy_var = tf.get_variable(name='dummy', shape=self.action_dim)
+
+            super(GaussianPolicy, self).__init__(env_spec=env_spec)
+
+    @property
+    def vectorized(self):
+        return True
+
+    def get_action(self, observation):
+        rnd = np.random.normal(size=(self.action_dim, ))
+        action = self.mean + np.exp(self.log_std) * rnd
+        info = dict(mean=self.mean, log_std=self.log_std)
+        return action, info
+
+    def get_actions(self, observations):
+        n = len(observations)
+        shape = (n, self.action_dim)
+        mean = np.broadcast_to(self.mean, shape)
+        log_std = np.broadcast_to(self.log_std, shape)
+        rnd = np.random.normal(size=shape)
+        action = mean + np.exp(log_std) * rnd
+        info = dict(mean=mean, log_std=log_std)
+        return action, info
+
+    @property
+    def distribution(self):
+        return self._dist
+
+    def dist_info_sym(self, obs_var, state_info_vars):
+        return dict(mean=self.mean_tf, log_std=self.log_std_tf)
+
+    def dist_info(self, obs, state_infos):
+        return dict(mean=self.mean, log_std=self.log_std)
+
+    def get_params_internal(self, **tags):
+        # Fake it as RLLab gets confused if we have no variables
+        return [self.dummy_var]
+
+
 def _convert_trajectories(trajs):
     '''Convert trajectories from format used in PIRL to that expected in AIRL.
 
@@ -113,7 +170,7 @@ def _convert_trajectories(trajs):
 
 
 def irl(env_fns, trajectories, discount, log_dir, tf_cfg, parallel=True,
-        model_cfg={}, policy_cfg={}, training_cfg={}):
+        model_cfg={}, policy_cfg=None, training_cfg={}):
     num_envs = len(env_fns)
     env = VecGymEnv(env_fns, parallel)
     env = TfEnv(env)
@@ -125,9 +182,10 @@ def irl(env_fns, trajectories, discount, log_dir, tf_cfg, parallel=True,
 
     train_graph = tf.Graph()
     with train_graph.as_default():
-        policy_kwargs = {'hidden_sizes': (32, 32)}
-        policy_kwargs.update(policy_cfg)
-        policy = GaussianMLPPolicy(name='policy', env_spec=env.spec, **policy_kwargs)
+        if policy_cfg is None:
+            policy_cfg = {'policy': GaussianMLPPolicy, 'hidden_sizes': (32, 32)}
+        policy_fn = policy_cfg.pop('policy')
+        policy = policy_fn(name='policy', env_spec=env.spec, **policy_cfg)
 
         training_kwargs = {
             'n_itr': 1000,

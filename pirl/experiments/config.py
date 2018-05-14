@@ -118,19 +118,24 @@ SINGLE_IRL_ALGORITHMS = {
            agents.tabular.value_in_env),
 }
 
-airl_state_only_irl = functools.partial(irl.airl.irl, tf_cfg=TENSORFLOW)
-airl_state_action_irl = functools.partial(airl_state_only_irl, training_cfg={'state_only': False})
-airl_quick_irl = functools.partial(airl_state_only_irl, training_cfg={'n_itr': 10})
-airl_state_action_quick_irl = functools.partial(airl_state_only_irl, training_cfg={'n_itr': 10})
-airl_quick_serial_irl = functools.partial(airl_state_only_irl, parallel=False, training_cfg={'n_itr': 10})
+AIRL_ALGORITHMS = {
+    'airl_so': {},
+    'airl_sa': dict(training_cfg={'state_only': False}),
+    'airl_so_serial': dict(training_cfg={'parallel': False}),
+    'airl_random': dict(policy_cfg={'policy': irl.airl.GaussianPolicy}),
+}
 airl_reward = functools.partial(irl.airl.AIRLRewardWrapper, tf_cfg=TENSORFLOW)
 airl_value = functools.partial(agents.sample.value,
                                functools.partial(irl.airl.sample, tf_cfg=TENSORFLOW))
-SINGLE_IRL_ALGORITHMS['airl_so'] = (airl_state_only_irl, airl_reward, airl_value)
-SINGLE_IRL_ALGORITHMS['airl_sa'] = (airl_state_action_irl, airl_reward, airl_value)
-SINGLE_IRL_ALGORITHMS['airl_so_quick'] = (airl_quick_irl, airl_reward, airl_value)
-SINGLE_IRL_ALGORITHMS['airl_sa_quick'] = (airl_state_action_quick_irl, airl_reward, airl_value)
-SINGLE_IRL_ALGORITHMS['airl_so_quick_serial'] = (airl_quick_serial_irl, airl_reward, airl_value)
+for k, kwargs in AIRL_ALGORITHMS.items():
+    irl_fn = functools.partial(irl.airl.irl, tf_cfg=TENSORFLOW, **kwargs)
+    SINGLE_IRL_ALGORITHMS[k] = (irl_fn, airl_reward, airl_value)
+
+    training_cfg = kwargs.get('training_cfg', {})
+    training_cfg['n_itr'] = 10
+    kwargs['training_cfg'] = training_cfg
+    irl_fn = functools.partial(irl.airl.irl, tf_cfg=TENSORFLOW, **kwargs)
+    SINGLE_IRL_ALGORITHMS[k + '_quick'] = (irl_fn, airl_reward, airl_value)
 
 ## Population IRL algorithms
 
@@ -219,7 +224,7 @@ EXPERIMENTS['dummy-continuous-test'] = {
     'discount': 0.99,
     'expert': 'ppo_cts_shortest',
     'eval': ['ppo_cts_shortest'],
-    'irl': ['airl_so_quick', 'airl_sa_quick'],
+    'irl': ['airl_so_quick', 'airl_sa_quick', 'airl_random_quick'],
     'trajectories': [10, 20],
 }
 EXPERIMENTS['dummy-continuous-test-medium'] = {
@@ -322,7 +327,7 @@ EXPERIMENTS['continuous-baselines-easy'] = {
     'discount': 0.99,
     'expert': 'ppo_cts',
     'eval': ['ppo_cts'],
-    'irl': ['airl_so'],
+    'irl': ['airl_so', 'airl_random'],
     'trajectories': [1000],
 }
 EXPERIMENTS['continuous-baselines-medium'] = {
@@ -335,7 +340,7 @@ EXPERIMENTS['continuous-baselines-medium'] = {
     'discount': 0.99,
     'expert': 'ppo_cts',
     'eval': ['ppo_cts'],
-    'irl': ['airl_so'],
+    'irl': ['airl_so', 'airl_random'],
     'trajectories': [1000],
 }
 EXPERIMENTS['billiards'] = {
@@ -418,7 +423,7 @@ for n in [1, 4, 8, 16]:
         'discount': 0.99,
         'expert': 'ppo_cts',
         'eval': [],
-        'irl': ['airl_so_quick_serial'],
+        'irl': ['airl_so_serial_quick'],
         'trajectories': [1000],
     }
     EXPERIMENTS['parallel-cts-reacher-fast-rl-{}'.format(n)] = {
