@@ -174,7 +174,7 @@ dependencies:
     - enum34==1.1.6
     - future==0.16.0
     - glfw==1.6.0
-    - gym==0.10.5
+    - git+git://github.com/AdamGleave/gym.git@all-fixes#egg=gym
     - imageio==2.3.0
     - joblib==0.11
     - mpi4py==3.0.0
