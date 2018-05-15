@@ -166,6 +166,8 @@ def irl(venv, trajectories, discount, log_dir, tf_cfg, model_cfg={},
 
         if policy_cfg is None:
             policy_cfg = {'policy': GaussianMLPPolicy, 'hidden_sizes': (32, 32)}
+        else:
+            policy_cfg = dict(policy_cfg)
         policy_fn = policy_cfg.pop('policy')
         policy = policy_fn(name='policy', env_spec=envs.spec, **policy_cfg)
 

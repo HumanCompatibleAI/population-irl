@@ -54,12 +54,19 @@ class SampleMonitor(gym.Wrapper):
         return self._trajectories
 
 class SampleVecMonitor(VecEnvWrapper):
-    def __init__(self, envs):
-        self._trajectories = []
+    def __init__(self, venv, trajectories=None):
+        '''Takes a vector environment venv and an empty collection trajectories;
+           trajectories are then stored in the collection. For most use cases,
+           the default of trajectories as an empty list is sufficient; in some
+           cases, other data structures e.g. a ring-buffer may be useful.'''
+        if trajectories is None:
+            trajectories = []
+        assert len(trajectories) == 0
+        self._trajectories = trajectories
         self.observations = None
         self.actions = None
         self.rewards = None
-        super(SampleVecMonitor, self).__init__(envs)
+        super(SampleVecMonitor, self).__init__(venv)
 
     def step_async(self, actions):
         for i, a in enumerate(actions):

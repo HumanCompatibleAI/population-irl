@@ -165,7 +165,7 @@ dependencies:
   - pip:
     - git+git://github.com/AdamGleave/inverse_rl.git@master#egg=adversarial-irl
     - atari-py==0.1.1
-    - git+git://github.com/AdamGleave/baselines.git@master#egg=baselines
+    - baselines==0.1.5
     - cached-property==1.4.0
     - click==6.7
     - cloudpickle==0.5.2
