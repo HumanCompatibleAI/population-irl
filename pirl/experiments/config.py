@@ -324,6 +324,22 @@ for shape in ['9x9', '4x4']:
         }
 
 # Continuous control
+EXPERIMENTS['continuous-baselines-classic'] = {
+    # continuous state space but (mostly) discrete action spaces
+    'environments': [
+        'Acrobot-v1',
+        'CartPole-v1',
+        'MountainCar-v0',
+        'MountainCarContinuous-v0',
+        'Pendulum-v0',
+    ],
+    'parallel_rollouts': 4,
+    'discount': 0.99,
+    'expert': 'ppo_cts',
+    'eval': ['ppo_cts'],
+    'irl': ['airl_so', 'airl_random'],
+    'trajectories': [1000],
+}
 EXPERIMENTS['continuous-baselines-easy'] = {
     'environments': [
         'Reacher-v2',
@@ -370,6 +386,30 @@ EXPERIMENTS['reacher-env-comparisons'] = {
     'eval': ['ppo_cts'],
     'irl': [],
     'trajectories': [1000],
+}
+
+# Few-shot continuous control
+EXPERIMENTS['reacher-metalearning'] = {
+    'train_environments': ['pirl/Reacher-fixed-hidden-goal-seed{}-v0'.format(seed) for seed in range(0,5)],
+    'test_environments': ['pirl/Reacher-fixed-hidden-goal-seed{}-v0'.format(seed) for seed in range(5, 10)],
+    'parallel_rollouts': 4,
+    'discount': 0.99,
+    'expert': 'ppo_cts',
+    'eval': ['ppo_cts'],
+    'irl': ['airl_so', 'airlp_so'],
+    'train_trajectories': [1000],
+    'test_trajectories': [0, 1, 5, 10, 100],
+}
+EXPERIMENTS['dummy-reacher-metalearning'] = {
+    'train_environments': ['pirl/Reacher-fixed-hidden-goal-seed{}-v0'.format(seed) for seed in range(0,2)],
+    'test_environments': ['pirl/Reacher-fixed-hidden-goal-seed{}-v0'.format(seed) for seed in range(5,6)],
+    'parallel_rollouts': 4,
+    'discount': 0.99,
+    'expert': 'ppo_cts_shortest',
+    'eval': ['ppo_cts_shortest'],
+    'irl': ['airl_so_quick', 'airlp_so_quick'],
+    'train_trajectories': [1000],
+    'test_trajectories': [0, 5],
 }
 
 # Test of RL parallelism
