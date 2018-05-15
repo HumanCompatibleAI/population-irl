@@ -287,6 +287,10 @@ def metalearn(venvs, trajectories, discount, log_dir, tf_cfg,
 
 @vectorized(True)
 def finetune(metainit, *args, **kwargs):
+    metalearn_only = ['outer_itr', 'lr']
+    for k in metalearn_only:
+        if k in kwargs:
+            del kwargs[k]
     return irl(*args, **kwargs, warmstart=metainit)
 
 
