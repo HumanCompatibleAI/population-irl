@@ -33,8 +33,13 @@ class VecInfo(VecEnvWrapper):
 
     def step_wait(self):
         obs, rewards, dones, env_infos = self.venv.step_wait()
-        env_infos = tensor_utils.stack_tensor_dict_list(env_infos)
-        return obs, rewards, dones, env_infos
+        #SOMEDAY: handle env_infos with different keys
+        #The problem is bench.Monitor adds an episode key only when an episode
+        #ends. stack_tensor_dict_list assumes constant keys, so this breaks
+        #when some but not all envirnoments are done.
+        #env_infos is only used for some debugging code, so just removing this.
+        #env_infos = tensor_utils.stack_tensor_dict_list(env_infos)
+        return obs, rewards, dones, {}
 
     def terminate(self):
         return self.close()
