@@ -1,4 +1,5 @@
 import pickle
+import random
 
 from baselines.common.vec_env import VecEnvWrapper
 from baselines.common.vec_env.dummy_vec_env import DummyVecEnv
@@ -42,7 +43,9 @@ class VecInfo(VecEnvWrapper):
         return obs, rewards, dones, {}
 
     def terminate(self):
-        return self.close()
+        # Normally we'd close environments, but this is done for us in
+        # pirl.experiments.experiments.
+        pass
 
 
 def _make_vec_env(env_fns, parallel):
@@ -67,6 +70,8 @@ class VecGymEnv(Env):
         return self._action_space
 
     def terminate(self):
+        # Normally we'd close environments, but this is done for us in
+        # pirl.experiments.experiments.
         pass
 
     @property
@@ -144,9 +149,10 @@ def _convert_trajectories(trajs):
     return [{'observations': np.array(obs), 'actions': np.array(actions)}
             for obs, actions in trajs]
 
+
 @vectorized(True)
-def irl(venv, trajectories, discount, log_dir, tf_cfg,
-        model_cfg={}, policy_cfg=None, training_cfg={}):
+def irl(venv, trajectories, discount, log_dir, tf_cfg, model_cfg={},
+        policy_cfg=None, training_cfg={}, warmstart=None):
     envs = VecGymEnv(venv)
     envs = TfEnv(envs)
 
@@ -156,6 +162,8 @@ def irl(venv, trajectories, discount, log_dir, tf_cfg,
 
     train_graph = tf.Graph()
     with train_graph.as_default():
+        irl_model = AIRL(env_spec=envs.spec, expert_trajs=experts, **model_kwargs)
+
         if policy_cfg is None:
             policy_cfg = {'policy': GaussianMLPPolicy, 'hidden_sizes': (32, 32)}
         policy_fn = policy_cfg.pop('policy')
@@ -169,7 +177,6 @@ def irl(venv, trajectories, discount, log_dir, tf_cfg,
             'entropy_weight': 0.1,
         }
         training_kwargs.update(training_cfg)
-        irl_model = AIRL(env_spec=envs.spec, expert_trajs=experts, **model_kwargs)
         algo = IRLTRPO(
             env=envs,
             policy=policy,
@@ -183,13 +190,104 @@ def irl(venv, trajectories, discount, log_dir, tf_cfg,
         )
         with rllab_logdir(algo=algo, dirname=log_dir):
             with tf.Session(config=tf_cfg):
+                if warmstart is not None:
+                    warm_reward, warm_policy = warmstart
+                    _kwargs, reward_params = warm_reward
+                    irl_model.set_params(reward_params)
+                    #TODO: restore policy parameters
                 algo.train()
 
                 reward_params = irl_model.get_params()
+
+                # Side-effect: forces policy to cache all parameters.
+                # This ensures they are saved/restored during pickling.
+                policy.get_params()
+                # Must pickle policy rather than returning it directly,
+                # since parameters in policy will not survive across tf sessions.
                 policy_pkl = pickle.dumps(policy)
 
     reward = model_kwargs, reward_params
     return reward, policy_pkl
+
+
+@vectorized(True)
+def metalearn(venvs, trajectories, discount, log_dir, tf_cfg,
+              outer_itr=1000, lr=1e-2, model_cfg={}, policy_cfg=None, training_cfg={}):
+    #TODO: seeds
+    envs = {k: TfEnv(VecGymEnv(v)) for k, v in venvs.items()}
+    env_spec = list(envs.values())[0].spec
+    num_envs = list(venvs.values())[0].num_envs
+    tasks = list(envs.keys())
+
+    experts = {k: _convert_trajectories(v) for k, v in trajectories.items()}
+    model_kwargs = {'state_only': True, 'max_itrs': 10}
+    model_kwargs.update(model_cfg)
+
+    train_graph = tf.Graph()
+    with train_graph.as_default():
+        if policy_cfg is None:
+            policy_cfg = {'policy': GaussianMLPPolicy, 'hidden_sizes': (32, 32)}
+        policy_fn = policy_cfg.pop('policy')
+        #TODO: do we want different policies?
+        policy = policy_fn(name='policy', env_spec=env_spec, **policy_cfg)
+
+        training_kwargs = {
+            'n_itr': 10,
+            'batch_size': 10000,
+            'max_path_length': 500,
+            'irl_model_wt': 1.0,
+            'entropy_weight': 0.1,
+        }
+        training_kwargs.update(training_cfg)
+        irl_model = AIRL(env_spec=env_spec, **model_kwargs)
+
+        #TODO: avoid duplication of everything? (all that's changing is environment)
+        #TODO: actually this will likely do bad things due to storing paths etc
+        algos = {k: IRLTRPO(
+                env=env,
+                policy=policy,
+                irl_model=irl_model,
+                discount=discount,
+                sampler_args=dict(n_envs=num_envs),
+                store_paths=True,
+                zero_environment_reward=True,
+                baseline=LinearFeatureBaseline(env_spec=env_spec),
+                **training_kwargs
+            ) for k, env in envs.items()}
+        with rllab_logdir(dirname=log_dir):
+            with tf.Session(config=tf_cfg) as sess:
+                sess.run(tf.global_variables_initializer())
+                meta_reward_params = irl_model.get_params()
+                for i in range(outer_itr):
+                    task = random.choice(tasks)
+                    irl_model.set_demos(experts[task])
+                    algos[task].init_irl_params = meta_reward_params
+                    algos[task].train()
+
+                    # {meta,task}_reward_params are lists of NumPy arrays
+                    task_reward_params = irl_model.get_params()
+                    assert len(task_reward_params) == len(meta_reward_params)
+                    for i in range(len(task_reward_params)):
+                        meta, task = meta_reward_params[i], task_reward_params[i]
+                        # Reptile update: meta <- meta + lr * (task - meta)
+                        meta_reward_params[i] = (1 - lr) * meta + lr * task
+                    irl_model.set_params(meta_reward_params)
+
+                # Side-effect: forces policy to cache all parameters.
+                # This ensures they are saved/restored during pickling.
+                policy.get_params()
+                # Must pickle policy rather than returning it directly,
+                # since parameters in policy will not survive across tf sessions.
+                policy_pkl = pickle.dumps(policy)
+
+    reward = model_kwargs, meta_reward_params
+
+    return reward, policy_pkl
+
+
+@vectorized(True)
+def finetune(metainit, *args, **kwargs):
+    return irl(*args, **kwargs, warmstart=metainit)
 
 
 def sample(venv, policy_pkl, num_episodes, seed, tf_cfg):

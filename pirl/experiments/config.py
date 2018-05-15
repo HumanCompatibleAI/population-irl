@@ -117,22 +117,22 @@ SINGLE_IRL_ALGORITHMS = {
 }
 
 AIRL_ALGORITHMS = {
-    'airl_so': {},
-    'airl_sa': dict(training_cfg={'state_only': False}),
-    'airl_random': dict(policy_cfg={'policy': irl.airl.GaussianPolicy}),
+    'so': dict(),
+    'sa': dict(training_cfg={'state_only': False}),
+    'random': dict(policy_cfg={'policy': irl.airl.GaussianPolicy}),
 }
 airl_reward = functools.partial(irl.airl.airl_reward_wrapper, tf_cfg=TENSORFLOW)
 airl_value = functools.partial(agents.sample.value,
                                functools.partial(irl.airl.sample, tf_cfg=TENSORFLOW))
 for k, kwargs in AIRL_ALGORITHMS.items():
     irl_fn = functools.partial(irl.airl.irl, tf_cfg=TENSORFLOW, **kwargs)
-    SINGLE_IRL_ALGORITHMS[k] = (irl_fn, airl_reward, airl_value)
+    SINGLE_IRL_ALGORITHMS['airl_{}'.format(k)] = (irl_fn, airl_reward, airl_value)
 
     training_cfg = kwargs.get('training_cfg', {})
     training_cfg['n_itr'] = 10
     kwargs['training_cfg'] = training_cfg
     irl_fn = functools.partial(irl.airl.irl, tf_cfg=TENSORFLOW, **kwargs)
-    SINGLE_IRL_ALGORITHMS[k + '_quick'] = (irl_fn, airl_reward, airl_value)
+    SINGLE_IRL_ALGORITHMS['airl_{}_quick'.format(k)] = (irl_fn, airl_reward, airl_value)
 
 ## Population IRL algorithms
 
@@ -170,6 +170,16 @@ for reg in range(-2,3):
     POPULATION_IRL_ALGORITHMS['mcep_reg1e{}'.format(reg)] = algo
 POPULATION_IRL_ALGORITHMS['mcep_reg0'] = pop_maxent(individual_reg=0)
 POPULATION_IRL_ALGORITHMS['mcep_quick_reg0'] = pop_maxent(individual_reg=0, num_iter=500)
+
+AIRLP_ALGORITHMS = {
+    'so': dict(),
+    'so_quick': dict(training_cfg={'n_itr': 2}, outer_itr=2),
+}
+for k, kwargs in AIRLP_ALGORITHMS.items():
+    metalearn_fn = functools.partial(irl.airl.metalearn, tf_cfg=TENSORFLOW, **kwargs)
+    finetune_fn = functools.partial(irl.airl.finetune, tf_cfg=TENSORFLOW, **kwargs)
+    entry = (metalearn_fn, finetune_fn, airl_reward, airl_value)
+    POPULATION_IRL_ALGORITHMS['airlp_{}'.format(k)] = entry
 
 def traditional_to_concat(fs):
     irl_algo, reward_wrapper, compute_value = fs
@@ -221,7 +231,7 @@ EXPERIMENTS['dummy-continuous-test'] = {
     'discount': 0.99,
     'expert': 'ppo_cts_shortest',
     'eval': ['ppo_cts_shortest'],
-    'irl': ['airl_so_quick'],# 'airl_sa_quick', 'airl_random_quick'],
+    'irl': ['airl_so_quick', 'airl_sa_quick', 'airl_random_quick'],
     'trajectories': [10, 20],
 }
 EXPERIMENTS['dummy-continuous-test-medium'] = {
