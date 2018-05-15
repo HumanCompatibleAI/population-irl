@@ -175,10 +175,11 @@ def constfn(val):
         return val
     return f
 
-def learn(*, policy, env, nsteps, total_timesteps, ent_coef, lr,
-            vf_coef=0.5,  max_grad_norm=0.5, gamma=0.99, lam=0.95,
-            log_interval=10, nminibatches=4, noptepochs=4, cliprange=0.2,
-            save_interval=0, load_path=None):
+def learn(*, policy, env, epinfobuf, trajectorybuf,
+             nsteps, total_timesteps, ent_coef, lr,
+             vf_coef=0.5,  max_grad_norm=0.5, gamma=0.99, lam=0.95,
+             log_interval=10, nminibatches=4, noptepochs=4, cliprange=0.2,
+             save_interval=0, load_path=None):
 
     if isinstance(lr, float): lr = constfn(lr)
     else: assert callable(lr)
@@ -193,10 +194,6 @@ def learn(*, policy, env, nsteps, total_timesteps, ent_coef, lr,
     ac_space = env.action_space
     nbatch = nenvs * nsteps
     nbatch_train = nbatch // nminibatches
-
-    epinfobuf = deque(maxlen=100)
-    trajectorybuf = deque(maxlen=100)
-    env = SampleVecMonitor(env, trajectorybuf)
 
     make_model = lambda nenvs: Model(policy=policy, ob_space=ob_space, ac_space=ac_space, nbatch_act=nenvs, nbatch_train=nbatch_train,
                     nsteps=nsteps, ent_coef=ent_coef, vf_coef=vf_coef,
@@ -338,25 +335,35 @@ def _make_const(norm):
 
 
 @vectorized(True)
-def train_continuous(envs, discount, log_dir, tf_config, num_timesteps, norm=True):
+def train_continuous(venv, discount, log_dir, tf_config, num_timesteps, norm=True):
     '''Policy with hyperparameters optimized for continuous control environments
        (e.g. MuJoCo). Returns log_dir, where the trained policy is saved.'''
     blogger.configure(dir=log_dir)
     checkpoint_dir = osp.join(blogger.get_dir(), 'checkpoints')
     os.makedirs(checkpoint_dir)
 
-    # Note for PPO statistics to be reported correctly, envs must be
-    # wrapped in a bench.Monitor.
+    # PPO relies on two monitors to report episode reward:
+    # - bench.Monitor, that is applied as soon as the environment created,
+    #   for the original reward. This is used in reporting only.
+    # - SampleVecMonitor, applied here immediately before (optional) normalization.
+    #   In most cases, the reward here is the same as for bench.Monitor.
+    #   But they will be different if we are applying a reward wrapper (when
+    #   reoptimizing from IRL). This is the reward used to choose the best model.
+    epinfobuf = deque(maxlen=100)
+    trajectorybuf = deque(maxlen=100)
+    venv = SampleVecMonitor(venv, trajectorybuf)
     make_vec_normalize = VecNormalize if norm else DummyVecNormalize
-    norm_envs = make_vec_normalize(envs)
+    norm_venv = make_vec_normalize(venv)
 
     train_graph = tf.Graph()
     with train_graph.as_default():
         with tf.Session(config=make_config(tf_config)):
             policy = MlpPolicy
-            nsteps = 2048 // envs.num_envs
+            nsteps = 2048 // venv.num_envs
             learner = learn(
-                policy=policy, env=norm_envs, nsteps=nsteps, nminibatches=32,
+                policy=policy, env=norm_venv,
+                epinfobuf=epinfobuf, trajectorybuf=trajectorybuf,
+                nsteps=nsteps, nminibatches=32,
                 lam=0.95, gamma=discount, noptepochs=10, log_interval=1,
                 ent_coef=0.0,
                 lr=3e-4,
@@ -369,7 +376,7 @@ def train_continuous(envs, discount, log_dir, tf_config, num_timesteps, norm=Tru
                 # joblib cannot pickle closures, so use cloudpickle first
                 make_model_pkl = cloudpickle.dumps(make_model)
                 model = make_model_pkl, params
-                policy = model, _save_stats(norm_envs)
+                policy = model, _save_stats(norm_venv)
 
                 checkpoint_fname = osp.join(checkpoint_dir, '{:05}'.format(update))
                 joblib.dump(policy, checkpoint_fname)

@@ -1,4 +1,5 @@
 import argparse
+from baselines.common.vec_env.dummy_vec_env import DummyVecEnv
 import gym
 from gym.wrappers import Monitor
 import joblib
@@ -46,9 +47,10 @@ def main():
                           force=True, video_callable=lambda x: True)
         env = InteractiveMonitor(env)
         return env
+    venv = DummyVecEnv([make_env])
     print('Sampling {} in {}, saving videos to {}'.format(
            args.num_episodes, args.env, args.out_dir))
-    ppo.sample([make_env], policy, args.num_episodes,
+    ppo.sample(venv, policy, args.num_episodes,
                args.seed, tf_config=config.TENSORFLOW)
 
 if __name__ == '__main__':

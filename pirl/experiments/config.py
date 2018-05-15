@@ -330,11 +330,12 @@ for shape in ['9x9', '4x4']:
 EXPERIMENTS['continuous-baselines-classic'] = {
     # continuous state space but (mostly) discrete action spaces
     'environments': [
-        'Acrobot-v1',
-        'CartPole-v1',
-        'MountainCar-v0',
         'MountainCarContinuous-v0',
-        'Pendulum-v0',
+        # below are discrete which AIRL cannot currently work with
+        # 'Acrobot-v1',
+        # 'CartPole-v1',
+        # 'MountainCar-v0',
+        # 'Pendulum-v0',
     ],
     'parallel_rollouts': 4,
     'discount': 0.99,
