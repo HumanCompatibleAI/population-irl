@@ -1,5 +1,6 @@
 import functools
 import itertools
+import os
 import os.path as osp
 import sys
 
@@ -10,7 +11,14 @@ from pirl import agents, envs, irl
 
 # General
 PROJECT_DIR = osp.dirname(osp.dirname(osp.dirname(osp.realpath(__file__))))
-CACHE_DIR = osp.join(PROJECT_DIR, 'data', 'cache')
+DATA_DIR = osp.join(PROJECT_DIR, 'data')
+CACHE_DIR = osp.join(PROJECT_DIR, 'cache')
+LOG_DIR = osp.join(PROJECT_DIR, 'logs')
+
+try:
+    from pirl.experiments.config_local import *
+except ImportError:
+    pass
 
 # ML Framework Config
 def make_tf_config():
@@ -21,6 +29,7 @@ TENSORFLOW = make_tf_config()
 
 # Logging
 def logging(identifier):
+    os.makedirs(LOG_DIR, exist_ok=True)
     return {
         'version': 1,
         'disable_existing_loggers': False,
@@ -38,7 +47,7 @@ def logging(identifier):
             'file': {
                 'level': 'DEBUG',
                 'formatter': 'standard',
-                'filename': 'logs/pirl-{}.log'.format(identifier),
+                'filename': '{}/pirl-{}.log'.format(LOG_DIR, identifier),
                 'maxBytes': 100 * 1024 * 1024,
                 'backupCount': 3,
                 'class': 'logging.handlers.RotatingFileHandler',

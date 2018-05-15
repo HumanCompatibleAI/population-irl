@@ -32,6 +32,7 @@ class NoDaemonProcess(multiprocessing.Process):
         pass
     daemon = property(_get_daemon, _set_daemon)
 
+
 class NoDaemonPool(multiprocessing.pool.Pool):
     '''A multiprocessing Pool whose processes do not have the daemon attribute
        set. This lets one have nested Pool's of processes. This is needed as
@@ -41,6 +42,7 @@ class NoDaemonPool(multiprocessing.pool.Pool):
        This has the negative effect that these processes don't automatically die
        with the main process -- best to not use this unless you need to.'''
     Process = NoDaemonProcess
+
 
 def _check_in(cats, kind):
     def f(s):
@@ -52,22 +54,10 @@ def _check_in(cats, kind):
 experiment_type = _check_in(config.EXPERIMENTS.keys(), 'experiment')
 
 
-def writable_dir(path):
-    try:
-        testfile = tempfile.TemporaryFile(dir=path)
-        testfile.close()
-    except OSError as e:
-        desc = "Cannot write to '{}': {}".format(path, e)
-        raise argparse.ArgumentTypeError(desc)
-
-    return path
-
-
 def parse_args():
     desc = 'Log trajectories from an RL algorithm.'
     parser = argparse.ArgumentParser(description=desc)
-    parser.add_argument('--data_dir', metavar='dir', default='./data',
-                        type=writable_dir)
+    parser.add_argument('--data_dir', metavar='dir', default=config.DATA_DIR, type=str)
     parser.add_argument('--seed', metavar='STR', default='foobar', type=str)
     parser.add_argument('--video-every', metavar='N', default=0, type=int,
                         help='video every N episodes; disabled by default.')
@@ -86,6 +76,7 @@ def init_worker(timestamp):
     # Make numpy repr() more compact.
     np.set_printoptions(threshold=5)
     logger.debug('Started')
+
 
 def git_hash():
     repo = git.Repo(path=os.path.realpath(__file__),
