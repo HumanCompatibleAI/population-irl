@@ -270,6 +270,7 @@ def metalearn(venvs, trajectories, discount, log_dir, tf_cfg,
                     for i in range(len(task_reward_params)):
                         meta, task = meta_reward_params[i], task_reward_params[i]
                         # Reptile update: meta <- meta + lr * (task - meta)
+                        #TODO: use Adam optimizer?
                         meta_reward_params[i] = (1 - lr) * meta + lr * task
                     irl_model.set_params(meta_reward_params)
 

@@ -175,6 +175,9 @@ AIRLP_ALGORITHMS = {
     'so': dict(),
     'so_quick': dict(training_cfg={'n_itr': 2}, outer_itr=2),
 }
+for lr in range(1, 4):
+    AIRLP_ALGORITHMS['so_lr1e-{}'.format(lr)] = dict(lr=10 ** (-lr))
+AIRLP_ALGORITHMS
 for k, kwargs in AIRLP_ALGORITHMS.items():
     metalearn_fn = functools.partial(irl.airl.metalearn, tf_cfg=TENSORFLOW, **kwargs)
     finetune_fn = functools.partial(irl.airl.finetune, tf_cfg=TENSORFLOW, **kwargs)
@@ -396,9 +399,9 @@ EXPERIMENTS['reacher-metalearning'] = {
     'discount': 0.99,
     'expert': 'ppo_cts',
     'eval': ['ppo_cts'],
-    'irl': ['airl_so', 'airlp_so'],
+    'irl': ['airl_so'] + ['airlp_so_lr1e-{}'.format(i) for i in range(1,4)],
     'train_trajectories': [1000],
-    'test_trajectories': [0, 1, 5, 10, 100],
+    'test_trajectories': [1, 5, 10, 100],
 }
 EXPERIMENTS['dummy-reacher-metalearning'] = {
     'train_environments': ['pirl/Reacher-fixed-hidden-goal-seed{}-v0'.format(seed) for seed in range(0,2)],
@@ -409,7 +412,7 @@ EXPERIMENTS['dummy-reacher-metalearning'] = {
     'eval': ['ppo_cts_shortest'],
     'irl': ['airl_so_quick', 'airlp_so_quick'],
     'train_trajectories': [1000],
-    'test_trajectories': [0, 5],
+    'test_trajectories': [5],
 }
 
 # Test of RL parallelism
