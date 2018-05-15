@@ -24,7 +24,7 @@ from airl.models.airl_state import AIRL
 from airl.utils.log_utils import rllab_logdir
 
 from pirl.agents.sample import SampleVecMonitor
-from pirl.utils import getattr_unwrapped
+from pirl.utils import vectorized
 
 
 class VecInfo(VecEnvWrapper):
@@ -40,17 +40,6 @@ class VecInfo(VecEnvWrapper):
         return self.close()
 
 
-def _set_max_path_length(orig_env, max_path_length):
-    env = orig_env
-    while True:
-        if isinstance(env, gym.Wrapper):
-            if env.class_name() == 'TimeLimit':
-                env._max_episode_steps = max_path_length
-                return orig_env
-            env = env.env
-        else:
-            return gym.wrappers.TimeLimit(orig_env, max_episode_steps=max_path_length)
-
 def _make_vec_env(env_fns, parallel):
     if parallel and len(env_fns) > 1:
         return SubprocVecEnv(env_fns)
@@ -59,14 +48,10 @@ def _make_vec_env(env_fns, parallel):
 
 
 class VecGymEnv(Env):
-    def __init__(self, env_fns, parallel):
-        self.env_fns = env_fns
-        self.parallel = parallel
-        env = env_fns[0]()
-        self.env = env
-        self._observation_space = convert_gym_space(env.observation_space)
-        self._action_space = convert_gym_space(env.action_space)
-        self._horizon = getattr_unwrapped(env, '_max_episode_steps')
+    def __init__(self, venv):
+        self.venv = venv
+        self._observation_space = convert_gym_space(venv.observation_space)
+        self._action_space = convert_gym_space(venv.action_space)
 
     @property
     def observation_space(self):
@@ -76,32 +61,18 @@ class VecGymEnv(Env):
     def action_space(self):
         return self._action_space
 
-    @property
-    def horizon(self):
-        return self._horizon
-
-    def reset(self):
-        return self.env.reset()
-
-    def step(self, action):
-        next_obs, reward, done, info = self.env.step(action)
-        return Step(next_obs, reward, done, **info)
-
-    def render(self):
-        self.env.render()
-
     def terminate(self):
-        self.env.close()
+        pass
 
     @property
     def vectorized(self):
         return True
 
     def vec_env_executor(self, n_envs, max_path_length):
-        assert n_envs <= len(self.env_fns)
-        env_fns = [lambda: _set_max_path_length(fn(), max_path_length)
-                   for fn in self.env_fns[:n_envs]]
-        return VecInfo(_make_vec_env(env_fns, self.parallel))
+        # SOMEDAY: make these parameters have an effect?
+        # We're powerless as the environments have already been created.
+        # But I'm not too bothered by this, as we can tweak them elsewhere.
+        return VecInfo(self.venv)
 
 
 class GaussianPolicy(StochasticPolicy, Serializable):
@@ -168,12 +139,11 @@ def _convert_trajectories(trajs):
     return [{'observations': np.array(obs), 'actions': np.array(actions)}
             for obs, actions in trajs]
 
-
-def irl(env_fns, trajectories, discount, log_dir, tf_cfg, parallel=True,
+@vectorized(True)
+def irl(venv, trajectories, discount, log_dir, tf_cfg,
         model_cfg={}, policy_cfg=None, training_cfg={}):
-    num_envs = len(env_fns)
-    env = VecGymEnv(env_fns, parallel)
-    env = TfEnv(env)
+    envs = VecGymEnv(venv)
+    envs = TfEnv(envs)
 
     experts = _convert_trajectories(trajectories)
     model_kwargs = {'state_only': True, 'max_itrs': 10}
@@ -184,7 +154,7 @@ def irl(env_fns, trajectories, discount, log_dir, tf_cfg, parallel=True,
         if policy_cfg is None:
             policy_cfg = {'policy': GaussianMLPPolicy, 'hidden_sizes': (32, 32)}
         policy_fn = policy_cfg.pop('policy')
-        policy = policy_fn(name='policy', env_spec=env.spec, **policy_cfg)
+        policy = policy_fn(name='policy', env_spec=envs.spec, **policy_cfg)
 
         training_kwargs = {
             'n_itr': 1000,
@@ -194,16 +164,16 @@ def irl(env_fns, trajectories, discount, log_dir, tf_cfg, parallel=True,
             'entropy_weight': 0.1,
         }
         training_kwargs.update(training_cfg)
-        irl_model = AIRL(env_spec=env.spec, expert_trajs=experts, **model_kwargs)
+        irl_model = AIRL(env_spec=envs.spec, expert_trajs=experts, **model_kwargs)
         algo = IRLTRPO(
-            env=env,
+            env=envs,
             policy=policy,
             irl_model=irl_model,
             discount=discount,
-            sampler_args=dict(n_envs=num_envs),
+            sampler_args=dict(n_envs=venv.num_envs),
             store_paths=True,
             zero_environment_reward=True,
-            baseline=LinearFeatureBaseline(env_spec=env.spec),
+            baseline=LinearFeatureBaseline(env_spec=envs.spec),
             **training_kwargs
         )
         with rllab_logdir(algo=algo, dirname=log_dir):
@@ -213,14 +183,11 @@ def irl(env_fns, trajectories, discount, log_dir, tf_cfg, parallel=True,
                 reward_params = irl_model.get_params()
                 policy_pkl = pickle.dumps(policy)
 
-    env.terminate()
-
     reward = model_kwargs, reward_params
     return reward, policy_pkl
 
 
-def sample(env_fns, policy_pkl, num_episodes, seed, tf_cfg, parallel=True):
-    venv = _make_vec_env(env_fns, parallel)
+def sample(venv, policy_pkl, num_episodes, seed, tf_cfg):
     venv = SampleVecMonitor(venv)
 
     infer_graph = tf.Graph()
@@ -238,22 +205,25 @@ def sample(env_fns, policy_pkl, num_episodes, seed, tf_cfg, parallel=True):
 
             return venv.trajectories
 
-    venv.close()
+
+def _setup_model(env, new_reward, tf_cfg):
+    env_spec = EnvSpec(
+        observation_space=to_tf_space(convert_gym_space(env.observation_space)),
+        action_space=to_tf_space(convert_gym_space(env.action_space)))
+    model_kwargs, reward_params = new_reward
+    infer_graph = tf.Graph()
+    with infer_graph.as_default():
+        irl_model = AIRL(env_spec=env_spec, expert_trajs=None, **model_kwargs)
+        sess = tf.Session(config=tf_cfg)
+        with sess.as_default():
+            irl_model.set_params(reward_params)
+    return sess, irl_model
 
 
 class AIRLRewardWrapper(gym.Wrapper):
-    #TODO: vectorized version?
-    """Wrapper for a gym.Env replacing with a new reward matrix."""
+    """Wrapper for a Env, using a reward network."""
     def __init__(self, env, new_reward, tf_cfg):
-        env_spec = EnvSpec(observation_space=to_tf_space(convert_gym_space(env.observation_space)),
-                           action_space=to_tf_space(convert_gym_space(env.action_space)))
-        model_kwargs, reward_params = new_reward
-        infer_graph = tf.Graph()
-        with infer_graph.as_default():
-            self.irl_model = AIRL(env_spec=env_spec, expert_trajs=None, **model_kwargs)
-            self.sess = tf.Session(config=tf_cfg)
-            with self.sess.as_default():
-                self.irl_model.set_params(reward_params)
+        self.sess, self.irl_model = _setup_model(env, new_reward, tf_cfg)
         super().__init__(env)
 
     def step(self, action):
@@ -269,3 +239,33 @@ class AIRLRewardWrapper(gym.Wrapper):
     def close(self):
         self.sess.close()
         self.env.close()
+
+
+class AIRLVecRewardWrapper(VecEnvWrapper):
+    """Wrapper for a VecEnv, using a reward network."""
+    def __init__(self, venv, new_reward, tf_cfg):
+        self.sess, self.irl_model = _setup_model(venv, new_reward, tf_cfg)
+        super().__init__(venv)
+
+    def step_async(self, actions):
+        self.last_actions = actions
+        self.venv.step_async(actions)
+
+    def step_wait(self):
+        obs, _old_rewards, dones, info = self.venv.step_wait()
+        feed_dict = {self.irl_model.act_t: np.array(self.last_actions),
+                     self.irl_model.obs_t: np.array(obs)}
+        new_reward = self.sess.run(self.irl_model.reward, feed_dict=feed_dict)
+        return obs, new_reward.flat, dones, info
+
+    def reset(self):
+        return self.venv.reset()
+
+    def close(self):
+        self.sess.close()
+        self.venv.close()
+
+
+def airl_reward_wrapper(env, new_reward, tf_cfg):
+    cls = AIRLVecRewardWrapper if hasattr(env, 'num_envs') else AIRLRewardWrapper
+    return cls(env, new_reward, tf_cfg)

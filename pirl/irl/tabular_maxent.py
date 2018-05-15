@@ -13,7 +13,7 @@ from scipy.special import logsumexp as sp_lse
 import torch
 from torch.autograd import Variable
 
-from pirl.utils import getattr_unwrapped, TrainingIterator
+from pirl.utils import getattr_unwrapped, vectorized, TrainingIterator
 
 #TODO: fully torchize?
 
@@ -89,13 +89,14 @@ default_scheduler = {
     ),
 }
 
-def irl(env_fns, trajectories, discount, log_dir=None, demo_counts=None,
+@vectorized(False)
+def irl(mdp, trajectories, discount, log_dir=None, demo_counts=None,
         horizon=None, planner=max_causal_ent_policy,
         regularize=None, common_reward=None, optimizer=None, scheduler=None,
         num_iter=5000, log_every=100, log_expensive_every=1000):
     """
     Args:
-        - env_fns(list[() -> TabularMdpEnv]): MDP trajectories were drawn from.
+        - mdp(TabularMdpEnv): MDP trajectories were drawn from.
         - trajectories(list): expert trajectories; exclusive with demo_counts.
             List containing one (states, actions) pair for each trajectory,
             where states and actions are lists containing all visited
@@ -127,7 +128,6 @@ def irl(env_fns, trajectories, discount, log_dir=None, demo_counts=None,
     assert (regularize is None) ^ (common_reward is None) == 0
     assert (regularize is None) or (demo_counts is None)
 
-    mdp = env_fns[0]()
     transition = getattr_unwrapped(mdp, 'transition')
     initial_states = getattr_unwrapped(mdp, 'initial_states')
     if horizon is None:
@@ -178,10 +178,11 @@ def irl(env_fns, trajectories, discount, log_dir=None, demo_counts=None,
     return reward.data.numpy(), pol
 
 
-def metalearn(envs_fns, trajectories, discount, individual_reg=None, **kwargs):
+@vectorized(False)
+def metalearn(mdps, trajectories, discount, individual_reg=None, **kwargs):
     """
     Args:
-        - envs_fns(dict<list<() -> TabularMdpEnv)>): MDPs trajectories were drawn from.
+        - mdps(dict<TabularMdpEnv)>): MDPs trajectories were drawn from.
             Dictionary containing MDPs trajectories, of the same name, were
             drawn from. MDPs must have the same state/action spaces, but may
             have different dynamics and reward functions.
@@ -198,12 +199,14 @@ def metalearn(envs_fns, trajectories, discount, individual_reg=None, **kwargs):
 
     Returns mean_reward, a list containing the estimate reward for each state.
     """
-    res = {k: irl(env_fns, trajectories[k], discount, **kwargs)
-           for k, env_fns in envs_fns.items()}
+    res = {k: irl(mdp, trajectories[k], discount, **kwargs)
+           for k, mdp in mdps.items()}
     rewards = {k: r for k, (r, v) in res.items()}
     mean_reward = np.mean(list(rewards.values()), axis=0)
     return mean_reward
 
+
+@vectorized(False)
 def finetune(mean_reward, env_fns, trajectories, discount, log_dir=None, individual_reg=1e-2, **kwargs):
     """First argument is result of metalearn; individual_reg is regularization
        factor; remaining arguments are passed-through to irl."""

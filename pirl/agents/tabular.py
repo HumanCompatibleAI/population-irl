@@ -4,7 +4,7 @@ import gym
 from gym.utils import seeding
 import numpy as np
 
-from pirl.utils import discrete_sample, getattr_unwrapped
+from pirl.utils import discrete_sample, getattr_unwrapped, vectorized
 
 def q_iteration(transition, reward, horizon, discount,
                 policy=None, max_error=1e-3):
@@ -76,10 +76,10 @@ def q_iteration_policy(T, R, H, discount):
 
 
 def env_wrapper(f):
+    @vectorized(False)
     @functools.wraps(f)
-    def helper(env_fns, log_dir=None, reward=None, *args, **kwargs):
+    def helper(mdp, log_dir=None, reward=None, *args, **kwargs):
         # log_dir is not used but is needed to match function signature.
-        mdp = env_fns[0]()
         T = getattr_unwrapped(mdp, 'transition')
         if reward is None:
             reward = getattr_unwrapped(mdp, 'reward')
@@ -88,7 +88,10 @@ def env_wrapper(f):
     return helper
 
 
+@vectorized(False)
 def value_in_mdp(mdp, policy, discount, seed):
+    '''Exact value of a tabular policy in environment mdp with given discount.
+       Returns (value, 0), where 0 represents the standard error.'''
     T = getattr_unwrapped(mdp, 'transition')
     R = getattr_unwrapped(mdp, 'reward')
     H = getattr_unwrapped(mdp, '_max_episode_steps')
@@ -99,15 +102,8 @@ def value_in_mdp(mdp, policy, discount, seed):
     return value, 0
 
 
-def value_in_env(env_fns, policy, discount, seed):
-    '''Exact value of a tabular policy in environment env with given discount.
-       Returns (value, 0), where 0 represents the standard error.'''
-    mdp = env_fns[0]()
-    return value_in_mdp(mdp, policy, discount, seed)
-
-
-def sample(env_fns, policy, num_episodes, seed):
-    env = env_fns[0]()  # step() is cheap, so no point parallelizing
+@vectorized(False)  # step is cheap so no point parallelizing
+def sample(env, policy, num_episodes, seed):
     # seed to make results reproducible
     rng, _ = seeding.np_random(seed)
 
@@ -134,6 +130,8 @@ def sample(env_fns, policy, num_episodes, seed):
 class TabularRewardWrapper(gym.Wrapper):
     """Wrapper for a gym.Env replacing with a new reward matrix."""
     def __init__(self, env, new_reward):
+        # Note: will fail on vectorized environments, but value_iteration
+        # doesn't support these anyway.
         self.new_reward = new_reward
         super().__init__(env)
 

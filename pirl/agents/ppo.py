@@ -1,7 +1,6 @@
 '''Wrapper around OpenAI Baselines PPO2 (GPU optimized).
    Based on baselines/ppo2/run_mujoco.py.'''
 
-import functools
 import logging
 import joblib
 import os
@@ -14,7 +13,7 @@ import numpy as np
 import tensorflow as tf
 
 from baselines.ppo2 import ppo2
-from baselines import bench, logger as blogger
+from baselines import logger as blogger
 from baselines.common.vec_env import VecEnvWrapper
 from baselines.common.vec_env.vec_normalize import VecNormalize
 from baselines.common.vec_env.dummy_vec_env import DummyVecEnv
@@ -22,6 +21,7 @@ from baselines.common.vec_env.subproc_vec_env import SubprocVecEnv
 from baselines.ppo2.policies import MlpPolicy
 
 from pirl.agents.sample import SampleVecMonitor
+from pirl.utils import vectorized
 
 logger = logging.getLogger('pirl.agents.ppo')
 
@@ -87,29 +87,24 @@ def _make_const(norm):
             setattr(norm, k, ConstantStatistics(v))
 
 
-def train_continuous(env_fns, discount, log_dir, tf_config, num_timesteps,
-                     parallel=True, norm=True):
+@vectorized(True)
+def train_continuous(envs, discount, log_dir, tf_config, num_timesteps, norm=True):
     '''Policy with hyperparameters optimized for continuous control environments
        (e.g. MuJoCo). Returns log_dir, where the trained policy is saved.'''
     blogger.configure(dir=log_dir)
     checkpoint_dir = osp.join(blogger.get_dir(), 'checkpoints')
     os.makedirs(checkpoint_dir)
 
-    num_envs = len(env_fns)
-    # Note for PPO statistics to be reported correctly, env_fns must wrap
-    # the environments with a bench.Monitor.
-    make_envs = SubprocVecEnv if (parallel and num_envs > 1) else DummyVecEnv
+    # Note for PPO statistics to be reported correctly, envs must be
+    # wrapped in a bench.Monitor.
     make_vec_normalize = VecNormalize if norm else DummyVecNormalize
-    envs = make_envs(env_fns)
+    norm_envs = make_vec_normalize(envs)
 
     train_graph = tf.Graph()
-
     with train_graph.as_default():
         with tf.Session(config=make_config(tf_config)):
-            norm_envs = make_vec_normalize(envs)
-
             policy = MlpPolicy
-            nsteps = 2048 // num_envs
+            nsteps = 2048 // envs.num_envs
             learner = ppo2.learn(
                 policy=policy, env=norm_envs, nsteps=nsteps, nminibatches=32,
                 lam=0.95, gamma=discount, noptepochs=10, log_interval=1,
@@ -137,11 +132,9 @@ def train_continuous(env_fns, discount, log_dir, tf_config, num_timesteps,
     return joblib.load(best_checkpoint)
 
 
-def sample(env_fns, policy, num_episodes, seed, tf_config, parallel=True, const_norm=False):
+@vectorized(True)
+def sample(envs, policy, num_episodes, seed, tf_config, const_norm=False):
     smodel, snorm_env = policy
-    num_envs = len(env_fns)
-    make_envs = SubprocVecEnv if (parallel and num_envs > 1) else DummyVecEnv
-    envs = make_envs(env_fns)
     envs_monitor = SampleVecMonitor(envs)
 
     infer_graph = tf.Graph()
@@ -153,7 +146,7 @@ def sample(env_fns, policy, num_episodes, seed, tf_config, parallel=True, const_
             # Load model
             make_model_pkl, params = smodel
             make_model = cloudpickle.loads(make_model_pkl)
-            model = make_model(num_envs)
+            model = make_model(envs.num_envs)
             model.restore_params(params)
 
             # Initialize environment
@@ -163,7 +156,7 @@ def sample(env_fns, policy, num_episodes, seed, tf_config, parallel=True, const_
 
             obs = norm_envs.reset()
             states = model.initial_state
-            dones = np.zeros(num_envs, dtype='bool')
+            dones = np.zeros(envs.num_envs, dtype='bool')
             completed = 0
             while completed < num_episodes:
                 a, v, states, neglogp = model.step(obs, states, dones)

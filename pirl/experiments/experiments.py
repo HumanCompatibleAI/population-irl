@@ -1,4 +1,5 @@
 import collections
+from contextlib import contextmanager
 import functools
 import itertools
 import joblib
@@ -7,6 +8,8 @@ import os
 import os.path as osp
 
 from baselines import bench
+from baselines.common.vec_env.dummy_vec_env import DummyVecEnv
+from baselines.common.vec_env.subproc_vec_env import SubprocVecEnv
 import gym
 from joblib import Memory
 
@@ -21,15 +24,43 @@ def sanitize_env_name(env_name):
     return env_name.replace('/', '_')
 
 
-def _parallel_envs(env_name, parallel, base_seed, log_prefix, wrapper=None):
+def _is_vectorized(f):
+    if hasattr(f, 'func'):  # handle functools.partial
+        return _is_vectorized(f.func)
+    else:
+        return f.is_vectorized
+
+
+@contextmanager
+def _make_envs(env_name, vectorized, parallel, base_seed, log_prefix,
+               pre_wrapper=None, post_wrapper=None):
     def helper(i):
         env = gym.make(env_name)
         env = bench.Monitor(env, log_prefix + str(i), allow_early_resets=True)
-        if wrapper is not None:
-            env = wrapper(env)
+        if pre_wrapper is not None:
+            env = pre_wrapper(env)
         env.seed(base_seed + i)
         return env
-    return [functools.partial(helper, i) for i in range(parallel)]
+
+    env = None
+    try:
+        if vectorized:
+            env_fns = [functools.partial(helper, i) for i in range(parallel)]
+            if parallel and len(env_fns) > 1:
+                env = SubprocVecEnv(env_fns)
+            else:
+                env = DummyVecEnv(env_fns)
+        else:  # not vectorized
+            env = helper(0)
+
+        if post_wrapper is not None:
+            # note post_wrapper may be called with Env or VecEnv
+            env = post_wrapper(env)
+
+        yield env
+    finally:
+        if env is not None:
+            env.close()
 
 
 def __train_policy(rl, discount, env_name, parallel, seed, log_dir):
@@ -38,15 +69,15 @@ def __train_policy(rl, discount, env_name, parallel, seed, log_dir):
     os.makedirs(mon_dir, exist_ok=True)
 
     train_seed = utils.create_seed(seed + 'train')
-    env_fns = _parallel_envs(env_name, parallel, train_seed,
-                             log_prefix=osp.join(mon_dir, 'train'))
-    p = gen_policy(env_fns, discount=discount, log_dir=log_dir)
+    with _make_envs(env_name, _is_vectorized(gen_policy), parallel, train_seed,
+                    log_prefix=osp.join(mon_dir, 'train')) as envs:
+        p = gen_policy(envs, discount=discount, log_dir=log_dir)
     joblib.dump(p, osp.join(log_dir, 'policy.pkl'))  # save for debugging
 
     eval_seed = utils.create_seed(seed + 'eval')
-    env_fns = _parallel_envs(env_name, parallel, eval_seed,
-                             log_prefix=osp.join(mon_dir, 'eval'))
-    v = compute_value(env_fns, p, discount=1.00, seed=eval_seed)
+    with _make_envs(env_name, _is_vectorized(compute_value), parallel, eval_seed,
+                    log_prefix=osp.join(mon_dir, 'eval')) as envs:
+        v = compute_value(envs, p, discount=1.00, seed=eval_seed)
 
     return p, v
 # avoid name clash in pickling
@@ -72,11 +103,10 @@ def synthetic_data(env_name, rl, num_trajectories, parallel, seed,
     os.makedirs(mon_dir, exist_ok=True)
 
     data_seed = utils.create_seed(seed + 'data')
-    env_fns = _parallel_envs(env_name, parallel, data_seed,
-                             log_prefix=osp.join(mon_dir, 'synthetic'),
-                             wrapper=monitor)
-
-    samples = sample(env_fns, policy, num_trajectories, data_seed)
+    with _make_envs(env_name, _is_vectorized(sample), parallel, data_seed,
+                   log_prefix=osp.join(mon_dir, 'synthetic'),
+                   pre_wrapper=monitor) as envs:
+        samples = sample(envs, policy, num_trajectories, data_seed)
     return [(observations, actions) for (observations, actions, rewards) in samples]
 
 
@@ -122,6 +152,7 @@ def expert_trajs(experiment, out_dir, cfg, pool, video_every, seed):
 
     return trajectories, values
 
+
 @utils.log_errors
 def __run_population_irl(irl_name, train_envs, n, test_envs, m, experiment,
                          out_dir, parallel, trajectories, discount, seed):
@@ -129,18 +160,23 @@ def __run_population_irl(irl_name, train_envs, n, test_envs, m, experiment,
                  experiment, irl_name, m, n)
     log_dir = osp.join(out_dir, 'irl', irl_name, '{}:{}'.format(m, n))
     os.makedirs(log_dir)
-    train, finetune, _reward_wrapper, compute_value = config.POPULATION_IRL_ALGORITHMS[irl_name]
+    train, finetune, _rw, compute_value = config.POPULATION_IRL_ALGORITHMS[irl_name]
 
     irl_seed = utils.create_seed(seed + 'irlmeta')
     meta_log_dir = osp.join(log_dir, 'meta')
     meta_mon_dir = osp.join(meta_log_dir, 'mon')
     os.makedirs(meta_mon_dir)
-    meta_env_fns = {k: _parallel_envs(k, parallel, irl_seed,
-                                      log_prefix=osp.join(meta_mon_dir, k))
-                     for k in train_envs}
     meta_subset = {k: trajectories[k][:n] for k in train_envs}
-    metainit = train(meta_env_fns, meta_subset,
+    ctxs = {}
+    for env in train_envs:
+        log_prefix = osp.join(meta_mon_dir, sanitize_env_name(env) + '-')
+        ctxs[env] = _make_envs(env, _is_vectorized(train), parallel,
+                             irl_seed, log_prefix=log_prefix)
+    meta_envs = {k: v.__enter__() for k, v in ctxs.items()}
+    metainit = train(meta_envs, meta_subset,
                      discount=discount, log_dir=meta_log_dir)
+    for v in ctxs.values():
+        v.__exit__(None, None, None)
     joblib.dump(metainit, osp.join(log_dir, 'metainit.pkl'))  # for debugging
 
     finetune_seed = utils.create_seed(seed + 'irlfinetune')
@@ -152,16 +188,16 @@ def __run_population_irl(irl_name, train_envs, n, test_envs, m, experiment,
         finetune_log_dir = osp.join(log_dir, 'finetune', sanitize_env_name(env))
         os.makedirs(finetune_log_dir)
         finetune_mon_prefix = osp.join(finetune_log_dir, 'mon')
-        finetune_env_fns = _parallel_envs(env, parallel, finetune_seed,
-                                          log_prefix=finetune_mon_prefix)
-        finetune_subset = trajectories[env][:m]
-        r, p = finetune(metainit, finetune_env_fns, finetune_subset,
-                        discount=discount, log_dir=finetune_log_dir)
-        rewards[env], policies[env] = r, p
-
-        eval_seed = utils.create_seed(seed + 'eval')
-        values[env] = compute_value(finetune_env_fns, p,
-                                    discount=1.0, seed=eval_seed)
+        with _make_envs(env, _is_vectorized(finetune),parallel,
+                        finetune_seed, log_prefix=finetune_mon_prefix) as envs:
+            finetune_subset = trajectories[env][:m]
+            r, p = finetune(metainit, envs, finetune_subset,
+                            discount=discount, log_dir=finetune_log_dir)
+            rewards[env], policies[env] = r, p
+        with _make_envs(env, _is_vectorized(finetune), parallel,
+                        finetune_seed, log_prefix=finetune_mon_prefix) as envs:
+            eval_seed = utils.create_seed(seed + 'eval')
+            values[env] = compute_value(envs, p, discount=1.0, seed=eval_seed)
 
     # Save learnt reward & policy for debugging purposes
     joblib.dump(rewards, osp.join(log_dir, 'rewards.pkl'))
@@ -171,29 +207,31 @@ def __run_population_irl(irl_name, train_envs, n, test_envs, m, experiment,
 _run_population_irl = memory.cache(ignore=['out_dir'])(__run_population_irl)
 #_run_population_irl = __run_population_irl
 
+
 @utils.log_errors
 def __run_single_irl(irl_name, n, env_name, parallel,
                      experiment, out_dir, trajectories, discount, seed):
     logger.debug('%s: running IRL algo: %s [%s]', experiment, irl_name, n)
-    irl_algo, _reward_wrapper, compute_value = config.SINGLE_IRL_ALGORITHMS[irl_name]
+    irl_algo, _rw, compute_value = config.SINGLE_IRL_ALGORITHMS[irl_name]
     subset = trajectories[:n]
-    log_dir = osp.join(out_dir, 'irl', irl_name, env_name, '{}'.format(n))
+    log_dir = osp.join(out_dir, 'irl', irl_name,
+                       sanitize_env_name(env_name), '{}'.format(n))
     mon_dir = osp.join(log_dir, 'mon')
     os.makedirs(mon_dir)
 
     irl_seed = utils.create_seed(seed + 'irl')
-    env_fns = _parallel_envs(env_name, parallel, irl_seed,
-                             log_prefix=osp.join(mon_dir, 'train'))
-    reward, policy = irl_algo(env_fns, subset, discount=discount, log_dir=log_dir)
+    with _make_envs(env_name, _is_vectorized(irl_algo), parallel, irl_seed,
+                    log_prefix=osp.join(mon_dir, 'train')) as envs:
+        reward, policy = irl_algo(envs, subset, discount=discount, log_dir=log_dir)
 
     # Save learnt reward & policy for debugging purposes
     joblib.dump(reward, osp.join(log_dir, 'reward.pkl'))
     joblib.dump(policy, osp.join(log_dir, 'policy.pkl'))
 
     eval_seed = utils.create_seed(seed + 'eval')
-    env_fns = _parallel_envs(env_name, parallel, eval_seed,
-                             log_prefix=osp.join(mon_dir, 'eval'))
-    value = compute_value(env_fns, policy, discount=1.00, seed=eval_seed)
+    with _make_envs(env_name, _is_vectorized(compute_value), parallel, eval_seed,
+                    log_prefix=osp.join(mon_dir, 'eval')) as envs:
+        value = compute_value(envs, policy, discount=1.00, seed=eval_seed)
 
     return reward, value
 _run_single_irl = memory.cache(ignore=['out_dir'])(__run_single_irl)
@@ -303,16 +341,16 @@ def _value(experiment, irl_name, rl_name, env_name, parallel,
     os.makedirs(mon_dir)
 
     train_seed = utils.create_seed(seed + 'eval_train')
-    env_fns = _parallel_envs(env_name, parallel, train_seed, wrapper=rw,
-                             log_prefix=osp.join(mon_dir, 'train'))
-    p = gen_policy(env_fns, discount=discount, log_dir=log_dir)
+    with _make_envs(env_name, _is_vectorized(gen_policy), parallel, train_seed,
+                    post_wrapper=rw, log_prefix=osp.join(mon_dir, 'train')) as envs:
+        p = gen_policy(envs, discount=discount, log_dir=log_dir)
 
     logger.debug('%s: reoptimized %s on %s, sampling to estimate value',
                  experiment, irl_name, env_name)
     eval_seed = utils.create_seed(seed + 'eval_eval')
-    env_fns = _parallel_envs(env_name, parallel, eval_seed,
-                             log_prefix=osp.join(mon_dir, 'eval'))
-    v = compute_value(env_fns, p, discount=1.00, seed=eval_seed)
+    with _make_envs(env_name, _is_vectorized(compute_value), parallel, eval_seed,
+                    log_prefix=osp.join(mon_dir, 'eval')) as envs:
+        v = compute_value(envs, p, discount=1.00, seed=eval_seed)
 
     return v
 

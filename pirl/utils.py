@@ -139,3 +139,12 @@ def nested_async_get(x, fn=lambda y: y):
         return fn(x.get())
     else:
         return fn(x)
+
+
+def vectorized(x):
+    '''Set an attribute to tell experiments pipeline whether to give
+       function vectorized inputs.'''
+    def helper(f):
+        f.is_vectorized = x
+        return f
+    return helper

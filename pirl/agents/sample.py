@@ -3,6 +3,10 @@ import numpy as np
 
 from baselines.common.vec_env import VecEnvWrapper
 
+from pirl.utils import vectorized
+
+
+@vectorized(True)
 def value(sample, envs, policy, discount, num_episodes=100, seed=0):
     '''Test policy saved in blog_dir on num_episodes in env.
         Return average reward.'''

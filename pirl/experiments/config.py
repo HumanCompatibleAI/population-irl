@@ -73,17 +73,17 @@ RL_ALGORITHMS = {
     'value_iteration': (
         agents.tabular.env_wrapper(agents.tabular.q_iteration_policy),
         agents.tabular.sample,
-        agents.tabular.value_in_env,
+        agents.tabular.value_in_mdp,
     ),
     'max_ent': (
         agents.tabular.env_wrapper(irl.tabular_maxent.max_ent_policy),
         agents.tabular.sample,
-        agents.tabular.value_in_env,
+        agents.tabular.value_in_mdp,
     ),
     'max_causal_ent': (
         agents.tabular.env_wrapper(irl.tabular_maxent.max_causal_ent_policy),
         agents.tabular.sample,
-        agents.tabular.value_in_env,
+        agents.tabular.value_in_mdp,
     ),
 }
 
@@ -96,8 +96,6 @@ ppo_value = functools.partial(agents.sample.value, ppo_sample)
 RL_ALGORITHMS['ppo_cts'] = (ppo_cts_pol(1e6), ppo_sample, ppo_value)
 RL_ALGORITHMS['ppo_cts_short'] = (ppo_cts_pol(1e5), ppo_sample, ppo_value)
 RL_ALGORITHMS['ppo_cts_shortest'] = (ppo_cts_pol(1e4), ppo_sample, ppo_value)
-RL_ALGORITHMS['ppo_cts_shortest_serial'] = (functools.partial(ppo_cts_pol(1e4), parallel=False),
-                                            ppo_sample, ppo_value)
 
 
 # IRL Algorithms
@@ -108,23 +106,22 @@ SINGLE_IRL_ALGORITHMS = {
     # Maximum Causal Entropy (Ziebart 2010)
     'mce': (irl.tabular_maxent.irl,
             agents.tabular.TabularRewardWrapper,
-            agents.tabular.value_in_env),
+            agents.tabular.value_in_mdp),
     'mce_quick': (functools.partial(irl.tabular_maxent.irl, num_iter=500),
                   agents.tabular.TabularRewardWrapper,
-                  agents.tabular.value_in_env),
+                  agents.tabular.value_in_mdp),
     # Maximum Entropy (Ziebart 2008)
     'me': (functools.partial(irl.tabular_maxent.irl, planner=irl.tabular_maxent.max_ent_policy),
            agents.tabular.TabularRewardWrapper,
-           agents.tabular.value_in_env),
+           agents.tabular.value_in_mdp),
 }
 
 AIRL_ALGORITHMS = {
     'airl_so': {},
     'airl_sa': dict(training_cfg={'state_only': False}),
-    'airl_so_serial': dict(training_cfg={'parallel': False}),
     'airl_random': dict(policy_cfg={'policy': irl.airl.GaussianPolicy}),
 }
-airl_reward = functools.partial(irl.airl.AIRLRewardWrapper, tf_cfg=TENSORFLOW)
+airl_reward = functools.partial(irl.airl.airl_reward_wrapper, tf_cfg=TENSORFLOW)
 airl_value = functools.partial(agents.sample.value,
                                functools.partial(irl.airl.sample, tf_cfg=TENSORFLOW))
 for k, kwargs in AIRL_ALGORITHMS.items():
@@ -166,7 +163,7 @@ def pop_maxent(**kwargs):
         functools.partial(irl.tabular_maxent.metalearn, **kwargs),
         functools.partial(irl.tabular_maxent.finetune, **kwargs),
         agents.tabular.TabularRewardWrapper,
-        agents.tabular.value_in_env
+        agents.tabular.value_in_mdp
     )
 for reg in range(-2,3):
     algo = pop_maxent(individual_reg = 10**reg)
@@ -224,7 +221,7 @@ EXPERIMENTS['dummy-continuous-test'] = {
     'discount': 0.99,
     'expert': 'ppo_cts_shortest',
     'eval': ['ppo_cts_shortest'],
-    'irl': ['airl_so_quick', 'airl_sa_quick', 'airl_random_quick'],
+    'irl': ['airl_so_quick'],# 'airl_sa_quick', 'airl_random_quick'],
     'trajectories': [10, 20],
 }
 EXPERIMENTS['dummy-continuous-test-medium'] = {
@@ -415,17 +412,6 @@ for n in [1, 4, 8, 16]:
         'irl': ['airl_so_quick'],
         'trajectories': [1000],
     }
-    EXPERIMENTS['parallel-cts-reacher-fast-serial-{}'.format(n)] = {
-        'environments': [
-            'Reacher-v2',
-        ],
-        'parallel_rollouts': n,
-        'discount': 0.99,
-        'expert': 'ppo_cts',
-        'eval': [],
-        'irl': ['airl_so_serial_quick'],
-        'trajectories': [1000],
-    }
     EXPERIMENTS['parallel-cts-reacher-fast-rl-{}'.format(n)] = {
         'environments': [
             'Reacher-v2',
@@ -437,17 +423,6 @@ for n in [1, 4, 8, 16]:
         'irl': [],
         'trajectories': [10],
     }
-    EXPERIMENTS['parallel-cts-reacher-fast-rl-serial-{}'.format(n)] = {
-        'environments': [
-            'Reacher-v2',
-        ],
-        'parallel_rollouts': n,
-        'discount': 0.99,
-        'expert': 'ppo_cts_shortest_serial',
-        'eval': [],
-        'irl': [],
-        'trajectories': [10],
-    }
     EXPERIMENTS['parallel-cts-humanoid-fast-rl-{}'.format(n)] = {
         'environments': [
             'Humanoid-v2',
@@ -455,17 +430,6 @@ for n in [1, 4, 8, 16]:
         'parallel_rollouts': n,
         'discount': 0.99,
         'expert': 'ppo_cts_shortest',
-        'eval': [],
-        'irl': [],
-        'trajectories': [10],
-    }
-    EXPERIMENTS['parallel-cts-humanoid-fast-rl-serial-{}'.format(n)] = {
-        'environments': [
-            'Humanoid-v2',
-        ],
-        'parallel_rollouts': n,
-        'discount': 0.99,
-        'expert': 'ppo_cts_shortest_serial',
         'eval': [],
         'irl': [],
         'trajectories': [10],
