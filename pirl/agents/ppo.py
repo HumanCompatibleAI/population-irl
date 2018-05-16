@@ -3,6 +3,7 @@
 from collections import deque
 import logging
 import joblib
+import math
 import os
 import os.path as osp
 import pickle
@@ -380,7 +381,11 @@ def train_continuous(venv, discount, log_dir, tf_config, num_timesteps, norm=Tru
 
                 checkpoint_fname = osp.join(checkpoint_dir, '{:05}'.format(update))
                 joblib.dump(policy, checkpoint_fname)
-                if best_mean_reward is None or mean_reward > best_mean_reward:
+
+                valid = math.isfinite(mean_reward)
+                improvement = (best_mean_reward is None
+                               or mean_reward > best_mean_reward)
+                if valid and improvement:
                     best_checkpoint = checkpoint_fname
                     blogger.log("Updating model, mean reward {} -> {}".format(
                                 best_mean_reward, mean_reward))
