@@ -182,15 +182,23 @@ POPULATION_IRL_ALGORITHMS['mcep_reg0'] = pop_maxent(individual_reg=0)
 POPULATION_IRL_ALGORITHMS['mcep_shortest_reg0'] = pop_maxent(individual_reg=0, num_iter=500)
 
 AIRLP_ALGORITHMS = {
-    'so': dict(),
-    'so_shortest': dict(training_cfg={'n_itr': 2}, outer_itr=2),
+    # 3-tuple with elements:
+    # - common
+    # - metalearn only
+    # - finetune only
+    'so': (dict(), dict(), dict()),
+    'so_short': (dict(outer_itr=100), dict(), dict()),
+    'so_10fine': (dict(), dict(), dict(training_cfg={'n_itr': 10})),
+    'so_short_10fine': (dict(outer_itr=100), dict(), dict(training_cfg={'n_itr': 10})),
+    'so_shortest': (dict(training_cfg={'n_itr': 2}, outer_itr=2), dict(), dict()),
 }
 for lr in range(1, 4):
-    AIRLP_ALGORITHMS['so_lr1e-{}'.format(lr)] = dict(lr=10 ** (-lr))
-AIRLP_ALGORITHMS
-for k, kwargs in AIRLP_ALGORITHMS.items():
-    metalearn_fn = functools.partial(irl.airl.metalearn, tf_cfg=TENSORFLOW, **kwargs)
-    finetune_fn = functools.partial(irl.airl.finetune, tf_cfg=TENSORFLOW, **kwargs)
+    AIRLP_ALGORITHMS['so_lr1e-{}'.format(lr)] = (dict(lr=10 ** (-lr)), dict(), dict())
+for k, (common, meta, fine) in AIRLP_ALGORITHMS.items():
+    meta = dict(meta, **common)
+    fine = dict(fine, **common)
+    metalearn_fn = functools.partial(irl.airl.metalearn, tf_cfg=TENSORFLOW, **meta)
+    finetune_fn = functools.partial(irl.airl.finetune, tf_cfg=TENSORFLOW, **fine)
     entry = (metalearn_fn, finetune_fn, airl_reward, airl_value)
     POPULATION_IRL_ALGORITHMS['airlp_{}'.format(k)] = entry
 
@@ -244,7 +252,19 @@ EXPERIMENTS['dummy-continuous-test'] = {
     'discount': 0.99,
     'expert': 'ppo_cts_shortest',
     'eval': ['ppo_cts_shortest'],
-    'irl': ['airl_so_shortest', 'airl_sa_shortest', 'airl_random_shortest'],
+    'irl': ['airl_so_shortest', 'airl_random_shortest'],
+    'trajectories': [10, 20],
+}
+EXPERIMENTS['few-dummy-continuous-test'] = {
+    'train_environments': ['pirl/Reacher-fixed-hidden-goal-seed0-v0'.format(i)
+                           for i in range(0, 2)],
+    'test_environments': ['pirl/Reacher-fixed-hidden-goal-seed0-v0'.format(i)
+                          for i in range(1, 3)],
+    'parallel_rollouts': 4,
+    'discount': 0.99,
+    'expert': 'ppo_cts_shortest',
+    'eval': ['ppo_cts_shortest'],
+    'irl': ['airl_so_shortest', 'airlp_so_shortest'],
     'trajectories': [10, 20],
 }
 EXPERIMENTS['dummy-continuous-test-medium'] = {
@@ -390,7 +410,7 @@ EXPERIMENTS['billiards'] = {
     'irl': ['airl_so'],
     'trajectories': [1000],
 }
-EXPERIMENTS['mountain-car'] = {
+EXPERIMENTS['mountain-car-single'] = {
     'environments': ['pirl/MountainCarContinuous-{}-v0'.format(side)
                      for side in ['left', 'right']],
     'parallel_rollouts': 4,
@@ -398,8 +418,8 @@ EXPERIMENTS['mountain-car'] = {
     # simple environment, small number of iterations sufficient to converge
     'expert': 'ppo_cts_short',
     'eval': ['ppo_cts_short'],
-    'irl': ['airl_so', 'airl_sa', 'airl_random'],
-    'trajectories': [5, 10, 50, 100, 1000],
+    'irl': ['airl_so_short', 'airl_sa_short', 'airl_random_short'],
+    'trajectories': [1, 2, 5, 10, 50, 100],
 }
 EXPERIMENTS['reacher-env-comparisons'] = {
     'environments': ['Reacher-v2', 'pirl/Reacher-baseline-seed0-v0',
@@ -435,6 +455,18 @@ EXPERIMENTS['dummy-reacher-metalearning'] = {
     'irl': ['airl_so_shortest', 'airlp_so_shortest'],
     'train_trajectories': [1000],
     'test_trajectories': [5],
+}
+EXPERIMENTS['mountain-car-meta'] = {
+    'environments': ['pirl/MountainCarContinuous-{}-v0'.format(side)
+                     for side in ['left', 'right']],
+    'parallel_rollouts': 4,
+    'discount': 0.99,
+    # simple environment, small number of iterations sufficient to converge
+    'expert': 'ppo_cts_short',
+    'eval': ['ppo_cts_short'],
+    'irl': [#'airl_so_short', 'airl_sa_short', 'airl_random_short',
+            'airlp_so_short', 'airlp_so_short_10fine'],
+    'trajectories': [1, 2, 5, 10, 50, 100],
 }
 
 # Test of RL parallelism

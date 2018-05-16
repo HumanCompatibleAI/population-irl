@@ -154,16 +154,15 @@ def expert_trajs(experiment, out_dir, cfg, pool, video_every, seed):
 
 
 @utils.log_errors
-def __run_population_irl(irl_name, train_envs, n, test_envs, m, experiment,
+def __run_population_irl(irl_name, train_envs, n, test_envs, ms, experiment,
                          out_dir, parallel, trajectories, discount, seed):
-    logger.debug('%s: running IRL algo: %s [%s/%s]',
-                 experiment, irl_name, m, n)
-    log_dir = osp.join(out_dir, 'irl', irl_name, '{}:{}'.format(m, n))
-    os.makedirs(log_dir)
+    logger.debug('%s: running IRL algo: %s (meta=%s / finetune=%s)',
+                 experiment, irl_name, n, ms)
+    log_dir = osp.join(out_dir, 'irl', irl_name)
     train, finetune, _rw, compute_value = config.POPULATION_IRL_ALGORITHMS[irl_name]
 
     irl_seed = utils.create_seed(seed + 'irlmeta')
-    meta_log_dir = osp.join(log_dir, 'meta')
+    meta_log_dir = osp.join(log_dir, 'meta:{}'.format(n))
     meta_mon_dir = osp.join(meta_log_dir, 'mon')
     os.makedirs(meta_mon_dir)
     meta_subset = {k: trajectories[k][:n] for k in train_envs}
@@ -184,20 +183,25 @@ def __run_population_irl(irl_name, train_envs, n, test_envs, m, experiment,
     rewards = collections.OrderedDict()
     policies = collections.OrderedDict()
     values = collections.OrderedDict()
-    for env in test_envs:
-        finetune_log_dir = osp.join(log_dir, 'finetune', sanitize_env_name(env))
-        os.makedirs(finetune_log_dir)
-        finetune_mon_prefix = osp.join(finetune_log_dir, 'mon')
-        with _make_envs(env, _is_vectorized(finetune),parallel,
-                        finetune_seed, log_prefix=finetune_mon_prefix) as envs:
-            finetune_subset = trajectories[env][:m]
-            r, p = finetune(metainit, envs, finetune_subset,
-                            discount=discount, log_dir=finetune_log_dir)
-            rewards[env], policies[env] = r, p
-        with _make_envs(env, _is_vectorized(finetune), parallel,
-                        finetune_seed, log_prefix=finetune_mon_prefix) as envs:
-            eval_seed = utils.create_seed(seed + 'eval')
-            values[env] = compute_value(envs, p, discount=1.0, seed=eval_seed)
+    for m in ms:
+        #TODO: parallelize
+        for env in test_envs:
+            finetune_log_dir = osp.join(meta_log_dir, 'finetune:{}'.format(m),
+                                        sanitize_env_name(env))
+            os.makedirs(finetune_log_dir)
+            finetune_mon_prefix = osp.join(finetune_log_dir, 'mon')
+            with _make_envs(env, _is_vectorized(finetune),parallel,
+                            finetune_seed, log_prefix=finetune_mon_prefix) as envs:
+                finetune_subset = trajectories[env][:m]
+                r, p = finetune(metainit, envs, finetune_subset,
+                                discount=discount, log_dir=finetune_log_dir)
+                setdef(rewards, m)[env] = r
+                setdef(policies, m)[env] = p
+            with _make_envs(env, _is_vectorized(finetune), parallel,
+                            finetune_seed, log_prefix=finetune_mon_prefix) as envs:
+                eval_seed = utils.create_seed(seed + 'eval')
+                v = compute_value(envs, p, discount=1.0, seed=eval_seed)
+                setdef(values, m)[env] = v
 
     # Save learnt reward & policy for debugging purposes
     joblib.dump(rewards, osp.join(log_dir, 'rewards.pkl'))
@@ -262,19 +266,19 @@ def run_irl(experiment, out_dir, cfg, pool, trajectories, seed):
 
     if 'trajectories' in cfg:
         sin_traj = cfg['trajectories']
-        pop_traj = [(n, n) for n in cfg['trajectories']]
+        pop_traj = collections.OrderedDict([(n, [n]) for n in cfg['trajectories']])
     else:
         sin_traj = cfg['test_trajectories']
-        pop_traj = list(itertools.product(cfg['train_trajectories'],
-                                          cfg['test_trajectories']))
-        pop_traj = [(n, m) for (n, m) in pop_traj if m <= n]
+        pop_traj = collections.OrderedDict()
+        for n in cfg['train_trajectories']:
+            pop_traj[n] = [m for m in cfg['test_trajectories'] if m <= n]
     test_envs = cfg.get('test_environments', cfg.get('environments'))
     sin_res = {}
     for irl_name, m, env in itertools.product(cfg['irl'], sin_traj, test_envs):
         if irl_name in config.SINGLE_IRL_ALGORITHMS:
             if m == 0:
                 continue
-            kwds = kwargs.copy()
+            kwds = dict(kwargs)
             kwds.update({
                 'irl_name': irl_name,
                 'n': m,
@@ -286,40 +290,39 @@ def run_irl(experiment, out_dir, cfg, pool, trajectories, seed):
 
     pop_res = {}
     train_envs = cfg.get('train_environments', cfg.get('environments'))
-    for irl_name, (n, m), env in itertools.product(cfg['irl'], pop_traj, test_envs):
+    for irl_name, n in itertools.product(cfg['irl'], pop_traj.keys()):
         if irl_name in config.POPULATION_IRL_ALGORITHMS:
-            kwds = kwargs.copy()
+            kwds = dict(kwargs)
             kwds.update({
                 'irl_name': irl_name,
                 'n': n,
-                'm': m,
+                'ms': pop_traj[n],
                 'train_envs': train_envs,
                 'test_envs': test_envs,
                 'trajectories': trajectories,
             })
             delayed = pool.apply_async(_run_population_irl, kwds=kwds)
-            setdef(setdef(setdef(pop_res, irl_name), n), m)[env] = delayed
+            setdef(pop_res, irl_name)[n] = delayed
 
     rewards = collections.OrderedDict()
     values = collections.OrderedDict()
 
     sin_res = utils.nested_async_get(sin_res)
     for irl_name, d in sin_res.items():
-        for n, m in pop_traj:
-            if m == 0:
-                continue
-            d2 = d[m]
-            for env, (r, v) in d2.items():
-                setdef(setdef(setdef(rewards, irl_name), n), m)[env] = r
-                setdef(setdef(setdef(values, irl_name), n), m)[env] = v
+        for n, ms in pop_traj.items():
+            for m in ms:
+                if m == 0:
+                    continue
+                d2 = d[m]
+                for env, (r, v) in d2.items():
+                    setdef(setdef(setdef(rewards, irl_name), n), m)[env] = r
+                    setdef(setdef(setdef(values, irl_name), n), m)[env] = v
 
     pop_res = utils.nested_async_get(pop_res)
     for irl_name, d in pop_res.items():
-        for n, d2 in d.items():
-            for m, d3 in d2.items():
-                for env, (r, v) in d3.items():
-                    setdef(setdef(setdef(rewards, irl_name), n), m)[env] = r[env]
-                    setdef(setdef(setdef(values, irl_name), n), m)[env] = v[env]
+        for n, (dr, dv) in d.items():
+            setdef(rewards, irl_name)[n] = dr
+            setdef(values, irl_name)[n] = dv
 
     return rewards, values
 
@@ -394,8 +397,9 @@ def value(experiment, out_dir, cfg, pool, rewards, seed):
                 res_by_n[n] = res_by_m
             value[irl_name] = res_by_n
 
-        log_dir = osp.join(out_dir, 'eval', 'gt')
         for env_name in cfg.get('test_environments', cfg.get('environments')):
+            log_dir = osp.join(out_dir, 'eval', sanitize_env_name(env_name),
+                               'gt', rl)
             args = (rl, discount, env_name, parallel, seed, log_dir)
             delayed = pool.apply_async(_train_policy, args)
             ground_truth.setdefault(env_name, {})[rl] = delayed

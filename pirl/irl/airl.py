@@ -9,6 +9,7 @@ import numpy as np
 import tensorflow as tf
 
 from rllab.envs.base import Env, EnvSpec, Step
+import rllab.misc.logger as rl_logger
 from sandbox.rocky.tf.envs.base import TfEnv, to_tf_space
 from rllab.baselines.linear_feature_baseline import LinearFeatureBaseline
 from rllab.envs.gym_env import convert_gym_space
@@ -214,8 +215,8 @@ def irl(venv, trajectories, discount, log_dir, tf_cfg, model_cfg={},
 
 
 @vectorized(True)
-def metalearn(venvs, trajectories, discount, log_dir, tf_cfg,
-              outer_itr=1000, lr=1e-2, model_cfg={}, policy_cfg=None, training_cfg={}):
+def metalearn(venvs, trajectories, discount, log_dir, *, tf_cfg, outer_itr=1000,
+              lr=1e-2, model_cfg={}, policy_cfg=None, training_cfg={}):
     #TODO: seeds
     envs = {k: TfEnv(VecGymEnv(v)) for k, v in venvs.items()}
     env_spec = list(envs.values())[0].spec
@@ -240,6 +241,8 @@ def metalearn(venvs, trajectories, discount, log_dir, tf_cfg,
             'max_path_length': 500,
             'irl_model_wt': 1.0,
             'entropy_weight': 0.1,
+            # paths substantially increase storage requirements
+            'store_paths': False,
         }
         training_kwargs.update(training_cfg)
         irl_model = AIRL(env_spec=env_spec, **model_kwargs)
@@ -252,7 +255,6 @@ def metalearn(venvs, trajectories, discount, log_dir, tf_cfg,
                 irl_model=irl_model,
                 discount=discount,
                 sampler_args=dict(n_envs=num_envs),
-                store_paths=True,
                 zero_environment_reward=True,
                 baseline=LinearFeatureBaseline(env_spec=env_spec),
                 **training_kwargs
@@ -262,20 +264,21 @@ def metalearn(venvs, trajectories, discount, log_dir, tf_cfg,
                 sess.run(tf.global_variables_initializer())
                 meta_reward_params = irl_model.get_params()
                 for i in range(outer_itr):
-                    task = random.choice(tasks)
-                    irl_model.set_demos(experts[task])
-                    algos[task].init_irl_params = meta_reward_params
-                    algos[task].train()
+                    with rl_logger.prefix('outer itr {} | '.format(i)):
+                        task = random.choice(tasks)
+                        irl_model.set_demos(experts[task])
+                        algos[task].init_irl_params = meta_reward_params
+                        algos[task].train()
 
-                    # {meta,task}_reward_params are lists of NumPy arrays
-                    task_reward_params = irl_model.get_params()
-                    assert len(task_reward_params) == len(meta_reward_params)
-                    for i in range(len(task_reward_params)):
-                        meta, task = meta_reward_params[i], task_reward_params[i]
-                        # Reptile update: meta <- meta + lr * (task - meta)
-                        #TODO: use Adam optimizer?
-                        meta_reward_params[i] = (1 - lr) * meta + lr * task
-                    irl_model.set_params(meta_reward_params)
+                        # {meta,task}_reward_params are lists of NumPy arrays
+                        task_reward_params = irl_model.get_params()
+                        assert len(task_reward_params) == len(meta_reward_params)
+                        for i in range(len(task_reward_params)):
+                            meta, task = meta_reward_params[i], task_reward_params[i]
+                            # Reptile update: meta <- meta + lr * (task - meta)
+                            #TODO: use Adam optimizer?
+                            meta_reward_params[i] = (1 - lr) * meta + lr * task
+                        irl_model.set_params(meta_reward_params)
 
                 # Side-effect: forces policy to cache all parameters.
                 # This ensures they are saved/restored during pickling.
@@ -295,6 +298,9 @@ def finetune(metainit, *args, **kwargs):
     for k in metalearn_only:
         if k in kwargs:
             del kwargs[k]
+    training_cfg = kwargs.get('training_cfg', {})
+    training_cfg.setdefault('n_itr', 100)
+    kwargs['training_cfg'] = training_cfg
     return irl(*args, **kwargs, warmstart=metainit)
 
 
