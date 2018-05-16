@@ -464,9 +464,10 @@ EXPERIMENTS['mountain-car-meta'] = {
     # simple environment, small number of iterations sufficient to converge
     'expert': 'ppo_cts_short',
     'eval': ['ppo_cts_short'],
-    'irl': [#'airl_so_short', 'airl_sa_short', 'airl_random_short',
+    'irl': ['airl_so_short', 'airl_sa_short', 'airl_random_short',
             'airlp_so_short', 'airlp_so_short_10fine'],
-    'trajectories': [1, 2, 5, 10, 50, 100],
+    'train_trajectories': [100],
+    'test_trajectories': [1, 2, 5, 10, 50, 100],
 }
 
 # Test of RL parallelism
