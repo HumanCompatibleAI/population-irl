@@ -138,10 +138,11 @@ for k, kwargs in AIRL_ALGORITHMS.items():
     SINGLE_IRL_ALGORITHMS['airl_{}'.format(k)] = (irl_fn, airl_reward, airl_value)
 
     for k2, v in {'short': 100, 'shortest': 10}.items():
-        training_cfg = kwargs.get('training_cfg', {})
+        kwds = dict(kwargs)
+        training_cfg = kwds.get('training_cfg', dict())
         training_cfg['n_itr'] = v
-        kwargs['training_cfg'] = training_cfg
-        irl_fn = functools.partial(irl.airl.irl, tf_cfg=TENSORFLOW, **kwargs)
+        kwds['training_cfg'] = training_cfg
+        irl_fn = functools.partial(irl.airl.irl, tf_cfg=TENSORFLOW, **kwds)
         SINGLE_IRL_ALGORITHMS['airl_{}_{}'.format(k, k2)] = (irl_fn, airl_reward, airl_value)
 
 ## Population IRL algorithms
