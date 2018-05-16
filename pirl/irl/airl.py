@@ -177,6 +177,8 @@ def irl(venv, trajectories, discount, log_dir, tf_cfg, model_cfg={},
             'max_path_length': 500,
             'irl_model_wt': 1.0,
             'entropy_weight': 0.1,
+            # paths substantially increase storage requirements
+            'store_paths': False,
         }
         training_kwargs.update(training_cfg)
         algo = IRLTRPO(
@@ -185,7 +187,6 @@ def irl(venv, trajectories, discount, log_dir, tf_cfg, model_cfg={},
             irl_model=irl_model,
             discount=discount,
             sampler_args=dict(n_envs=venv.num_envs),
-            store_paths=True,
             zero_environment_reward=True,
             baseline=LinearFeatureBaseline(env_spec=envs.spec),
             **training_kwargs
