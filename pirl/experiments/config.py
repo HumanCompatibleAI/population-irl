@@ -116,7 +116,7 @@ SINGLE_IRL_ALGORITHMS = {
     'mce': (irl.tabular_maxent.irl,
             agents.tabular.TabularRewardWrapper,
             agents.tabular.value_in_mdp),
-    'mce_quick': (functools.partial(irl.tabular_maxent.irl, num_iter=500),
+    'mce_shortest': (functools.partial(irl.tabular_maxent.irl, num_iter=500),
                   agents.tabular.TabularRewardWrapper,
                   agents.tabular.value_in_mdp),
     # Maximum Entropy (Ziebart 2008)
@@ -137,11 +137,12 @@ for k, kwargs in AIRL_ALGORITHMS.items():
     irl_fn = functools.partial(irl.airl.irl, tf_cfg=TENSORFLOW, **kwargs)
     SINGLE_IRL_ALGORITHMS['airl_{}'.format(k)] = (irl_fn, airl_reward, airl_value)
 
-    training_cfg = kwargs.get('training_cfg', {})
-    training_cfg['n_itr'] = 10
-    kwargs['training_cfg'] = training_cfg
-    irl_fn = functools.partial(irl.airl.irl, tf_cfg=TENSORFLOW, **kwargs)
-    SINGLE_IRL_ALGORITHMS['airl_{}_quick'.format(k)] = (irl_fn, airl_reward, airl_value)
+    for k2, v in {'short': 100, 'shortest': 10}.items():
+        training_cfg = kwargs.get('training_cfg', {})
+        training_cfg['n_itr'] = v
+        kwargs['training_cfg'] = training_cfg
+        irl_fn = functools.partial(irl.airl.irl, tf_cfg=TENSORFLOW, **kwargs)
+        SINGLE_IRL_ALGORITHMS['airl_{}_{}'.format(k, k2)] = (irl_fn, airl_reward, airl_value)
 
 ## Population IRL algorithms
 
@@ -178,11 +179,11 @@ for reg in range(-2,3):
     algo = pop_maxent(individual_reg = 10**reg)
     POPULATION_IRL_ALGORITHMS['mcep_reg1e{}'.format(reg)] = algo
 POPULATION_IRL_ALGORITHMS['mcep_reg0'] = pop_maxent(individual_reg=0)
-POPULATION_IRL_ALGORITHMS['mcep_quick_reg0'] = pop_maxent(individual_reg=0, num_iter=500)
+POPULATION_IRL_ALGORITHMS['mcep_shortest_reg0'] = pop_maxent(individual_reg=0, num_iter=500)
 
 AIRLP_ALGORITHMS = {
     'so': dict(),
-    'so_quick': dict(training_cfg={'n_itr': 2}, outer_itr=2),
+    'so_shortest': dict(training_cfg={'n_itr': 2}, outer_itr=2),
 }
 for lr in range(1, 4):
     AIRLP_ALGORITHMS['so_lr1e-{}'.format(lr)] = dict(lr=10 ** (-lr))
@@ -216,7 +217,7 @@ EXPERIMENTS['dummy-test'] = {
     'discount': 1.00,
     'expert': 'value_iteration',
     'eval': ['value_iteration'],
-    'irl': ['mcep_quick_reg0', 'mce_quick'],
+    'irl': ['mcep_shortest_reg0', 'mce_shortest'],
     'trajectories': [20, 10],
 }
 EXPERIMENTS['few-dummy-test'] = {
@@ -225,7 +226,7 @@ EXPERIMENTS['few-dummy-test'] = {
     'discount': 1.00,
     'expert': 'value_iteration',
     'eval': ['value_iteration'],
-    'irl': ['mce_quick', 'mce_quickc', 'mcep_quick_reg0'],
+    'irl': ['mce_shortest', 'mce_shortestc', 'mcep_shortest_reg0'],
     'train_trajectories': [20],
     'test_trajectories': [0, 1, 5],
 }
@@ -234,7 +235,7 @@ EXPERIMENTS['dummy-test-deterministic'] = {
     'discount': 1.00,
     'expert': 'value_iteration',
     'eval': ['value_iteration'],
-    'irl': ['mce_quick', 'mcep_quick_reg0'],
+    'irl': ['mce_shortest', 'mcep_shortest_reg0'],
     'trajectories': [20, 10],
 }
 EXPERIMENTS['dummy-continuous-test'] = {
@@ -243,7 +244,7 @@ EXPERIMENTS['dummy-continuous-test'] = {
     'discount': 0.99,
     'expert': 'ppo_cts_shortest',
     'eval': ['ppo_cts_shortest'],
-    'irl': ['airl_so_quick', 'airl_sa_quick', 'airl_random_quick'],
+    'irl': ['airl_so_shortest', 'airl_sa_shortest', 'airl_random_shortest'],
     'trajectories': [10, 20],
 }
 EXPERIMENTS['dummy-continuous-test-medium'] = {
@@ -348,9 +349,9 @@ EXPERIMENTS['continuous-baselines-classic'] = {
     ],
     'parallel_rollouts': 4,
     'discount': 0.99,
-    'expert': 'ppo_cts',
-    'eval': ['ppo_cts'],
-    'irl': ['airl_so', 'airl_random'],
+    'expert': 'ppo_cts_short',
+    'eval': ['ppo_cts_short'],
+    'irl': ['airl_so_short', 'airl_random_short'],
     'trajectories': [1000],
 }
 EXPERIMENTS['continuous-baselines-easy'] = {
@@ -420,7 +421,7 @@ EXPERIMENTS['dummy-reacher-metalearning'] = {
     'discount': 0.99,
     'expert': 'ppo_cts_shortest',
     'eval': ['ppo_cts_shortest'],
-    'irl': ['airl_so_quick', 'airlp_so_quick'],
+    'irl': ['airl_so_shortest', 'airlp_so_shortest'],
     'train_trajectories': [1000],
     'test_trajectories': [5],
 }
@@ -450,7 +451,7 @@ for n in [1, 4, 8, 16]:
         'discount': 0.99,
         'expert': 'ppo_cts',
         'eval': [],
-        'irl': ['airl_so_quick'],
+        'irl': ['airl_so_shortest'],
         'trajectories': [1000],
     }
     EXPERIMENTS['parallel-cts-reacher-{}'.format(n)] = {
@@ -472,7 +473,7 @@ for n in [1, 4, 8, 16]:
         'discount': 0.99,
         'expert': 'ppo_cts',
         'eval': [],
-        'irl': ['airl_so_quick'],
+        'irl': ['airl_so_shortest'],
         'trajectories': [1000],
     }
     EXPERIMENTS['parallel-cts-reacher-fast-rl-{}'.format(n)] = {
