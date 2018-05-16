@@ -390,6 +390,17 @@ EXPERIMENTS['billiards'] = {
     'irl': ['airl_so'],
     'trajectories': [1000],
 }
+EXPERIMENTS['mountain-car'] = {
+    'environments': ['pirl/MountainCarContinuous-{}-v0'.format(side)
+                     for side in ['left', 'right']],
+    'parallel_rollouts': 4,
+    'discount': 0.99,
+    # simple environment, small number of iterations sufficient to converge
+    'expert': 'ppo_cts_short',
+    'eval': ['ppo_cts_short'],
+    'irl': ['airl_so', 'airl_sa', 'airl_random'],
+    'trajectories': [5, 10, 50, 100, 1000],
+}
 EXPERIMENTS['reacher-env-comparisons'] = {
     'environments': ['Reacher-v2', 'pirl/Reacher-baseline-seed0-v0',
                      'pirl/Reacher-variable-hidden-goal-seed0-v0',

@@ -4,9 +4,10 @@ from gym.envs.registration import register
 from pirl.envs import gridworld, tabular_mdp
 from pirl.envs.gridworld import GridWorldMdpEnv
 from pirl.envs.tabular_mdp import TabularMdpEnv
-from pirl.envs.seaquest import SeaquestPopulationEnv
-from pirl.envs.billiards import BilliardsEnv
+from pirl.envs.mountain_car import ContinuousMountainCarPopulationEnv
 from pirl.envs.reacher import ReacherPopulationEnv
+from pirl.envs.billiards import BilliardsEnv
+from pirl.envs.seaquest import SeaquestPopulationEnv
 
 ### Gridworlds
 
@@ -86,33 +87,15 @@ for kind, cells in cfg.items():
             }
         )
 
-## Seaquest
-register(
-    id='pirl/SeaquestPopulation-v0',
-    entry_point='pirl.envs:SeaquestPopulationEnv',
-    max_episode_steps=100000,
-    kwargs={},
-)
-
-## Billiards
-billiard_params = [
-    (0, 1),
-    (1, 1),
-    (5, 2),
-    (-10, 1)
-]
-for seed in range(10):
-    for num_balls in range(1, len(billiard_params) + 1):
-        register(
-            id='pirl/Billiards{}-seed{}-v0'.format(num_balls, seed),
-            entry_point='pirl.envs:BilliardsEnv',
-            max_episode_steps=200,
-            kwargs={
-                'params': billiard_params,
-                'num_balls': num_balls,
-                'seed': seed,
-            },
-        )
+## MountainCar
+for name, sign in {'left': -1, 'right': 1}.items():
+    register(
+        id='pirl/MountainCarContinuous-{}-v0'.format(name),
+        entry_point='pirl.envs:ContinuousMountainCarPopulationEnv',
+        max_episode_steps=999,
+        reward_threshold=90.0,
+        kwargs={'side': sign},
+    )
 
 ## Reacher
 for seed in range(10):
@@ -151,3 +134,31 @@ for seed in range(10):
             'goal_state_access': False,
         },
     )
+
+## Billiards
+billiard_params = [
+    (0, 1),
+    (1, 1),
+    (5, 2),
+    (-10, 1)
+]
+for seed in range(10):
+    for num_balls in range(1, len(billiard_params) + 1):
+        register(
+            id='pirl/Billiards{}-seed{}-v0'.format(num_balls, seed),
+            entry_point='pirl.envs:BilliardsEnv',
+            max_episode_steps=200,
+            kwargs={
+                'params': billiard_params,
+                'num_balls': num_balls,
+                'seed': seed,
+            },
+        )
+
+## Seaquest
+register(
+    id='pirl/SeaquestPopulation-v0',
+    entry_point='pirl.envs:SeaquestPopulationEnv',
+    max_episode_steps=100000,
+    kwargs={},
+)

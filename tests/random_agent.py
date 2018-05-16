@@ -2,7 +2,8 @@ import argparse
 import time
 
 import gym
-from gym import logger, wrappers 
+import gym.wrappers as wrappers
+import gym.logger as logger
 
 from pirl import envs  # needed for side effect of registering environments
 
