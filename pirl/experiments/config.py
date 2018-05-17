@@ -8,6 +8,7 @@ import gym
 import tensorflow as tf
 
 from pirl import agents, envs, irl
+from pirl.utils import vectorized, is_vectorized
 
 # General
 PROJECT_DIR = osp.dirname(osp.dirname(osp.dirname(osp.realpath(__file__))))
@@ -206,9 +207,11 @@ for k, (common, meta, fine) in AIRLP_ALGORITHMS.items():
 
 def traditional_to_concat(fs):
     irl_algo, reward_wrapper, compute_value = fs
+    @vectorized(False)
     def metalearner(env_fns, trajectories, discount, log_dir):
         return list(itertools.chain(*trajectories.values()))
     @functools.wraps(irl_algo)
+    @vectorized(is_vectorized(irl_algo))
     def finetune(train_trajectories, env_fns, test_trajectories, **kwargs):
         concat_trajectories = train_trajectories + test_trajectories
         return irl_algo(env_fns, concat_trajectories, **kwargs)

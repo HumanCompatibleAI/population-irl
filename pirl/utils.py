@@ -148,3 +148,10 @@ def vectorized(x):
         f.is_vectorized = x
         return f
     return helper
+
+
+def is_vectorized(f):
+    if hasattr(f, 'func'):  # handle functools.partial
+        return is_vectorized(f.func)
+    else:
+        return f.is_vectorized
