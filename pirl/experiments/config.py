@@ -103,6 +103,7 @@ def ppo_cts_pol(num_timesteps):
 ppo_sample = functools.partial(agents.ppo.sample, tf_config=TENSORFLOW)
 ppo_value = functools.partial(agents.sample.value, ppo_sample)
 RL_ALGORITHMS['ppo_cts'] = (ppo_cts_pol(1e6), ppo_sample, ppo_value)
+RL_ALGORITHMS['ppo_cts_500k'] = (ppo_cts_pol(5e5), ppo_sample, ppo_value)
 RL_ALGORITHMS['ppo_cts_short'] = (ppo_cts_pol(1e5), ppo_sample, ppo_value)
 RL_ALGORITHMS['ppo_cts_shortest'] = (ppo_cts_pol(1e4), ppo_sample, ppo_value)
 
@@ -375,6 +376,15 @@ EXPERIMENTS['continuous-baselines-classic'] = {
     'irl': ['airl_so_short', 'airl_random_short'],
     'trajectories': [1000],
 }
+EXPERIMENTS['continuous-reacher'] = {
+    'environments': ['Reacher-v2'],
+    'parallel_rollouts': 4,
+    'discount': 0.99,
+    'expert': 'ppo_cts',
+    'eval': ['ppo_cts'],
+    'irl': ['airl_so', 'airl_random'],
+    'trajectories': [1000],
+}
 EXPERIMENTS['continuous-baselines-easy'] = {
     'environments': [
         'Reacher-v2',
@@ -412,7 +422,7 @@ EXPERIMENTS['billiards'] = {
     'trajectories': [1000],
 }
 EXPERIMENTS['mountain-car-single'] = {
-    'environments': ['pirl/MountainCarContinuous-{}-v0'.format(side)
+    'environments': ['pirl/MountainCarContinuous-{}-0-v0'.format(side)
                      for side in ['left', 'right']],
     'parallel_rollouts': 4,
     'discount': 0.99,
@@ -421,6 +431,17 @@ EXPERIMENTS['mountain-car-single'] = {
     'eval': ['ppo_cts_short'],
     'irl': ['airl_so_short', 'airl_sa_short', 'airl_random_short'],
     'trajectories': [1, 2, 5, 10, 50, 100],
+}
+EXPERIMENTS['mountain-car-vel'] = {
+    'environments': ['pirl/MountainCarContinuous-left-{}-v0'.format(vel)
+                     for vel in [0, 0.1, 1, 10]],
+    'parallel_rollouts': 4,
+    'discount': 0.99,
+    # simple environment, small number of iterations sufficient to converge
+    'expert': 'ppo_cts_short',
+    'eval': ['ppo_cts_short'],
+    'irl': ['airl_sa_short', 'airl_random_short'],
+    'trajectories': [1, 2, 5, 100],
 }
 EXPERIMENTS['reacher-env-comparisons'] = {
     'environments': ['Reacher-v2', 'pirl/Reacher-baseline-seed0-v0',
@@ -458,7 +479,7 @@ EXPERIMENTS['dummy-reacher-metalearning'] = {
     'test_trajectories': [5],
 }
 EXPERIMENTS['mountain-car-meta'] = {
-    'environments': ['pirl/MountainCarContinuous-{}-v0'.format(side)
+    'environments': ['pirl/MountainCarContinuous-{}-0-v0'.format(side)
                      for side in ['left', 'right']],
     'parallel_rollouts': 4,
     'discount': 0.99,
