@@ -143,9 +143,11 @@ def ray_get_nested_dict(ob, level=0):
 # Workaround: pretend we have more GPUs than we do!
 GPU_MULTIPLIER = 4
 
-def get_num_fake_gpus(max_gpu=1000):
-    real_gpus = ray.services._autodetect_num_gpus()
-    return min(real_gpus, max_gpu) * GPU_MULTIPLIER
+def get_num_fake_gpus(max_gpu=None):
+    gpus = ray.services._autodetect_num_gpus()
+    if max_gpu is not None:
+        gpus = min(gpus, max_gpu)
+    return gpus * GPU_MULTIPLIER
 
 def set_cuda_visible_devices():
     ids = ray.get_gpu_ids()

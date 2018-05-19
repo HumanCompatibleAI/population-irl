@@ -10,6 +10,8 @@ dependencies:
   - babel=2.5.3
   - backcall=0.1.0
   - bleach=1.5.0
+  - boto3=1.5.32
+  - botocore=1.8.46
   - bzip2=1.0.6
   - ca-certificates=2018.03.07
   - cairo=1.14.12
@@ -23,6 +25,7 @@ dependencies:
   - curl=7.59.0
   - cycler=0.10.0
   - dbus=1.13.2
+  - decorator=4.2.1
   - docutils=0.14
   - entrypoints=0.2.3
   - execnet=1.5.0
@@ -51,6 +54,7 @@ dependencies:
   - jasper=1.900.1
   - jedi=0.11.1
   - jinja2=2.10
+  - jmespath=0.9.3
   - jpeg=9b
   - jsonschema=2.6.0
   - jupyter=1.0.0
@@ -122,7 +126,6 @@ dependencies:
   - pytest-xdist=1.22.2
   - python=3.6.5
   - python-dateutil=2.7.2
-  - pytorch=0.3.1
   - pytz=2018.3
   - pyzmq=17.0.0
   - qt=5.9.4
@@ -130,6 +133,7 @@ dependencies:
   - readline=7.0
   - requests=2.18.4
   - rhash=1.3.5
+  - s3transfer=0.1.13
   - scipy=1.0.1
   - seaborn=0.8.1
   - send2trash=1.5.0
@@ -147,7 +151,6 @@ dependencies:
   - terminado=0.8.1
   - testpath=0.3.1
   - tk=8.6.7
-  - torchvision=0.2.0
   - tornado=5.0.1
   - traitlets=4.3.2
   - typing=3.6.4
@@ -161,18 +164,26 @@ dependencies:
   - zeromq=4.2.3
   - zlib=1.2.11
   - cuda90=1.0
+  - pytorch=0.3.1
+  - torchvision=0.2.0
   - pip:
+    - absl-py==0.1.13
     - git+git://github.com/AdamGleave/inverse_rl.git@master#egg=adversarial-irl
+    - astor==0.6.2
     - atari-py==0.1.1
-    - baselines==0.1.5
+    - git+git://github.com/openai/baselines.git@9cb7ec#egg=baselines
     - cached-property==1.4.0
     - click==6.7
     - cloudpickle==0.5.2
+    - colorama==0.3.9
     - cython==0.28.1
     - dill==0.2.7.1
-    - enum34==1.1.6
+    - flatbuffers==2015.12.22.1
+    - funcsigs==1.0.2
     - future==0.16.0
+    - gast==0.2.0
     - glfw==1.6.0
+    - grpcio==1.11.0
     - git+git://github.com/AdamGleave/gym.git@all-fixes#egg=gym
     - imageio==2.3.0
     - joblib==0.11
@@ -180,6 +191,8 @@ dependencies:
     - mujoco-py==1.50.1.56
     - portalocker==1.2.0
     - progressbar2==3.36.0
+    - psutil==5.4.5
+    - pyarrow==0.9.0
     - pygame==1.9.3
     - pyglet==1.3.1
     - pyopengl==3.1.0
@@ -187,8 +200,9 @@ dependencies:
     - python-utils==2.3.0
     - pyyaml==3.12
     - ray==0.4.0
+    - redis==2.10.6
     - git+git://github.com/AdamGleave/rllab.git@master#egg=rllab
     - https://storage.googleapis.com/tensorflow/linux/gpu/tensorflow_gpu-1.7.0-cp36-cp36m-linux_x86_64.whl
-    - torch==0.3.1
+    - termcolor==1.1.0
     - tqdm==4.19.9
     - zmq==0.0.0
