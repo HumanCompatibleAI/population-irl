@@ -147,7 +147,7 @@ SINGLE_IRL_ALGORITHMS = {
         train=functools.partial(irl.tabular_maxent.irl, num_iter=500),
         reward_wrapper=agents.tabular.TabularRewardWrapper,
         value=agents.tabular.value_in_mdp,
-        vectorized = False,
+        vectorized=False,
         uses_gpu=False,
     ),
     # Maximum Entropy (Ziebart 2008)
@@ -224,7 +224,7 @@ def pop_maxent(**kwargs):
         reward_wrapper=agents.tabular.TabularRewardWrapper,
         value=agents.tabular.value_in_mdp,
         vectorized=False,
-        uses_gpu=True,
+        uses_gpu=False,
     )
 for reg in range(-2,3):
     algo = pop_maxent(individual_reg = 10**reg)
