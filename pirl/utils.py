@@ -1,17 +1,21 @@
 import collections
-from decorator import decorate
 import logging
+import os
 import random
-import traceback
+import string
 import time
-from multiprocessing import pool
 
 from gym.utils import seeding
 import numpy as np
-import tensorflow as tf
-import torch
+import ray
+import ray.services
 
 logger = logging.getLogger('pirl.utils')
+
+# Gym environment helpers
+
+def sanitize_env_name(env_name):
+    return env_name.replace('/', '_')
 
 def getattr_unwrapped(env, attr):
     """Get attribute attr from env, or one of the nested environments.
@@ -31,17 +35,10 @@ def getattr_unwrapped(env, attr):
         else:
             return getattr_unwrapped(env.env, attr)
 
+# Randomness & sampling
+
 def create_seed(seed=None, max_bytes=8):
     return seeding.create_seed(seed, max_bytes=max_bytes)
-
-def random_seed(seed=None):
-    seed = create_seed(seed + 'main')
-    random.seed(seed)
-    np.random.seed(seeding._int_list_from_bigint(seed))
-    torch.manual_seed(seed)
-    torch.cuda.manual_seed(seed)
-    tf.set_random_seed(seed)
-    return seed
 
 
 def discrete_sample(prob, rng):
@@ -49,6 +46,13 @@ def discrete_sample(prob, rng):
        specifies class probabilities."""
     return (np.cumsum(prob) > rng.rand()).argmax()
 
+
+# Modified from https://stackoverflow.com/questions/2257441/random-string-generation-with-upper-case-letters-and-digits-in-python
+def id_generator(size=8):
+    choices = random.choices(string.ascii_uppercase + string.digits, k=size)
+    return ''.join(choices)
+
+# Logging
 
 class TrainingIterator(object):
     def __init__(self, num_iters, name=None,
@@ -102,56 +106,61 @@ class TrainingIterator(object):
     def record(self, k, v):
         self._vals.setdefault(k, collections.OrderedDict())[self._i] = v
 
+# Convenience functions for nested dictionaries
 
-def _log_errors(f, *args, **kwargs):
-    try:
-        return f(*args, **kwargs)
-    except Exception as e:
-        logger.error('Error in subprocess: %s', traceback.format_exc())
-        raise e
-
-
-def log_errors(f):
-    '''For use with multiprocessing. If an exception occurs, log it immediately
-       and then reraise it. This gives early warning in the event of an error
-       (by default, multiprocessing will wait on all other executions before
-        raising or in any way reporting the exception).'''
-    # Use the decorator module to preseve function signature.
-    # In Python 3.5+, functools.wraps also preserves the signature returned by
-    # inspect.signature, but not the (deprecated) inspect.getargspec.
-    # Unfortunately, some other modules e.g. joblib that we depend on still use
-    # the deprecated module.
-    return decorate(f, _log_errors)
+# Modified from:
+# https://stackoverflow.com/questions/25833613/python-safe-method-to-get-value-of-nested-dictionary
+def safeset(dic, keys, value):
+    for key in keys[:-1]:
+        dic = dic.setdefault(key, collections.OrderedDict())
+    dic[keys[-1]] = value
 
 
-def nested_async_get(x, fn=lambda y: y):
-    '''Invoked on a recursive data structure consisting of dicts and lists,
-       returns the same-shaped data structure mapping a leaf node x to
-       fn(x.get()) if x is an AsyncResult and fn(x) otherwise.'''
-    if isinstance(x, dict):
-        return {k: nested_async_get(v, fn) for k, v in x.items()}
-    elif isinstance(x, collections.OrderedDict):
-        res = [(k, nested_async_get(v, fn)) for k, v in x.items()]
-        return collections.OrderedDict(res)
-    elif isinstance(x, list):
-        return [nested_async_get(v, fn) for v in x]
-    elif isinstance(x, pool.AsyncResult):
-        return fn(x.get())
+# Modified from:
+# https://stackoverflow.com/questions/32935232/python-apply-function-to-values-in-nested-dictionary
+def safeget(dct, keys):
+    for key in keys:
+        return dct.setdefault(key, collections.OrderedDict())
+    return dct
+
+
+def map_nested_dict(ob, func, init=[], level=0):
+    if isinstance(ob, collections.Mapping) and (level == 0 or len(init) < level):
+        return {k: map_nested_dict(v, func, init + [k]) for k, v in ob.items()}
     else:
-        return fn(x)
+        return func(ob, init)
 
 
-def vectorized(x):
-    '''Set an attribute to tell experiments pipeline whether to give
-       function vectorized inputs.'''
-    def helper(f):
-        f.is_vectorized = x
-        return f
-    return helper
+def _get_nested_dict_helper(future, _keys):
+    return ray.get(future)
 
+def ray_get_nested_dict(ob, level=0):
+    return map_nested_dict(ob, _get_nested_dict_helper, level=level)
 
-def is_vectorized(f):
-    if hasattr(f, 'func'):  # handle functools.partial
-        return is_vectorized(f.func)
+# GPU Management
+
+# Ray does not support fractional GPU resources (issue #402)
+# Workaround: pretend we have more GPUs than we do!
+GPU_MULTIPLIER = 4
+
+def get_num_fake_gpus(max_gpu=1000):
+    real_gpus = ray.services._autodetect_num_gpus()
+    return min(real_gpus, max_gpu) * GPU_MULTIPLIER
+
+def set_cuda_visible_devices():
+    ids = ray.get_gpu_ids()
+    # Fractional allocation across GPUs won't work reliably
+    # e.g. what if we need a half, and two GPUs are both 3/4's full
+    # Let's just handle the simple case of needing 1/GPU_MULTIPLIER of a GPU.
+    if len(ids) == 0:
+        # Algorithm didn't ask for any GPUs? OK, it won't get any.
+        gpus = ''
+    elif len(ids) == 1:
+        # Algorithm asked for one GPU. Map it onto the appropriate one.
+        gpus = str(ids[0] % GPU_MULTIPLIER)
     else:
-        return f.is_vectorized
+        # Don't support asking for more than one fraction of the GPU.
+        # The issue is Ray isn't guaranteed to allocate us slices from the
+        # same GPU.
+        raise ValueError("Requested task with >1 GPU (currently unsupported).")
+    os.environ['CUDA_VISIBLE_DEVICES'] = gpus

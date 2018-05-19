@@ -1,25 +1,23 @@
+from baselines.common.vec_env import VecEnvWrapper
 import gym
 import numpy as np
 
-from baselines.common.vec_env import VecEnvWrapper
-
-from pirl.utils import vectorized
-
-
-@vectorized(True)
-def value(sample, envs, policy, discount, num_episodes=100, seed=0):
-    '''Test policy saved in blog_dir on num_episodes in env.
-        Return average reward.'''
-    # TODO: does this belong in PPO or a more general class?
-    trajectories = sample(envs, policy, num_episodes, seed)
+def _summary_stats(trajectories, discount):
     rewards = [r for (s, a, r) in trajectories]
     horizon = max([len(s) for (s, a, r) in trajectories])
     weights = np.cumprod([1] + [discount] * (horizon - 1))
     total_reward = [np.dot(r, weights[:len(r)]) for r in rewards]
 
     mean = np.mean(total_reward)
-    se = np.std(total_reward, ddof=1) / np.sqrt(num_episodes)
+    se = np.std(total_reward, ddof=1) / np.sqrt(len(trajectories))
     return mean, se
+
+
+def value(sample, envs, policy, discount, num_episodes=100, seed=0):
+    '''Test policy saved in blog_dir on num_episodes in env.
+        Return average reward.'''
+    trajs = sample(envs, policy, num_episodes, seed)
+    return _summary_stats(trajs, discount)
 
 
 class SampleMonitor(gym.Wrapper):

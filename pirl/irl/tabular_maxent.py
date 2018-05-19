@@ -13,7 +13,7 @@ from scipy.special import logsumexp as sp_lse
 import torch
 from torch.autograd import Variable
 
-from pirl.utils import getattr_unwrapped, vectorized, TrainingIterator
+from pirl.utils import getattr_unwrapped, TrainingIterator
 
 #TODO: fully torchize?
 
@@ -89,7 +89,6 @@ default_scheduler = {
     ),
 }
 
-@vectorized(False)
 def irl(mdp, trajectories, discount, log_dir=None, demo_counts=None,
         horizon=None, planner=max_causal_ent_policy,
         regularize=None, common_reward=None, optimizer=None, scheduler=None,
@@ -178,7 +177,6 @@ def irl(mdp, trajectories, discount, log_dir=None, demo_counts=None,
     return reward.data.numpy(), pol
 
 
-@vectorized(False)
 def metalearn(mdps, trajectories, discount, individual_reg=None, **kwargs):
     """
     Args:
@@ -206,7 +204,6 @@ def metalearn(mdps, trajectories, discount, individual_reg=None, **kwargs):
     return mean_reward
 
 
-@vectorized(False)
 def finetune(mean_reward, env_fns, trajectories, discount, log_dir=None, individual_reg=1e-2, **kwargs):
     """First argument is result of metalearn; individual_reg is regularization
        factor; remaining arguments are passed-through to irl."""

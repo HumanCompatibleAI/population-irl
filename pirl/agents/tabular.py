@@ -1,10 +1,8 @@
-import functools
-
 import gym
 from gym.utils import seeding
 import numpy as np
 
-from pirl.utils import discrete_sample, getattr_unwrapped, vectorized
+from pirl.utils import discrete_sample, getattr_unwrapped
 
 def q_iteration(transition, reward, horizon, discount,
                 policy=None, max_error=1e-3):
@@ -70,25 +68,23 @@ def get_policy(Q):
     return pi
 
 
-def q_iteration_policy(T, R, H, discount):
+def q_iteration_policy(T, R, H, discount=None):
     Q, info = q_iteration(T, R, H, discount)
     return get_policy(Q)
 
 
-def env_wrapper(f):
-    @vectorized(False)
-    @functools.wraps(f)
-    def helper(mdp, log_dir=None, reward=None, *args, **kwargs):
+def policy_env_wrapper(f):
+    # TODO: remove None defaults (workaround Ray issue #998)
+    def helper(mdp, discount=None, log_dir=None, reward=None):
         # log_dir is not used but is needed to match function signature.
         T = getattr_unwrapped(mdp, 'transition')
         if reward is None:
             reward = getattr_unwrapped(mdp, 'reward')
         H = getattr_unwrapped(mdp, '_max_episode_steps')
-        return f(T, reward, H, *args, **kwargs)
+        return f(T, reward, H, discount)
     return helper
 
 
-@vectorized(False)
 def value_in_mdp(mdp, policy, discount, seed):
     '''Exact value of a tabular policy in environment mdp with given discount.
        Returns (value, 0), where 0 represents the standard error.'''
@@ -102,7 +98,6 @@ def value_in_mdp(mdp, policy, discount, seed):
     return value, 0
 
 
-@vectorized(False)  # step is cheap so no point parallelizing
 def sample(env, policy, num_episodes, seed):
     # seed to make results reproducible
     rng, _ = seeding.np_random(seed)

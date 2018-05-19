@@ -26,8 +26,6 @@ from airl.models.airl_state import AIRL
 from airl.utils.log_utils import rllab_logdir
 
 from pirl.agents.sample import SampleVecMonitor
-from pirl.utils import vectorized
-
 
 class VecInfo(VecEnvWrapper):
     def reset(self):
@@ -151,7 +149,6 @@ def _convert_trajectories(trajs):
             for obs, actions in trajs]
 
 
-@vectorized(True)
 def irl(venv, trajectories, discount, log_dir, tf_cfg, model_cfg={},
         policy_cfg=None, training_cfg={}, warmstart=None):
     envs = VecGymEnv(venv)
@@ -214,7 +211,6 @@ def irl(venv, trajectories, discount, log_dir, tf_cfg, model_cfg={},
     return reward, policy_pkl
 
 
-@vectorized(True)
 def metalearn(venvs, trajectories, discount, log_dir, *, tf_cfg, outer_itr=1000,
               lr=1e-2, model_cfg={}, policy_cfg=None, training_cfg={}):
     #TODO: seeds
@@ -292,7 +288,6 @@ def metalearn(venvs, trajectories, discount, log_dir, *, tf_cfg, outer_itr=1000,
     return reward, policy_pkl
 
 
-@vectorized(True)
 def finetune(metainit, *args, **kwargs):
     metalearn_only = ['outer_itr', 'lr']
     for k in metalearn_only:

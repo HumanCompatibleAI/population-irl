@@ -23,7 +23,6 @@ dependencies:
   - curl=7.59.0
   - cycler=0.10.0
   - dbus=1.13.2
-  - decorator=4.2.1
   - docutils=0.14
   - entrypoints=0.2.3
   - execnet=1.5.0
@@ -187,6 +186,7 @@ dependencies:
     - pyprind==2.11.2
     - python-utils==2.3.0
     - pyyaml==3.12
+    - ray==0.4.0
     - git+git://github.com/AdamGleave/rllab.git@master#egg=rllab
     - https://storage.googleapis.com/tensorflow/linux/gpu/tensorflow_gpu-1.7.0-cp36-cp36m-linux_x86_64.whl
     - torch==0.3.1

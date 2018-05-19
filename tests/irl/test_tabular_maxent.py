@@ -46,7 +46,7 @@ def test_irl(env_name, planner, discount):
 
     # Setup
     env = gym.make(env_name)
-    env_planner = tabular.env_wrapper(planner)
+    env_planner = tabular.policy_env_wrapper(planner)
     optimal_policy = env_planner(env, discount=discount)
     trajectories = experiments.synthetic_data.func(env_name, env, 'max_ent', num_trajectories, 1,
                                                    seed, '/tmp/test-pirl/', 10000, optimal_policy)

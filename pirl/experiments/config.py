@@ -1,18 +1,29 @@
+from collections import namedtuple
 import functools
 import itertools
-import os
+import logging.config
 import os.path as osp
 import sys
 
 import gym
+import numpy as np
 import tensorflow as tf
 
 from pirl import agents, envs, irl
-from pirl.utils import vectorized, is_vectorized
 
-# General
+# Types
+RES_FLDS = ['vectorized', 'uses_gpu']
+RLAlgorithm = namedtuple('RLAlgorithm', ['train', 'sample', 'value'] + RES_FLDS)
+IRLAlgorithm = namedtuple('IRLAlgorithm',
+                          ['train', 'reward_wrapper', 'value'] + RES_FLDS)
+MetaIRLAlgorithm = namedtuple('MetaIRLAlgorithm',
+                              ['metalearn', 'finetune',
+                               'reward_wrapper', 'value'] + RES_FLDS)
+
+# Directory location
 PROJECT_DIR = osp.dirname(osp.dirname(osp.dirname(osp.realpath(__file__))))
 DATA_DIR = osp.join(PROJECT_DIR, 'data')
+OBJECT_DIR = osp.join(DATA_DIR, 'objects')
 CACHE_DIR = osp.join(PROJECT_DIR, 'cache')
 LOG_DIR = osp.join(PROJECT_DIR, 'logs')
 
@@ -22,6 +33,7 @@ except ImportError:
     pass
 
 # ML Framework Config
+
 def make_tf_config():
     config = tf.ConfigProto()
     config.gpu_options.allow_growth = True
@@ -29,9 +41,7 @@ def make_tf_config():
 TENSORFLOW = make_tf_config()
 
 # Logging
-def logging(identifier):
-    os.makedirs(LOG_DIR, exist_ok=True)
-    return {
+LOG_CFG = {
         'version': 1,
         'disable_existing_loggers': False,
         'formatters': {
@@ -45,23 +55,28 @@ def logging(identifier):
                 'formatter': 'standard',
                 'class': 'logging.StreamHandler',
             },
-            'file': {
-                'level': 'DEBUG',
-                'formatter': 'standard',
-                'filename': '{}/pirl-{}.log'.format(LOG_DIR, identifier),
-                'maxBytes': 100 * 1024 * 1024,
-                'backupCount': 3,
-                'class': 'logging.handlers.RotatingFileHandler',
-            },
         },
         'loggers': {
             '': {
-                'handlers': ['stream', 'file'],
+                'handlers': ['stream'],
                 'level': 'DEBUG',
                 'propagate': True
             },
         }
     }
+
+def node_setup():
+    logging.config.dictConfig(LOG_CFG)
+    # Hack: Joblib Memory.cache uses repr() on numpy arrays for metadata.
+    # This ends up taking ~100s per call and increases space on disk by 2x.
+    # Make numpy repr() more compact.
+    np.set_printoptions(threshold=5)
+#TODO: Execute this explicitly rather than on import
+#It's bad form to mess with the logging settings of scripts importing us.
+#Better to set it explicitly in each program during startup.
+#However, Ray does not let us run setup code on workers, this is an easy workaround :(
+node_setup()
+
 
 # RL Algorithms
 
@@ -80,34 +95,40 @@ def logging(identifier):
 # It returns (mean, se) where mean is the estimated reward and se is the
 # standard error (0 for exact methods).
 RL_ALGORITHMS = {
-    'value_iteration': (
-        agents.tabular.env_wrapper(agents.tabular.q_iteration_policy),
-        agents.tabular.sample,
-        agents.tabular.value_in_mdp,
+    'value_iteration': RLAlgorithm(
+        train=agents.tabular.policy_env_wrapper(agents.tabular.q_iteration_policy),
+        sample=agents.tabular.sample,
+        value=agents.tabular.value_in_mdp,
+        vectorized=False,
+        uses_gpu=False,
     ),
-    'max_ent': (
-        agents.tabular.env_wrapper(irl.tabular_maxent.max_ent_policy),
-        agents.tabular.sample,
-        agents.tabular.value_in_mdp,
+    'max_ent': RLAlgorithm(
+        train=agents.tabular.policy_env_wrapper(irl.tabular_maxent.max_ent_policy),
+        sample=agents.tabular.sample,
+        value=agents.tabular.value_in_mdp,
+        vectorized=False,
+        uses_gpu=False,
     ),
-    'max_causal_ent': (
-        agents.tabular.env_wrapper(irl.tabular_maxent.max_causal_ent_policy),
-        agents.tabular.sample,
-        agents.tabular.value_in_mdp,
+    'max_causal_ent': RLAlgorithm(
+        train=agents.tabular.policy_env_wrapper(irl.tabular_maxent.max_causal_ent_policy),
+        sample=agents.tabular.sample,
+        value=agents.tabular.value_in_mdp,
+        vectorized=False,
+        uses_gpu=False,
     ),
 }
 
 def ppo_cts_pol(num_timesteps):
-    return functools.partial(agents.ppo.train_continuous,
-                             tf_config=TENSORFLOW,
-                             num_timesteps=num_timesteps)
-ppo_sample = functools.partial(agents.ppo.sample, tf_config=TENSORFLOW)
-ppo_value = functools.partial(agents.sample.value, ppo_sample)
-RL_ALGORITHMS['ppo_cts'] = (ppo_cts_pol(1e6), ppo_sample, ppo_value)
-RL_ALGORITHMS['ppo_cts_500k'] = (ppo_cts_pol(5e5), ppo_sample, ppo_value)
-RL_ALGORITHMS['ppo_cts_short'] = (ppo_cts_pol(1e5), ppo_sample, ppo_value)
-RL_ALGORITHMS['ppo_cts_shortest'] = (ppo_cts_pol(1e4), ppo_sample, ppo_value)
-
+    train = functools.partial(agents.ppo.train_continuous,
+                              tf_config=TENSORFLOW,
+                              num_timesteps=num_timesteps)
+    sample = functools.partial(agents.ppo.sample, tf_config=TENSORFLOW)
+    value = functools.partial(agents.sample.value, sample)
+    return RLAlgorithm(train, sample, value, vectorized=True, uses_gpu=True)
+RL_ALGORITHMS['ppo_cts'] = ppo_cts_pol(1e6)
+RL_ALGORITHMS['ppo_cts_500k'] = ppo_cts_pol(5e5)
+RL_ALGORITHMS['ppo_cts_short'] = ppo_cts_pol(1e5)
+RL_ALGORITHMS['ppo_cts_shortest'] = ppo_cts_pol(1e4)
 
 # IRL Algorithms
 
@@ -115,16 +136,29 @@ RL_ALGORITHMS['ppo_cts_shortest'] = (ppo_cts_pol(1e4), ppo_sample, ppo_value)
 
 SINGLE_IRL_ALGORITHMS = {
     # Maximum Causal Entropy (Ziebart 2010)
-    'mce': (irl.tabular_maxent.irl,
-            agents.tabular.TabularRewardWrapper,
-            agents.tabular.value_in_mdp),
-    'mce_shortest': (functools.partial(irl.tabular_maxent.irl, num_iter=500),
-                  agents.tabular.TabularRewardWrapper,
-                  agents.tabular.value_in_mdp),
+    'mce': IRLAlgorithm(
+        train=irl.tabular_maxent.irl,
+        reward_wrapper=agents.tabular.TabularRewardWrapper,
+        value=agents.tabular.value_in_mdp,
+        vectorized=False,
+        uses_gpu=False,
+    ),
+    'mce_shortest': IRLAlgorithm(
+        train=functools.partial(irl.tabular_maxent.irl, num_iter=500),
+        reward_wrapper=agents.tabular.TabularRewardWrapper,
+        value=agents.tabular.value_in_mdp,
+        vectorized = False,
+        uses_gpu=False,
+    ),
     # Maximum Entropy (Ziebart 2008)
-    'me': (functools.partial(irl.tabular_maxent.irl, planner=irl.tabular_maxent.max_ent_policy),
-           agents.tabular.TabularRewardWrapper,
-           agents.tabular.value_in_mdp),
+    'me': IRLAlgorithm(
+        train=functools.partial(irl.tabular_maxent.irl,
+                                planner=irl.tabular_maxent.max_ent_policy),
+        reward_wrapper=agents.tabular.TabularRewardWrapper,
+        value=agents.tabular.value_in_mdp,
+        vectorized=False,
+        uses_gpu=False,
+    ),
 }
 
 AIRL_ALGORITHMS = {
@@ -136,16 +170,28 @@ airl_reward = functools.partial(irl.airl.airl_reward_wrapper, tf_cfg=TENSORFLOW)
 airl_value = functools.partial(agents.sample.value,
                                functools.partial(irl.airl.sample, tf_cfg=TENSORFLOW))
 for k, kwargs in AIRL_ALGORITHMS.items():
-    irl_fn = functools.partial(irl.airl.irl, tf_cfg=TENSORFLOW, **kwargs)
-    SINGLE_IRL_ALGORITHMS['airl_{}'.format(k)] = (irl_fn, airl_reward, airl_value)
+    train = functools.partial(irl.airl.irl, tf_cfg=TENSORFLOW, **kwargs)
+    SINGLE_IRL_ALGORITHMS['airl_{}'.format(k)] = IRLAlgorithm(
+        train=train,
+        reward_wrapper=airl_reward,
+        value=airl_value,
+        vectorized=True,
+        uses_gpu=True,
+    )
 
     for k2, v in {'short': 100, 'shortest': 10}.items():
         kwds = dict(kwargs)
         training_cfg = kwds.get('training_cfg', dict())
         training_cfg['n_itr'] = v
         kwds['training_cfg'] = training_cfg
-        irl_fn = functools.partial(irl.airl.irl, tf_cfg=TENSORFLOW, **kwds)
-        SINGLE_IRL_ALGORITHMS['airl_{}_{}'.format(k, k2)] = (irl_fn, airl_reward, airl_value)
+        train = functools.partial(irl.airl.irl, tf_cfg=TENSORFLOW, **kwds)
+        SINGLE_IRL_ALGORITHMS['airl_{}_{}'.format(k, k2)] = IRLAlgorithm(
+            train=train,
+            reward_wrapper=airl_reward,
+            value=airl_value,
+            vectorized=True,
+            uses_gpu=True,
+        )
 
 ## Population IRL algorithms
 
@@ -172,17 +218,20 @@ for k, kwargs in AIRL_ALGORITHMS.items():
 # standard error (0 for exact methods).
 POPULATION_IRL_ALGORITHMS = dict()
 def pop_maxent(**kwargs):
-    return (
-        functools.partial(irl.tabular_maxent.metalearn, **kwargs),
-        functools.partial(irl.tabular_maxent.finetune, **kwargs),
-        agents.tabular.TabularRewardWrapper,
-        agents.tabular.value_in_mdp
+    return MetaIRLAlgorithm(
+        metalearn=functools.partial(irl.tabular_maxent.metalearn, **kwargs),
+        finetune=functools.partial(irl.tabular_maxent.finetune, **kwargs),
+        reward_wrapper=agents.tabular.TabularRewardWrapper,
+        value=agents.tabular.value_in_mdp,
+        vectorized=False,
+        uses_gpu=True,
     )
 for reg in range(-2,3):
     algo = pop_maxent(individual_reg = 10**reg)
     POPULATION_IRL_ALGORITHMS['mcep_reg1e{}'.format(reg)] = algo
 POPULATION_IRL_ALGORITHMS['mcep_reg0'] = pop_maxent(individual_reg=0)
-POPULATION_IRL_ALGORITHMS['mcep_shortest_reg0'] = pop_maxent(individual_reg=0, num_iter=500)
+POPULATION_IRL_ALGORITHMS['mcep_shortest_reg0'] = pop_maxent(individual_reg=0,
+                                                             num_iter=500)
 
 AIRLP_ALGORITHMS = {
     # 3-tuple with elements:
@@ -202,20 +251,20 @@ for k, (common, meta, fine) in AIRLP_ALGORITHMS.items():
     fine = dict(fine, **common)
     metalearn_fn = functools.partial(irl.airl.metalearn, tf_cfg=TENSORFLOW, **meta)
     finetune_fn = functools.partial(irl.airl.finetune, tf_cfg=TENSORFLOW, **fine)
-    entry = (metalearn_fn, finetune_fn, airl_reward, airl_value)
+    entry = MetaIRLAlgorithm(metalearn_fn, finetune_fn, airl_reward, airl_value,
+                             vectorized=True, uses_gpu=True)
     POPULATION_IRL_ALGORITHMS['airlp_{}'.format(k)] = entry
 
-def traditional_to_concat(fs):
-    irl_algo, reward_wrapper, compute_value = fs
-    @vectorized(False)
-    def metalearner(env_fns, trajectories, discount, log_dir):
+def traditional_to_concat(singleirl):
+    def metalearner(envs, trajectories, discount, log_dir):
         return list(itertools.chain(*trajectories.values()))
-    @functools.wraps(irl_algo)
-    @vectorized(is_vectorized(irl_algo))
-    def finetune(train_trajectories, env_fns, test_trajectories, **kwargs):
+    @functools.wraps(singleirl.train)
+    def finetune(train_trajectories, envs, test_trajectories, **kwargs):
         concat_trajectories = train_trajectories + test_trajectories
-        return irl_algo(env_fns, concat_trajectories, **kwargs)
-    return metalearner, finetune, reward_wrapper, compute_value
+        return singleirl.train(envs, concat_trajectories, **kwargs)
+    return MetaIRLAlgorithm(metalearner, finetune,
+                            singleirl.reward_wrapper, singleirl.value,
+                            singleirl.vectorized, singleirl.uses_gpu)
 
 for name, algo in SINGLE_IRL_ALGORITHMS.items():
     POPULATION_IRL_ALGORITHMS[name + 'c'] = traditional_to_concat(algo)
@@ -230,8 +279,9 @@ EXPERIMENTS['dummy-test'] = {
     'discount': 1.00,
     'expert': 'value_iteration',
     'eval': ['value_iteration'],
-    'irl': ['mcep_shortest_reg0', 'mce_shortest'],
-    'trajectories': [20, 10],
+    'irl': ['mce_shortest', 'mcep_shortest_reg0'],
+    'train_trajectories': [20, 10],
+    'test_trajectories': [20, 10],
 }
 EXPERIMENTS['few-dummy-test'] = {
     'train_environments': ['pirl/GridWorld-Simple-v0'],
@@ -240,7 +290,7 @@ EXPERIMENTS['few-dummy-test'] = {
     'expert': 'value_iteration',
     'eval': ['value_iteration'],
     'irl': ['mce_shortest', 'mce_shortestc', 'mcep_shortest_reg0'],
-    'train_trajectories': [20],
+    'train_trajectories': [20, 10],
     'test_trajectories': [0, 1, 5],
 }
 EXPERIMENTS['dummy-test-deterministic'] = {
@@ -249,7 +299,8 @@ EXPERIMENTS['dummy-test-deterministic'] = {
     'expert': 'value_iteration',
     'eval': ['value_iteration'],
     'irl': ['mce_shortest', 'mcep_shortest_reg0'],
-    'trajectories': [20, 10],
+    'train_trajectories': [20, 10],
+    'test_trajectories': [20, 10],
 }
 EXPERIMENTS['dummy-continuous-test'] = {
     'environments': ['Reacher-v2'],
@@ -258,19 +309,20 @@ EXPERIMENTS['dummy-continuous-test'] = {
     'expert': 'ppo_cts_shortest',
     'eval': ['ppo_cts_shortest'],
     'irl': ['airl_so_shortest', 'airl_random_shortest'],
-    'trajectories': [10, 20],
+    'test_trajectories': [10, 20],
 }
 EXPERIMENTS['few-dummy-continuous-test'] = {
-    'train_environments': ['pirl/Reacher-fixed-hidden-goal-seed0-v0'.format(i)
+    'train_environments': ['pirl/Reacher-fixed-hidden-goal-seed{}-v0'.format(i)
                            for i in range(0, 2)],
-    'test_environments': ['pirl/Reacher-fixed-hidden-goal-seed0-v0'.format(i)
+    'test_environments': ['pirl/Reacher-fixed-hidden-goal-seed{}-v0'.format(i)
                           for i in range(1, 3)],
     'parallel_rollouts': 4,
     'discount': 0.99,
     'expert': 'ppo_cts_shortest',
     'eval': ['ppo_cts_shortest'],
     'irl': ['airl_so_shortest', 'airlp_so_shortest'],
-    'trajectories': [10, 20],
+    'train_trajectories': [10, 20],
+    'test_trajectories': [10, 20],
 }
 EXPERIMENTS['dummy-continuous-test-medium'] = {
     'environments': ['Reacher-v2'],
@@ -279,7 +331,7 @@ EXPERIMENTS['dummy-continuous-test-medium'] = {
     'expert': 'ppo_cts_short',
     'eval': ['ppo_cts_short'],
     'irl': ['airl_so'],
-    'trajectories': [10, 100, 1000],
+    'test_trajectories': [10, 100, 1000],
 }
 EXPERIMENTS['dummy-continuous-test-slow'] = {
     'environments': ['Reacher-v2'],
@@ -288,41 +340,7 @@ EXPERIMENTS['dummy-continuous-test-slow'] = {
     'expert': 'ppo_cts',
     'eval': ['ppo_cts'],
     'irl': ['airl_so'],
-    'trajectories': [10, 100, 1000],
-}
-
-# Jungle gridworld experiments
-EXPERIMENTS['jungle'] = {
-    'environments': ['pirl/GridWorld-Jungle-9x9-{}-v0'.format(k)
-                     for k in ['Soda', 'Water', 'Liquid']],
-    'discount': 1.00,
-    'expert': 'max_causal_ent',
-    'eval': ['value_iteration'],
-    'irl': [
-        'mce',
-        'mcec',
-        'mcep_reg0',
-        'mcep_reg1e-2',
-        'mcep_reg1e-1',
-        'mcep_reg1e0',
-    ],
-    'trajectories': [1000, 500, 200, 100, 50, 30, 20, 10, 5],
-}
-EXPERIMENTS['jungle-small'] = {
-    'environments': ['pirl/GridWorld-Jungle-4x4-{}-v0'.format(k)
-                     for k in ['Soda', 'Water', 'Liquid']],
-    'discount': 1.00,
-    'expert': 'max_causal_ent',
-    'eval': ['value_iteration'],
-    'irl': [
-        'mce',
-        'mcec',
-        'mcep_reg0',
-        'mcep_reg1e-2',
-        'mcep_reg1e-1',
-        'mcep_reg1e0',
-    ],
-    'trajectories': [500, 200, 100, 50, 30, 20, 10, 5],
+    'test_trajectories': [10, 100, 1000],
 }
 
 # Test different planner combinations
@@ -335,7 +353,7 @@ EXPERIMENTS['unexpected-optimal'] = {
         'mce',
         'me',
     ],
-    'trajectories': [200],
+    'test_trajectories': [200],
 }
 
 # Few-shot learning
@@ -357,8 +375,8 @@ for shape in ['9x9', '4x4']:
                 'mcep_reg1e-1',
                 'mcep_reg1e0',
             ],
-            'trajectories': [1000],
-            'few_shot': [0, 1, 2, 5, 10, 20, 50, 100],
+            'train_trajectories': [1000],
+            'test_trajectories': [0, 1, 2, 5, 10, 20, 50, 100],
         }
 
 # Continuous control
@@ -377,7 +395,7 @@ EXPERIMENTS['continuous-baselines-classic'] = {
     'expert': 'ppo_cts_short',
     'eval': ['ppo_cts_short'],
     'irl': ['airl_so_short', 'airl_random_short'],
-    'trajectories': [1000],
+    'test_trajectories': [1000],
 }
 EXPERIMENTS['continuous-reacher'] = {
     'environments': ['Reacher-v2'],
@@ -386,7 +404,7 @@ EXPERIMENTS['continuous-reacher'] = {
     'expert': 'ppo_cts',
     'eval': ['ppo_cts'],
     'irl': ['airl_so', 'airl_random'],
-    'trajectories': [1000],
+    'test_trajectories': [1000],
 }
 EXPERIMENTS['continuous-baselines-easy'] = {
     'environments': [
@@ -399,7 +417,7 @@ EXPERIMENTS['continuous-baselines-easy'] = {
     'expert': 'ppo_cts',
     'eval': ['ppo_cts'],
     'irl': ['airl_so', 'airl_random'],
-    'trajectories': [1000],
+    'test_trajectories': [1000],
 }
 EXPERIMENTS['continuous-baselines-medium'] = {
     'environments': [
@@ -412,7 +430,7 @@ EXPERIMENTS['continuous-baselines-medium'] = {
     'expert': 'ppo_cts',
     'eval': ['ppo_cts'],
     'irl': ['airl_so', 'airl_random'],
-    'trajectories': [1000],
+    'test_trajectories': [1000],
 }
 EXPERIMENTS['billiards'] = {
     'environments': ['pirl/Billiards{}-seed{}-v0'.format(n, i)
@@ -422,7 +440,7 @@ EXPERIMENTS['billiards'] = {
     'expert': 'ppo_cts',
     'eval': [],
     'irl': ['airl_so'],
-    'trajectories': [1000],
+    'test_trajectories': [1000],
 }
 EXPERIMENTS['mountain-car-single'] = {
     'environments': ['pirl/MountainCarContinuous-{}-0-v0'.format(side)
@@ -433,7 +451,7 @@ EXPERIMENTS['mountain-car-single'] = {
     'expert': 'ppo_cts_short',
     'eval': ['ppo_cts_short'],
     'irl': ['airl_so_short', 'airl_sa_short', 'airl_random_short'],
-    'trajectories': [1, 2, 5, 10, 50, 100],
+    'test_trajectories': [1, 2, 5, 10, 50, 100],
 }
 EXPERIMENTS['mountain-car-vel'] = {
     'environments': ['pirl/MountainCarContinuous-left-{}-v0'.format(vel)
@@ -444,7 +462,7 @@ EXPERIMENTS['mountain-car-vel'] = {
     'expert': 'ppo_cts_short',
     'eval': ['ppo_cts_short'],
     'irl': ['airl_sa_short', 'airl_random_short'],
-    'trajectories': [1, 2, 5, 100],
+    'test_trajectories': [1, 2, 5, 100],
 }
 EXPERIMENTS['reacher-env-comparisons'] = {
     'environments': ['Reacher-v2', 'pirl/Reacher-baseline-seed0-v0',
@@ -455,7 +473,7 @@ EXPERIMENTS['reacher-env-comparisons'] = {
     'expert': 'ppo_cts',
     'eval': ['ppo_cts'],
     'irl': [],
-    'trajectories': [1000],
+    'test_trajectories': [1000],
 }
 
 # Few-shot continuous control
@@ -508,7 +526,7 @@ for n in [1, 4, 8, 16]:
         'expert': 'ppo_cts',
         'eval': [],#['ppo_cts'],
         'irl': ['airl_so'],
-        'trajectories': [1000],
+        'test_trajectories': [1000],
     }
     EXPERIMENTS['parallel-cts-easy-fast-{}'.format(n)] = {
         'environments': [
@@ -521,7 +539,7 @@ for n in [1, 4, 8, 16]:
         'expert': 'ppo_cts',
         'eval': [],
         'irl': ['airl_so_shortest'],
-        'trajectories': [1000],
+        'test_trajectories': [1000],
     }
     EXPERIMENTS['parallel-cts-reacher-{}'.format(n)] = {
         'environments': [
@@ -532,7 +550,7 @@ for n in [1, 4, 8, 16]:
         'expert': 'ppo_cts',
         'eval': [],
         'irl': ['airl_so'],
-        'trajectories': [1000],
+        'test_trajectories': [1000],
     }
     EXPERIMENTS['parallel-cts-reacher-fast-{}'.format(n)] = {
         'environments': [
@@ -543,7 +561,7 @@ for n in [1, 4, 8, 16]:
         'expert': 'ppo_cts',
         'eval': [],
         'irl': ['airl_so_shortest'],
-        'trajectories': [1000],
+        'test_trajectories': [1000],
     }
     EXPERIMENTS['parallel-cts-reacher-fast-rl-{}'.format(n)] = {
         'environments': [
@@ -554,7 +572,7 @@ for n in [1, 4, 8, 16]:
         'expert': 'ppo_cts_shortest',
         'eval': [],
         'irl': [],
-        'trajectories': [10],
+        'test_trajectories': [10],
     }
     EXPERIMENTS['parallel-cts-humanoid-fast-rl-{}'.format(n)] = {
         'environments': [
@@ -565,31 +583,49 @@ for n in [1, 4, 8, 16]:
         'expert': 'ppo_cts_shortest',
         'eval': [],
         'irl': [],
-        'trajectories': [10],
+        'test_trajectories': [10],
     }
 
 
 def validate_config():
+    # Check algorithms
+    pop_keys = set(POPULATION_IRL_ALGORITHMS.keys())
+    intersection = pop_keys.intersection(SINGLE_IRL_ALGORITHMS.keys())
+    assert len(intersection) == 0
+
+    for rl, algo in RL_ALGORITHMS.items():
+        assert isinstance(algo, RLAlgorithm), rl
+    for irl, algo in SINGLE_IRL_ALGORITHMS.items():
+        assert isinstance(algo, IRLAlgorithm), irl
+    for irl, algo in POPULATION_IRL_ALGORITHMS.items():
+        assert isinstance(algo, MetaIRLAlgorithm), irl
+
     for k, v in EXPERIMENTS.items():
         try:
-            for env in v.get('train_environments', v.get('environments')):
-                gym.envs.registry.spec(env)
-            for env in v.get('test_environments', v.get('environments')):
-                gym.envs.registry.spec(env)
-            float(v['discount'])
+            # Check environments
+            env_fields = ['environments',
+                          'train_environments',
+                          'test_environnments']
+            for field in env_fields:
+                for env in v.get(field, []):
+                    gym.envs.registry.spec(env)
+
+            # Check algorithms
             RL_ALGORITHMS[v['expert']]
             for rl in v.get(eval, []):
                 RL_ALGORITHMS[rl]
-            intersect = set(POPULATION_IRL_ALGORITHMS.keys()).intersection(SINGLE_IRL_ALGORITHMS.keys())
-            for irl, algo in SINGLE_IRL_ALGORITHMS.items():
-                assert len(algo) == 3, k
-            for irl, algo in POPULATION_IRL_ALGORITHMS.items():
-                assert len(algo) == 4, k
-            assert len(intersect) == 0
             for irl in v['irl']:
-                assert (irl in POPULATION_IRL_ALGORITHMS or irl in SINGLE_IRL_ALGORITHMS)
-            [int(t) for t in v.get('train_trajectories', v.get('trajectories'))]
-            [int(t) for t in v.get('test_trajectories', v.get('trajectories'))]
+                assert (irl in POPULATION_IRL_ALGORITHMS or
+                        irl in SINGLE_IRL_ALGORITHMS)
+
+            # Check other config params
+            float(v['discount'])
+            meta_irl = any([irl in POPULATION_IRL_ALGORITHMS
+                            for irl in v['irl']])
+            assert ('train_trajectories' in v) == meta_irl
+            if 'train_trajectories' in v:
+                [int(t) for t in v['train_trajectories']]
+            [int(t) for t in v['test_trajectories']]
         except Exception as e:
             msg = 'In experiment ' + k + ': ' + str(e)
             raise type(e)(msg).with_traceback(sys.exc_info()[2])

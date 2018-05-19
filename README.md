@@ -24,7 +24,7 @@ This codebase sometimes triggers a double-free error, which seems to be due to a
 
 To check everything works, you can run:
 
-	python -m pirl.experiments.cli dummy-test few-dummy-test dummy-continuous-test
+	python run_experiments.py dummy-test few-dummy-test dummy-continuous-test
 	pytest
 
 ## Jupyter notebooks

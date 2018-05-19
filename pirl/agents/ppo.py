@@ -22,7 +22,7 @@ from baselines.common.vec_env.vec_normalize import VecNormalize
 from baselines.ppo2.policies import MlpPolicy
 
 from pirl.agents.sample import SampleVecMonitor
-from pirl.utils import vectorized
+from pirl.utils import set_cuda_visible_devices
 
 logger = logging.getLogger('pirl.agents.ppo')
 
@@ -335,10 +335,12 @@ def _make_const(norm):
             setattr(norm, k, ConstantStatistics(v))
 
 
-@vectorized(True)
-def train_continuous(venv, discount, log_dir, tf_config, num_timesteps, norm=True):
+# TODO: remove None defaults (workaround Ray issue #998)
+def train_continuous(venv=None, discount=None, log_dir=None,
+                     tf_config=None, num_timesteps=None, norm=True):
     '''Policy with hyperparameters optimized for continuous control environments
        (e.g. MuJoCo). Returns log_dir, where the trained policy is saved.'''
+    set_cuda_visible_devices()
     blogger.configure(dir=log_dir)
     checkpoint_dir = osp.join(blogger.get_dir(), 'checkpoints')
     os.makedirs(checkpoint_dir)
@@ -394,8 +396,9 @@ def train_continuous(venv, discount, log_dir, tf_config, num_timesteps, norm=Tru
     return joblib.load(best_checkpoint)
 
 
-@vectorized(True)
-def sample(envs, policy, num_episodes, seed, tf_config, const_norm=False):
+#TODO: remove None defaults (workaround Ray issue #998)
+def sample(envs=None, policy=None, num_episodes=None,
+           seed=None, tf_config=None, const_norm=False):
     smodel, snorm_env = policy
     envs_monitor = SampleVecMonitor(envs)
 
