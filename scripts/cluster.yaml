@@ -1,0 +1,54 @@
+cluster_name: pirl
+# Autoscaler
+min_workers: 0
+max_workers: 20
+target_utilization_fraction: 0.8
+idle_timeout_minutes: 5
+
+# General AWS Config
+provider:
+    type: aws
+    region: us-west-2
+    availability_zone: us-west-2a  # this AZ is generally the cheapest
+auth:
+    ssh_user: ec2-user
+    ssh_private_key: ./scripts/population-irl.pem
+
+# Node templates
+head_node:
+    InstanceType: m5.large
+    ImageId: ami-04cc8af4cb0d706db  # Custom AMI with our code pre-installed
+    KeyName: Population-IRL
+
+file_mounts: {
+    "/tmp/current_branch_sha": "./.git/refs/heads/master",
+}
+
+worker_nodes:
+    # IMPORTANT: If you update the instance type, also update --num-gpus
+    # in worker_start_ray_commands
+    InstanceType: p2.xlarge
+    ImageId: ami-04cc8af4cb0d706db  # Custom AMI with our code pre-installed
+    KeyName: Population-IRL
+    InstanceMarketOptions:
+        MarketType: spot  # max price defaults to the on-demand price
+
+# List of shell commands to run to set up nodes.
+setup_commands:
+    # Note we don't update dependencies. This improves start-up speed,
+    # but means we need to create a new AMI each time dependencies change.
+    - cd $HOME/population-irl && git fetch && git checkout `cat /tmp/current_branch_sha`
+head_setup_commands: []
+worker_setup_commands: []
+
+head_start_ray_commands:
+    - ray stop
+    - ulimit -n 65536; ray start --head --redis-port=6379 --object-manager-port=8076 --autoscaling-config=~/ray_bootstrap_config.yaml
+
+# Command to start ray on worker nodes. You don't need to change this.
+worker_start_ray_commands:
+    # Pretend we have more GPUs than we actually do, to workaround issue #402.
+    # IMPORTANT: The # of GPUs should be inflated by the same amount as
+    # pirl.utils.GPU_MULTIPLIER.
+    - ray stop
+    - ulimit -n 65536; ray start --num-gpus=4 --redis-address=$RAY_HEAD_IP:6379 --object-manager-port=8076

@@ -141,6 +141,7 @@ def ray_get_nested_dict(ob, level=0):
 
 # Ray does not support fractional GPU resources (issue #402)
 # Workaround: pretend we have more GPUs than we do!
+# IMPORTANT: If you change this, also change --num-gpus in scripts/cluster.yaml
 GPU_MULTIPLIER = 4
 
 def get_num_fake_gpus(max_gpu=None):

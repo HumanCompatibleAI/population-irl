@@ -4,6 +4,9 @@
 # Local configs
 config_local.py
 
+# Credentials
+*.pem
+
 # Archive files
 *.npz
 *.pkl

@@ -42,6 +42,7 @@ def parse_args():
                         help='video every N episodes; disabled by default.')
     parser.add_argument('--num-cpu', metavar='N', default=None, type=int)
     parser.add_argument('--num-gpu', metavar='N', default=None, type=int)
+    parser.add_argument('--ray-cluster', metavar='HOST', default=None, type=str)
     parser.add_argument('experiments', metavar='experiment',
                         type=experiment_type, nargs='+')
 
@@ -61,9 +62,13 @@ if __name__ == '__main__':
     video_every = args.video_every if args.video_every != 0 else None
     logger.info('CLI args: %s', args)
 
-    num_gpu = get_num_fake_gpus(args.num_gpu)
-    ray.init(num_cpus=args.num_cpu, num_gpus=num_gpu,
-             redirect_worker_output=True)
+    if args.ray_cluster is None:  # run locally
+        num_gpu = get_num_fake_gpus(args.num_gpu)
+        ray.init(num_cpus=args.num_cpu, num_gpus=num_gpu,
+                 redirect_worker_output=True)
+    else:  # connect to existing server (could still be a single machine)
+        ray.init(redis_address=args.ray_cluster)
+
     # Experiment loop
     for experiment in args.experiments:
         # reseed so does not matter which order experiments are run in

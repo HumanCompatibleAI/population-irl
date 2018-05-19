@@ -587,7 +587,6 @@ def run_irl(cfg, out_dir, trajectories, seed):
 def _value_helper(irl=None, n=None, m=None, rl=None,
                   parallel=None, discount=None, seed=None,
                   env_name=None, reward=None, log_dir=None):
-    print('evaluating')
     logger.debug('Evaluating %s [meta=%d, finetune=%d] ' 
                  'by %s [discount=%f, seed=%s, parallel=%d] '
                  'on %s (writing to %s)',
