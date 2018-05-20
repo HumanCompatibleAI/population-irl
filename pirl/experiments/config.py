@@ -35,7 +35,6 @@ except ImportError:
 EXPERIMENTS_DIR = osp.join(DATA_DIR, 'experiments')
 OBJECT_DIR = osp.join(DATA_DIR, 'objects')
 CACHE_DIR = osp.join(DATA_DIR, 'cache')
-LOG_DIR = osp.join(DATA_DIR, 'logs')
 
 # ML Framework Config
 
