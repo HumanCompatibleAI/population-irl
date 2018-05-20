@@ -17,7 +17,7 @@ auth:
 # Node templates
 head_node:
     InstanceType: m5.large
-    ImageId: ami-04cc8af4cb0d706db  # Custom AMI with our code pre-installed
+    ImageId: ami-099e28043c783216a  # Custom AMI with our code pre-installed
     KeyName: Population-IRL
 
 file_mounts: {
@@ -28,7 +28,7 @@ worker_nodes:
     # IMPORTANT: If you update the instance type, also update --num-gpus
     # in worker_start_ray_commands
     InstanceType: p2.xlarge
-    ImageId: ami-04cc8af4cb0d706db  # Custom AMI with our code pre-installed
+    ImageId: ami-099e28043c783216a  # Custom AMI with our code pre-installed
     KeyName: Population-IRL
     InstanceMarketOptions:
         MarketType: spot  # max price defaults to the on-demand price
