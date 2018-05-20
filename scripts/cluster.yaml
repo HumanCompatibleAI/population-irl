@@ -39,6 +39,7 @@ setup_commands:
     # Note we don't update dependencies. This improves start-up speed,
     # but means we need to create a new AMI each time dependencies change.
     - cd $HOME/population-irl && git fetch && git checkout `cat /tmp/current_branch_sha`
+    - ln -sf $HOME/population-irl/pirl/config/cloud.py $HOME/population-irl/pirl/config/config_local.py
 head_setup_commands: []
 worker_setup_commands: []
 
