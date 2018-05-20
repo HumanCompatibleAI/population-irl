@@ -40,7 +40,8 @@ def parse_args():
                         help='video every N episodes; disabled by default.')
     parser.add_argument('--num-cpu', metavar='N', default=None, type=int)
     parser.add_argument('--num-gpu', metavar='N', default=None, type=int)
-    parser.add_argument('--ray-cluster', metavar='HOST', default=None, type=str)
+    parser.add_argument('--ray-server', metavar='HOST',
+                        default=config.RAY_SERVER, type=str)
     parser.add_argument('experiments', metavar='experiment',
                         type=experiment_type, nargs='+')
 
@@ -65,14 +66,14 @@ if __name__ == '__main__':
     video_every = args.video_every if args.video_every != 0 else None
     logger.info('CLI args: %s', args)
 
-    if args.ray_cluster is None:  # run locally
+    if args.ray_server is None:  # run locally
         num_gpu = args.num_gpu
         if num_gpu is None:
             num_gpu = ray.services._autodetect_num_gpus() * GPU_MULTIPLIER
         ray.init(num_cpus=args.num_cpu, num_gpus=args.num_gpu,
                  redirect_worker_output=True)
     else:  # connect to existing server (could still be a single machine)
-        ray.init(redis_address=args.ray_cluster)
+        ray.init(redis_address=args.ray_server)
 
     # Experiment loop
     for experiment in args.experiments:

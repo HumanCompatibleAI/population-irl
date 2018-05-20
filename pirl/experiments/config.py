@@ -27,6 +27,9 @@ OBJECT_DIR = osp.join(DATA_DIR, 'objects')
 CACHE_DIR = osp.join(PROJECT_DIR, 'cache')
 LOG_DIR = osp.join(PROJECT_DIR, 'logs')
 
+# Scheduler IP
+RAY_SERVER = None
+
 try:
     from pirl.experiments.config_local import *
 except ImportError:
