@@ -83,7 +83,14 @@ def ray_remote_variable_resources(**kwargs):
             suffix = ','.join(['{}={}'.format(k, v) for k, v in parameters])
             name = func.__name__
             func.__name__ = '{}:{}'.format(name, suffix)
-            cache[tuple(vs)] = ray.remote(**dict(parameters), **kwargs)(func)
+            # Specify max_calls=1 to force GPU memory to be released.
+            # This shouldn't be necessary, but the overhead of using a fresh
+            # worker each time is minimal as our tasks are long-lived.
+            # Without this I've found TensorFlow initialization hangs
+            # indefinitely sometimes...
+            cache[tuple(vs)] = ray.remote(max_calls=1,
+                                          **dict(parameters),
+                                          **kwargs)(func)
             func.__name__ = name
 
         def func_call(*args, **kwargs):
@@ -109,7 +116,6 @@ def ray_remote_variable_resources(**kwargs):
             # TODO: fudge factor? (do we really need one CPU per environment?)
             num_cpus = parallel
 
-            # TODO: this is a massive hack to make function IDs unique :(
             try:
                 fn = cache[(num_cpus, num_gpus)]
             except KeyError:
@@ -125,6 +131,7 @@ def ray_remote_variable_resources(**kwargs):
 
         return func_invoker
     return decorator
+
 
 log_dirs = set()
 def log_to_tmp_dir(func):
@@ -157,14 +164,14 @@ def log_to_tmp_dir(func):
         # Catch common misuse of this decorator
         if ultimate_symlink in log_dirs:
             msg = "Duplicate log directory '{}'".format(ultimate_symlink)
-            raise RuntimeError(msg)
+            raise AssertionError(msg)
         log_dirs.add(ultimate_symlink)
 
         # Make the directories
         tmp_symlink = '{}.{}'.format(ultimate_symlink, id_generator())
         os.makedirs(config.OBJECT_DIR, exist_ok=True)
-        os.makedirs(os.path.dirname(ultimate_symlink), exist_ok=True)
         tmp_log_dir = tempfile.mkdtemp(dir=config.OBJECT_DIR, prefix=func_name)
+        os.makedirs(os.path.dirname(tmp_symlink), exist_ok=True)
         os.symlink(tmp_log_dir, tmp_symlink, target_is_directory=True)
 
         # Call the function
@@ -173,7 +180,8 @@ def log_to_tmp_dir(func):
 
         # Success! (If the function threw an exception, we never reach here.)
         try:
-            os.rename(tmp_symlink, ultimate_symlink)
+            os.link(tmp_symlink, ultimate_symlink)
+            os.unlink(tmp_symlink)
         except FileExistsError:
             logger.warning('Destination %s already exists (attempt to ' 
                            'rename %s Was this a retried task?',
@@ -219,6 +227,8 @@ def synthetic_data(rl=None, discount=None, parallel=None, seed=None,
                    log_dir=None, video_every=None, policy=None):
     '''Precondition: policy produced by RL algorithm rl.'''
     # Note discount is not used, but is needed as a caching key.
+    # Setup
+    set_cuda_visible_devices()
     logger.debug('%s: sampling %d trajectories from %s '
                  '[discount=%f, seed=%s, parallel=%d]',
                  env_name, num_trajectories, rl, discount, seed, parallel)
@@ -249,6 +259,7 @@ def synthetic_data(rl=None, discount=None, parallel=None, seed=None,
 @log_to_tmp_dir
 def _compute_value(rl=None, discount=None, parallel=None, seed=None,
                    env_name=None, log_dir=None, policy=None):
+    set_cuda_visible_devices()
     # Note discount is not used, but is needed as a caching key.
     logger.debug('%s: computing value of %s [discount=%f, seed=%s, parallel=%d]',
                  env_name, rl, discount, seed, parallel)
@@ -326,7 +337,8 @@ def expert_trajs(cfg, out_dir, video_every, seed):
 @ray_remote_variable_resources()
 @log_to_tmp_dir
 def _run_population_irl_meta(irl, parallel, discount, seed, trajs, log_dir):
-    # Logging
+    # Setup
+    set_cuda_visible_devices()
     n = len(list(trajs.values())[0])
     logger.debug('meta_irl: %s [meta=%d]', irl, n)
     meta_log_dir = osp.join(log_dir, 'meta:{}'.format(n))
@@ -365,7 +377,8 @@ def _run_population_irl_meta(irl, parallel, discount, seed, trajs, log_dir):
 @log_to_tmp_dir
 def _run_population_irl_finetune(irl, parallel, discount, seed,
                                  env, trajs, metainit, log_dir):
-    # Logging
+    # Setup
+    set_cuda_visible_devices()
     logger.debug('meta_irl: %s [finetune=%d, env=%s]',
                  irl, len(trajs), env)
     finetune_mon_prefix = osp.join(log_dir, 'mon')
@@ -463,13 +476,15 @@ def _run_population_irl(irl, parallel, discount, seed, train_envs,
 @log_to_tmp_dir
 def _run_single_irl_train(irl, parallel, discount, seed,
                           env_name, log_dir, trajectories):
-    irl_algo = config.SINGLE_IRL_ALGORITHMS[irl]
+    # Setup
+    set_cuda_visible_devices()
     mon_dir = osp.join(log_dir, 'mon')
     os.makedirs(mon_dir)
 
     eval_seed = create_seed(seed + 'eval')
     irl_seed = create_seed(seed + 'irl')
 
+    irl_algo = config.SINGLE_IRL_ALGORITHMS[irl]
     with _make_envs(env_name, irl_algo.vectorized, parallel, irl_seed,
                     log_prefix=osp.join(mon_dir, 'train')) as envs:
         reward, policy = irl_algo.train(envs, trajectories, discount=discount,
@@ -587,22 +602,23 @@ def run_irl(cfg, out_dir, trajectories, seed):
 def _value_helper(irl=None, n=None, m=None, rl=None,
                   parallel=None, discount=None, seed=None,
                   env_name=None, reward=None, log_dir=None):
+    # Setup
+    set_cuda_visible_devices()
     logger.debug('Evaluating %s [meta=%d, finetune=%d] ' 
                  'by %s [discount=%f, seed=%s, parallel=%d] '
                  'on %s (writing to %s)',
                  irl, n, m,
                  rl, discount, seed, parallel,
                  env_name, log_dir)
-    rl_algo = config.RL_ALGORITHMS[rl]
+    mon_dir = osp.join(log_dir, 'mon')
+    os.makedirs(mon_dir)
 
     if irl in config.SINGLE_IRL_ALGORITHMS:
         reward_wrapper = config.SINGLE_IRL_ALGORITHMS[irl].reward_wrapper
     else:
         reward_wrapper = config.POPULATION_IRL_ALGORITHMS[irl].reward_wrapper
     rw = functools.partial(reward_wrapper, new_reward=reward)
-
-    mon_dir = osp.join(log_dir, 'mon')
-    os.makedirs(mon_dir)
+    rl_algo = config.RL_ALGORITHMS[rl]
 
     train_seed = create_seed(seed + 'eval_train')
     with _make_envs(env_name, rl_algo.vectorized, parallel,
@@ -692,10 +708,12 @@ def value(cfg, out_dir, rewards, seed):
                 'env_name': env_name,
                 'parallel': parallel,
                 'seed': seed,
-                'log_dir': log_dir
             }
-            pol = _train_policy.remote(**kwargs)
-            val = _compute_value.remote(policy=pol, **kwargs)
+            pol = _train_policy.remote(log_dir=osp.join(log_dir, 'train'),
+                                       **kwargs,)
+            val = _compute_value.remote(policy=pol,
+                                        log_dir=osp.join(log_dir, 'eval'),
+                                        **kwargs)
             safeset(ground_truth_futures, [rl, env_name], val)
 
     return value_futures, ground_truth_futures

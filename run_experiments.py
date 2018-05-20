@@ -14,11 +14,9 @@ import os
 import pickle
 
 import git
-import numpy as np
 import ray
 
 from pirl.experiments import config, experiments
-from pirl.utils import get_num_fake_gpus
 
 logger = logging.getLogger('pirl.experiments.cli')
 
@@ -53,6 +51,11 @@ def git_hash():
                     search_parent_directories=True)
     return repo.head.object.hexsha
 
+
+# We pretend we have more GPUs to workaround Ray issue #402.
+# This can be overridden by specifying --num-gpu.
+GPU_MULTIPLIER = 4  #
+# Timestamp for logging
 ISO_TIMESTAMP = "%Y%m%d_%H%M%S"
 
 if __name__ == '__main__':
@@ -63,8 +66,10 @@ if __name__ == '__main__':
     logger.info('CLI args: %s', args)
 
     if args.ray_cluster is None:  # run locally
-        num_gpu = get_num_fake_gpus(args.num_gpu)
-        ray.init(num_cpus=args.num_cpu, num_gpus=num_gpu,
+        num_gpu = args.num_gpu
+        if num_gpu is None:
+            num_gpu = ray.services._autodetect_num_gpus() * GPU_MULTIPLIER
+        ray.init(num_cpus=args.num_cpu, num_gpus=args.num_gpu,
                  redirect_worker_output=True)
     else:  # connect to existing server (could still be a single machine)
         ray.init(redis_address=args.ray_cluster)

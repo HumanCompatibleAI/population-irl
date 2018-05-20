@@ -340,7 +340,6 @@ def train_continuous(venv=None, discount=None, log_dir=None,
                      tf_config=None, num_timesteps=None, norm=True):
     '''Policy with hyperparameters optimized for continuous control environments
        (e.g. MuJoCo). Returns log_dir, where the trained policy is saved.'''
-    set_cuda_visible_devices()
     blogger.configure(dir=log_dir)
     checkpoint_dir = osp.join(blogger.get_dir(), 'checkpoints')
     os.makedirs(checkpoint_dir)

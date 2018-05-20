@@ -139,31 +139,8 @@ def ray_get_nested_dict(ob, level=0):
 
 # GPU Management
 
-# Ray does not support fractional GPU resources (issue #402)
-# Workaround: pretend we have more GPUs than we do!
-# IMPORTANT: If you change this, also change --num-gpus in scripts/cluster.yaml
-GPU_MULTIPLIER = 4
-
-def get_num_fake_gpus(max_gpu=None):
-    gpus = ray.services._autodetect_num_gpus()
-    if max_gpu is not None:
-        gpus = min(gpus, max_gpu)
-    return gpus * GPU_MULTIPLIER
-
 def set_cuda_visible_devices():
     ids = ray.get_gpu_ids()
-    # Fractional allocation across GPUs won't work reliably
-    # e.g. what if we need a half, and two GPUs are both 3/4's full
-    # Let's just handle the simple case of needing 1/GPU_MULTIPLIER of a GPU.
-    if len(ids) == 0:
-        # Algorithm didn't ask for any GPUs? OK, it won't get any.
-        gpus = ''
-    elif len(ids) == 1:
-        # Algorithm asked for one GPU. Map it onto the appropriate one.
-        gpus = str(ids[0] % GPU_MULTIPLIER)
-    else:
-        # Don't support asking for more than one fraction of the GPU.
-        # The issue is Ray isn't guaranteed to allocate us slices from the
-        # same GPU.
-        raise ValueError("Requested task with >1 GPU (currently unsupported).")
+    real_num_gpus = ray.services._autodetect_num_gpus()
+    gpus = ','.join([str(x % real_num_gpus) for x in ids])
     os.environ['CUDA_VISIBLE_DEVICES'] = gpus
