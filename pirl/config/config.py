@@ -13,7 +13,7 @@ DATA_DIR = osp.join(PROJECT_DIR, 'data')
 RAY_SERVER = None # Scheduler IP
 
 try:
-    from pirl.experiments.config_local import *
+    from pirl.config.config_local import *
 except ImportError:
     pass
 
