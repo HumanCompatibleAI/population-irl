@@ -113,8 +113,8 @@ def ray_remote_variable_resources(**kwargs):
                 raise ValueError("No 'rl' or 'irl' parameters")
             num_gpus = bool(uses_gpu)
             # TODO: should parallelism of environments be the only factor?
-            # TODO: fudge factor? (do we really need one CPU per environment?)
-            num_cpus = parallel
+            # TODO: is 2 the appropriate fudge factor?
+            num_cpus = max(1, parallel // 2)
 
             try:
                 fn = cache[(num_cpus, num_gpus)]
