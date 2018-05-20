@@ -20,20 +20,22 @@ MetaIRLAlgorithm = namedtuple('MetaIRLAlgorithm',
                               ['metalearn', 'finetune',
                                'reward_wrapper', 'value'] + RES_FLDS)
 
-# Directory location
+# Overrideable defaults
 PROJECT_DIR = osp.dirname(osp.dirname(osp.dirname(osp.realpath(__file__))))
 DATA_DIR = osp.join(PROJECT_DIR, 'data')
-OBJECT_DIR = osp.join(DATA_DIR, 'objects')
-CACHE_DIR = osp.join(PROJECT_DIR, 'cache')
-LOG_DIR = osp.join(PROJECT_DIR, 'logs')
-
-# Scheduler IP
-RAY_SERVER = None
+RAY_SERVER = None # Scheduler IP
 
 try:
     from pirl.experiments.config_local import *
 except ImportError:
     pass
+
+# Directory locations
+
+EXPERIMENTS_DIR = osp.join(DATA_DIR, 'experiments')
+OBJECT_DIR = osp.join(DATA_DIR, 'objects')
+CACHE_DIR = osp.join(DATA_DIR, 'cache')
+LOG_DIR = osp.join(DATA_DIR, 'logs')
 
 # ML Framework Config
 

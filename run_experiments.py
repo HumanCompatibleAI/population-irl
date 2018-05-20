@@ -34,7 +34,6 @@ experiment_type = _check_in(config.EXPERIMENTS.keys(), 'experiment')
 def parse_args():
     desc = 'Log trajectories from an RL algorithm.'
     parser = argparse.ArgumentParser(description=desc)
-    parser.add_argument('--data_dir', metavar='dir', default=config.DATA_DIR, type=str)
     parser.add_argument('--seed', metavar='STR', default='foobar', type=str)
     parser.add_argument('--video-every', metavar='N', default=0, type=int,
                         help='video every N episodes; disabled by default.')
@@ -81,7 +80,7 @@ if __name__ == '__main__':
         timestamp = datetime.now().strftime(ISO_TIMESTAMP)
         version = git_hash()
         out_dir = '{}-{}-{}'.format(experiment, timestamp, version)
-        path = os.path.join(args.data_dir, out_dir)
+        path = os.path.join(config.EXPERIMENTS_DIR, out_dir)
         os.makedirs(path)
 
         cfg = config.EXPERIMENTS[experiment]

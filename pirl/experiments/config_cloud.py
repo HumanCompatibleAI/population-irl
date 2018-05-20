@@ -6,6 +6,7 @@ hostname = socket.gethostname()
 
 SHARED_MNT = '/mnt/efs/population-irl'
 LOG_DIR = osp.join(SHARED_MNT, 'logs', hostname)
+OBJECT_DIR = osp.join(SHARED_MNT, 'objects')
 DATA_DIR = osp.join(SHARED_MNT, 'data')
 CACHE_DIR = osp.join(SHARED_MNT, 'cache')
 
