@@ -249,12 +249,12 @@ for k, (common, meta, fine) in AIRLP_ALGORITHMS.items():
     POPULATION_IRL_ALGORITHMS['airlp_{}'.format(k)] = entry
 
 def traditional_to_concat(singleirl):
-    def metalearner(envs, trajectories, discount, log_dir):
+    def metalearner(envs, trajectories, discount, seed, log_dir):
         return list(itertools.chain(*trajectories.values()))
     @functools.wraps(singleirl.train)
-    def finetune(train_trajectories, envs, test_trajectories, **kwargs):
+    def finetune(train_trajectories, envs, test_trajectories, discount, seed, **kwargs):
         concat_trajectories = train_trajectories + test_trajectories
-        return singleirl.train(envs, concat_trajectories, **kwargs)
+        return singleirl.train(envs, concat_trajectories, discount, seed, **kwargs)
     return MetaIRLAlgorithm(metalearner, finetune,
                             singleirl.reward_wrapper, singleirl.value,
                             singleirl.vectorized, singleirl.uses_gpu)
