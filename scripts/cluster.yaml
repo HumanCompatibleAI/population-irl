@@ -16,7 +16,8 @@ auth:
 
 # Node templates
 head_node:
-    InstanceType: m5.large
+    #TODO: when Ray issue #2106 is fixed, switch this to non-GPU (e.g. m5)
+    InstanceType: p2.xlarge
     ImageId: ami-099e28043c783216a  # Custom AMI with our code pre-installed
     KeyName: Population-IRL
 
