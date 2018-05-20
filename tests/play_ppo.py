@@ -5,7 +5,8 @@ from gym.wrappers import Monitor
 import joblib
 
 from pirl.agents import ppo
-from pirl.experiments import config
+from pirl import config
+
 
 class InteractiveMonitor(gym.Wrapper):
     def __init__(self, env):

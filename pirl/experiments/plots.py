@@ -45,19 +45,22 @@ def nested_dicts_to_df(ds, idxs, transform):
 def extract_value(data):
     def unpack_mean_sd_tuple(d):
         return {k: {'mean': v[0], 'se': v[1]} for k, v in d.items()}
-    idxs = ['irl', 'n', 'm', 'env', 'eval', 'type']
+    idxs = ['seed', 'eval', 'irl', 'env', 'n', 'm', 'type']
     values = nested_dicts_to_df(data['values'], idxs, unpack_mean_sd_tuple)
-    sorted_idx = ['env', 'n', 'm', 'eval', 'type']
+    values = values.stack().unstack('eval')
+    sorted_idx = ['env', 'n', 'm', 'irl', 'seed', 'type']
     values = values.reorder_levels(sorted_idx)
 
-    idx =  ['env', 'eval', 'type']
+    idx =  ['seed', 'eval', 'env', 'type']
     ground_truth = nested_dicts_to_df(data['ground_truth'], idx, unpack_mean_sd_tuple)
     ground_truth = ground_truth.stack().unstack('eval')
-    ground_truth = ground_truth.reorder_levels(['env', 'type'])
+    ground_truth = ground_truth.reorder_levels(['env', 'seed', 'type'])
 
     def get_gt(k):
-        env, _, _, _, kind = k
-        return ground_truth.loc[(env, kind), :]
+        env, _, _, _, seed, kind = k
+        return ground_truth.loc[(env, seed, kind), :]
+    print('values', values.index)
+    print('ground_truth', ground_truth.index)
     values_gt = pd.DataFrame(list(map(get_gt, values.index)), index=values.index)
     return pd.concat([values, values_gt], axis=1)
 

@@ -8,16 +8,16 @@ import os
 import os.path as osp
 import tempfile
 
-import joblib
-import ray
-
 from baselines import bench
 from baselines.common.vec_env.dummy_vec_env import DummyVecEnv
 from baselines.common.vec_env.subproc_vec_env import SubprocVecEnv
 import gym
+import joblib
 from joblib import Memory
+import numpy as np
+import ray
 
-from pirl.experiments import config
+from pirl import config
 from pirl.utils import create_seed, id_generator, sanitize_env_name, safeset, \
                        map_nested_dict, ray_get_nested_dict, \
                        set_cuda_visible_devices
@@ -212,7 +212,8 @@ def _train_policy(rl=None, discount=None, parallel=None, seed=None,
                     log_prefix=osp.join(mon_dir, 'train')) as envs:
         # This nested parallelism is unfortunate. We're mostly doing this
         # as algorithms differ in their resource reservation.
-        policy = rl_algo.train(envs, discount=discount, log_dir=log_dir)
+        policy = rl_algo.train(envs, discount=discount, seed=train_seed,
+                               log_dir=log_dir)
 
     joblib.dump(policy, osp.join(log_dir, 'policy.pkl'))  # save for debugging
 
@@ -360,8 +361,8 @@ def _run_population_irl_meta(irl, parallel, discount, seed, trajs, log_dir):
 
     # Run metalearning
     subset = {k: v[:n] for k, v in trajs.items()}
-    metainit = irl_algo.metalearn(meta_envs, subset,
-                                  discount=discount, log_dir=meta_log_dir)
+    metainit = irl_algo.metalearn(meta_envs, subset, discount=discount,
+                                  seed=irl_seed, log_dir=meta_log_dir)
 
     # Make sure to exit out of all the environments
     for env in ctxs.values():
@@ -392,9 +393,8 @@ def _run_population_irl_finetune(irl, parallel, discount, seed,
     with _make_envs(env, irl_algo.vectorized, parallel,
                     finetune_seed,
                     log_prefix=finetune_mon_prefix) as envs:
-        r, p = irl_algo.finetune(metainit, envs, trajs,
-                                 discount=discount,
-                                 log_dir=log_dir)
+        r, p = irl_algo.finetune(metainit, envs, trajs, discount=discount,
+                                 seed=finetune_seed, log_dir=log_dir)
 
     # Compute value of finetuned policy
     with _make_envs(env, irl_algo.vectorized, parallel,
@@ -481,19 +481,18 @@ def _run_single_irl_train(irl, parallel, discount, seed,
     mon_dir = osp.join(log_dir, 'mon')
     os.makedirs(mon_dir)
 
-    eval_seed = create_seed(seed + 'eval')
-    irl_seed = create_seed(seed + 'irl')
-
     irl_algo = config.SINGLE_IRL_ALGORITHMS[irl]
+    irl_seed = create_seed(seed + 'irl')
     with _make_envs(env_name, irl_algo.vectorized, parallel, irl_seed,
                     log_prefix=osp.join(mon_dir, 'train')) as envs:
         reward, policy = irl_algo.train(envs, trajectories, discount=discount,
-                                        log_dir=log_dir)
+                                        seed=irl_seed, log_dir=log_dir)
 
     # Save learnt reward & policy for debugging purposes
     joblib.dump(reward, osp.join(log_dir, 'reward.pkl'))
     joblib.dump(policy, osp.join(log_dir, 'policy.pkl'))
 
+    eval_seed = create_seed(seed + 'eval')
     with _make_envs(env_name, irl_algo.vectorized, parallel, eval_seed,
                     log_prefix=osp.join(mon_dir, 'eval')) as envs:
         value = irl_algo.value(envs, policy, discount=1.00, seed=eval_seed)
@@ -624,7 +623,8 @@ def _value_helper(irl=None, n=None, m=None, rl=None,
     with _make_envs(env_name, rl_algo.vectorized, parallel,
                     train_seed, post_wrapper=rw,
                     log_prefix=osp.join(mon_dir, 'train')) as envs:
-        p = rl_algo.train(envs, discount=discount, log_dir=log_dir)
+        p = rl_algo.train(envs, discount=discount,
+                          seed=train_seed, log_dir=log_dir)
 
     eval_seed = create_seed(seed + 'eval_eval')
     with _make_envs(env_name, rl_algo.vectorized, parallel,
@@ -697,6 +697,8 @@ def value(cfg, out_dir, rewards, seed):
                                             functools.partial(reward_map, rl=rl))
 
     # ground_truth_futures: [rl][env] -> (mean, se)
+    #TODO: This is often duplicating the work of expert_trajs.
+    #It also feels conceptually confused -- we should probably be computing this in a separate function.
     ground_truth_futures = collections.OrderedDict()
     for rl in cfg['eval']:
         for env_name in cfg.get('test_environments', cfg.get('environments')):
@@ -710,7 +712,7 @@ def value(cfg, out_dir, rewards, seed):
                 'seed': seed,
             }
             pol = _train_policy.remote(log_dir=osp.join(log_dir, 'train'),
-                                       **kwargs,)
+                                       **kwargs)
             val = _compute_value.remote(policy=pol,
                                         log_dir=osp.join(log_dir, 'eval'),
                                         **kwargs)
@@ -720,29 +722,7 @@ def value(cfg, out_dir, rewards, seed):
 
 ## General
 
-def run_experiment(cfg, out_dir, video_every, seed):
-    '''Run experiment defined in config.EXPERIMENTS.
-
-    Args:
-        - experiment(str): experiment name.
-        - out_dir(str): path to write logs and results to.
-        - video_every(optional[int]): if None, do not record video.
-        - seed(int)
-
-    Returns:
-        dict with key-value pairs:
-
-        - trajectories: synthetic data.
-            dict, keyed by environments, with values generated by synthetic_data.
-        - rewards: IRL inferred reward.
-            nested dict, keyed by environment then IRL algorithm.
-        - value: value obtained reoptimizing in the environment.
-            Use the RL algorithm used to generate the original synthetic data
-            to train a policy on the inferred reward, then compute expected
-            discounted value obtained from the resulting policy.
-        - ground_truth: value obtained from RL policy.
-        - info: info dict from IRL algorithms.
-        '''
+def _run_experiment(cfg, out_dir, video_every, seed):
     # Generate synthetic data
     # trajs: dict, env -> Future[list of np arrays]
     # expert_vals: dict, env -> Future[(mean, s.e.)]
@@ -766,4 +746,36 @@ def run_experiment(cfg, out_dir, video_every, seed):
         'values': values,
         'ground_truth': ground_truth
     }
-    return ray_get_nested_dict(res, level=2)
+    return res
+
+
+def run_experiment(cfg, out_dir, video_every, base_seed):
+    '''Run experiment defined in config.EXPERIMENTS.
+
+    Args:
+        - experiment(str): experiment name.
+        - out_dir(str): path to write logs and results to.
+        - video_every(optional[int]): if None, do not record video.
+        - base_seed(int)
+
+    Returns:
+        dict with key-value pairs:
+
+        - trajectories: synthetic data.
+            dict, keyed by environments, with values generated by synthetic_data.
+        - rewards: IRL inferred reward.
+            nested dict, keyed by environment then IRL algorithm.
+        - value: value obtained reoptimizing in the environment.
+            Use the RL algorithm used to generate the original synthetic data
+            to train a policy on the inferred reward, then compute expected
+            discounted value obtained from the resulting policy.
+        - ground_truth: value obtained from RL policy.
+        - info: info dict from IRL algorithms.
+        '''
+    res = collections.defaultdict(collections.OrderedDict)
+    for seed in range(cfg['seeds']):
+        d = _run_experiment(cfg, out_dir, video_every, base_seed + str(seed))
+        for k, v in d.items():
+            res[k][seed] = v
+
+    return ray_get_nested_dict(res, level=3)

@@ -1,24 +1,11 @@
-from collections import namedtuple
 import functools
 import itertools
-import logging.config
 import os.path as osp
-import sys
 
-import gym
-import numpy as np
 import tensorflow as tf
 
-from pirl import agents, envs, irl
-
-# Types
-RES_FLDS = ['vectorized', 'uses_gpu']
-RLAlgorithm = namedtuple('RLAlgorithm', ['train', 'sample', 'value'] + RES_FLDS)
-IRLAlgorithm = namedtuple('IRLAlgorithm',
-                          ['train', 'reward_wrapper', 'value'] + RES_FLDS)
-MetaIRLAlgorithm = namedtuple('MetaIRLAlgorithm',
-                              ['metalearn', 'finetune',
-                               'reward_wrapper', 'value'] + RES_FLDS)
+from pirl import agents, irl
+from pirl.config.types import RLAlgorithm, IRLAlgorithm, MetaIRLAlgorithm
 
 # Overrideable defaults
 PROJECT_DIR = osp.dirname(osp.dirname(osp.dirname(osp.realpath(__file__))))
@@ -69,25 +56,12 @@ LOG_CFG = {
         }
     }
 
-def node_setup():
-    logging.config.dictConfig(LOG_CFG)
-    # Hack: Joblib Memory.cache uses repr() on numpy arrays for metadata.
-    # This ends up taking ~100s per call and increases space on disk by 2x.
-    # Make numpy repr() more compact.
-    np.set_printoptions(threshold=5)
-#TODO: Execute this explicitly rather than on import
-#It's bad form to mess with the logging settings of scripts importing us.
-#Better to set it explicitly in each program during startup.
-#However, Ray does not let us run setup code on workers, this is an easy workaround :(
-node_setup()
-
-
 # RL Algorithms
 
 # Values take form (gen_policy, sample, compute_value).
 #
-# gen_policy has signature (env, discount, log_dir), where env is a gym.Env,
-# discount is a float and log_dir is a writable directory.
+# gen_policy has signature (env, discount, seed, log_dir), where env is a gym.Env,
+# discount is a float, seed is an integer and log_dir is a writable directory.
 # They return a policy (algorithm-specific object).
 #
 # sample has signature (env, policy, num_episodes, seed) where
@@ -95,7 +69,7 @@ node_setup()
 # to sample deterministically. It returns a list of 3-tuples
 # (states, actions, rewards), each of which is a list.
 #
-# compute_value has signature (env, policy, discount).
+# compute_value has signature (env, policy, discount, seed).
 # It returns (mean, se) where mean is the estimated reward and se is the
 # standard error (0 for exact methods).
 RL_ALGORITHMS = {
@@ -138,6 +112,29 @@ RL_ALGORITHMS['ppo_cts_shortest'] = ppo_cts_pol(1e4)
 
 ## Single environment IRL algorithms (not population)
 
+# Values take the form: (irl, reward_wrapper, compute_value).
+#
+# irl signature (env, trajectories, discount, seed, log_dir) where:
+# - env is a gym.Env.
+# - trajectories is a dict of environment IDs to lists of trajectories.
+# - discount is a float in [0,1].
+# - seed is an integer.
+# - log_dir is a directory which may be used for logging or other temporary output.
+# It returns a tuple (reward, policy), both of which are algorithm-specific
+# objects. reward must be comprehensible to RL algorithms (if any) specified in
+# the 'eval' key in the experimental config.
+#
+# reward_wrapper is a class with signature __init__(env, reward).
+# It wraps environment (that may be a vector environment) and overrides step()
+# to return the reward learnt by the IRL algorithm.
+#
+# compute_value has signature (env, policy, discount, seed) where:
+# - env is a gym.Env.
+# - policy is as returned by the IRL algorithm.
+# - discount is a float in [0,1].
+# - seed is an integer.
+# It returns (mean, se) where mean is the estimated reward and se is the
+# standard error (0 for exact methods).
 SINGLE_IRL_ALGORITHMS = {
     # Maximum Causal Entropy (Ziebart 2010)
     'mce': IRLAlgorithm(
@@ -199,27 +196,19 @@ for k, kwargs in AIRL_ALGORITHMS.items():
 
 ## Population IRL algorithms
 
-# Values take the form: (irl, reward_wrapper, compute_value).
+# Values take the form: (metalearn, finetune, reward_wrapper, compute_value).
 #
-# irl signature (env, trajectories, discount, log_dir) where:
-# - env is a gym.Env.
-# - trajectories is a dict of environment IDs to lists of trajectories.
-# - discount is a float in [0,1].
-# - log_dir is a directory which may be used for logging or other temporary output.
-# It returns a tuple (reward, policy), both of which are algorithm-specific
-# objects. reward must be comprehensible to RL algorithms (if any) specified in
-# the 'eval' key in the experimental config.
+# metalearn has signature (envs, trajectories, discount, seed, log_dir), where:
+# - envs is a dictionary mapping to gym.Env
+# - trajectories is a dictionary mapping to trajectories
+# - discount, seed and log_dir are as in the single-IRL case.
+# It returns an algorithm-specific object.
 #
-# reward_wrapper is a class with signature __init__(env, reward).
-# It wraps environment and overrides step() to return the reward learnt by
-# the IRL algorithm.
+# finetune has signature (metainit, env, trajectories, discount, seed, log_dir),
+# where metainit is the return value of metalearn; the remaining arguments and
+# the return value are as in the single-IRL case.
 #
-# compute_value has signature (env, policy, discount) where:
-# - env is a gym.Env.
-# - policy is as returned by the IRL algorithm.
-# - discount is a float in [0,1].
-# It returns (mean, se) where mean is the estimated reward and se is the
-# standard error (0 for exact methods).
+# reward_wrapper and compute_value are the same as in the single-IRL case.
 POPULATION_IRL_ALGORITHMS = dict()
 def pop_maxent(**kwargs):
     return MetaIRLAlgorithm(
@@ -589,47 +578,3 @@ for n in [1, 4, 8, 16]:
         'irl': [],
         'test_trajectories': [10],
     }
-
-
-def validate_config():
-    # Check algorithms
-    pop_keys = set(POPULATION_IRL_ALGORITHMS.keys())
-    intersection = pop_keys.intersection(SINGLE_IRL_ALGORITHMS.keys())
-    assert len(intersection) == 0
-
-    for rl, algo in RL_ALGORITHMS.items():
-        assert isinstance(algo, RLAlgorithm), rl
-    for irl, algo in SINGLE_IRL_ALGORITHMS.items():
-        assert isinstance(algo, IRLAlgorithm), irl
-    for irl, algo in POPULATION_IRL_ALGORITHMS.items():
-        assert isinstance(algo, MetaIRLAlgorithm), irl
-
-    for k, v in EXPERIMENTS.items():
-        try:
-            # Check environments
-            env_fields = ['environments',
-                          'train_environments',
-                          'test_environnments']
-            for field in env_fields:
-                for env in v.get(field, []):
-                    gym.envs.registry.spec(env)
-
-            # Check algorithms
-            RL_ALGORITHMS[v['expert']]
-            for rl in v.get(eval, []):
-                RL_ALGORITHMS[rl]
-            for irl in v['irl']:
-                assert (irl in POPULATION_IRL_ALGORITHMS or
-                        irl in SINGLE_IRL_ALGORITHMS)
-
-            # Check other config params
-            float(v['discount'])
-            meta_irl = any([irl in POPULATION_IRL_ALGORITHMS
-                            for irl in v['irl']])
-            assert ('train_trajectories' in v) == meta_irl
-            if 'train_trajectories' in v:
-                [int(t) for t in v['train_trajectories']]
-            [int(t) for t in v['test_trajectories']]
-        except Exception as e:
-            msg = 'In experiment ' + k + ': ' + str(e)
-            raise type(e)(msg).with_traceback(sys.exc_info()[2])

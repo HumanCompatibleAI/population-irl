@@ -335,9 +335,8 @@ def _make_const(norm):
             setattr(norm, k, ConstantStatistics(v))
 
 
-# TODO: remove None defaults (workaround Ray issue #998)
-def train_continuous(venv=None, discount=None, log_dir=None,
-                     tf_config=None, num_timesteps=None, norm=True):
+def train_continuous(venv, discount, seed, log_dir, tf_config,
+                     num_timesteps, norm=True):
     '''Policy with hyperparameters optimized for continuous control environments
        (e.g. MuJoCo). Returns log_dir, where the trained policy is saved.'''
     blogger.configure(dir=log_dir)
@@ -359,6 +358,7 @@ def train_continuous(venv=None, discount=None, log_dir=None,
 
     train_graph = tf.Graph()
     with train_graph.as_default():
+        tf.set_random_seed(seed)
         with tf.Session(config=make_config(tf_config)):
             policy = MlpPolicy
             nsteps = 2048 // venv.num_envs
@@ -404,8 +404,7 @@ def sample(envs=None, policy=None, num_episodes=None,
     infer_graph = tf.Graph()
     with infer_graph.as_default():
         # Seed to make results reproducible
-        seed = seeding.create_seed(seed)
-        tf.set_random_seed(seed)  # TODO: is this seed really needed (can set globally)?
+        tf.set_random_seed(seed)
         with tf.Session(config=make_config(tf_config)):
             # Load model
             make_model_pkl, params = smodel

@@ -149,17 +149,18 @@ def _convert_trajectories(trajs):
             for obs, actions in trajs]
 
 
-def irl(venv, trajectories, discount, log_dir, tf_cfg, model_cfg={},
+def irl(venv, trajectories, discount, seed, log_dir, *, tf_cfg, model_cfg={},
         policy_cfg=None, training_cfg={}, warmstart=None):
     envs = VecGymEnv(venv)
     envs = TfEnv(envs)
-
     experts = _convert_trajectories(trajectories)
-    model_kwargs = {'state_only': True, 'max_itrs': 10}
-    model_kwargs.update(model_cfg)
 
     train_graph = tf.Graph()
     with train_graph.as_default():
+        tf.set_random_seed(seed)
+
+        model_kwargs = {'state_only': True, 'max_itrs': 10}
+        model_kwargs.update(model_cfg)
         irl_model = AIRL(env_spec=envs.spec, expert_trajs=experts, **model_kwargs)
 
         if policy_cfg is None:
@@ -189,6 +190,7 @@ def irl(venv, trajectories, discount, log_dir, tf_cfg, model_cfg={},
             baseline=LinearFeatureBaseline(env_spec=envs.spec),
             **training_kwargs
         )
+
         with rllab_logdir(algo=algo, dirname=log_dir):
             with tf.Session(config=tf_cfg):
                 if warmstart is not None:
@@ -211,7 +213,7 @@ def irl(venv, trajectories, discount, log_dir, tf_cfg, model_cfg={},
     return reward, policy_pkl
 
 
-def metalearn(venvs, trajectories, discount, log_dir, *, tf_cfg, outer_itr=1000,
+def metalearn(venvs, trajectories, discount, seed, log_dir, *, tf_cfg, outer_itr=1000,
               lr=1e-2, model_cfg={}, policy_cfg=None, training_cfg={}):
     #TODO: seeds
     envs = {k: TfEnv(VecGymEnv(v)) for k, v in venvs.items()}
@@ -225,6 +227,8 @@ def metalearn(venvs, trajectories, discount, log_dir, *, tf_cfg, outer_itr=1000,
 
     train_graph = tf.Graph()
     with train_graph.as_default():
+        tf.set_random_seed(seed)
+
         if policy_cfg is None:
             policy_cfg = {'policy': GaussianMLPPolicy, 'hidden_sizes': (32, 32)}
         policy_fn = policy_cfg.pop('policy')
@@ -304,7 +308,7 @@ def sample(venv, policy_pkl, num_episodes, seed, tf_cfg):
 
     infer_graph = tf.Graph()
     with infer_graph.as_default():
-        tf.set_random_seed(seed)  # seed to make results reproducible
+        tf.set_random_seed(seed)
         with tf.Session(config=tf_cfg):
             policy = pickle.loads(policy_pkl)
 

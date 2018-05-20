@@ -16,7 +16,8 @@ import pickle
 import git
 import ray
 
-from pirl.experiments import config, experiments
+from pirl import config
+from pirl.experiments import experiments
 
 logger = logging.getLogger('pirl.experiments.cli')
 
@@ -59,7 +60,6 @@ GPU_MULTIPLIER = 4  #
 ISO_TIMESTAMP = "%Y%m%d_%H%M%S"
 
 if __name__ == '__main__':
-    config.validate_config()  # fail fast and early
     # Argument parsing
     args = parse_args()
     video_every = args.video_every if args.video_every != 0 else None

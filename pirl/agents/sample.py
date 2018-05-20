@@ -13,7 +13,7 @@ def _summary_stats(trajectories, discount):
     return mean, se
 
 
-def value(sample, envs, policy, discount, num_episodes=100, seed=0):
+def value(sample, envs, policy, discount, seed, num_episodes=100):
     '''Test policy saved in blog_dir on num_episodes in env.
         Return average reward.'''
     trajs = sample(envs, policy, num_episodes, seed)

@@ -89,7 +89,7 @@ default_scheduler = {
     ),
 }
 
-def irl(mdp, trajectories, discount, log_dir=None, demo_counts=None,
+def irl(mdp, trajectories, discount, seed=None, log_dir=None, demo_counts=None,
         horizon=None, planner=max_causal_ent_policy,
         regularize=None, common_reward=None, optimizer=None, scheduler=None,
         num_iter=5000, log_every=100, log_expensive_every=1000):
@@ -102,6 +102,7 @@ def irl(mdp, trajectories, discount, log_dir=None, demo_counts=None,
             states/actions in that trajectory.
         - discount(float): between 0 and 1.
             Should match that of the agent generating the trajectories.
+        - seed: ignored.
         - log_dir: ignored.
         - demo_counts(array): expert visitation frequency; exclusive with trajectories.
             The expected visitation frequency of the optimal policy.
@@ -177,7 +178,8 @@ def irl(mdp, trajectories, discount, log_dir=None, demo_counts=None,
     return reward.data.numpy(), pol
 
 
-def metalearn(mdps, trajectories, discount, individual_reg=None, **kwargs):
+def metalearn(mdps, trajectories, discount, seed=None, log_dir=None,
+              individual_reg=None, **kwargs):
     """
     Args:
         - mdps(dict<TabularMdpEnv)>): MDPs trajectories were drawn from.
@@ -190,23 +192,24 @@ def metalearn(mdps, trajectories, discount, individual_reg=None, **kwargs):
             visited states/actions in that trajectory.
         - discount(float): between 0 and 1.
             Should match that of the agent generating the trajectories.
-        - individual_reg(float): regularization factor for per-agent reward.
-            Penalty factor applied to the l_2 norm of per-agent reward matrices,
-            divided by the number of trajectories.
+        - seed: passed through to irl().
+        - log_dir: passed through to irl().
+        - individual_reg(float): ignored (used by finetune).
         - kwargs: passed-through to irl().
 
     Returns mean_reward, a list containing the estimate reward for each state.
     """
-    res = {k: irl(mdp, trajectories[k], discount, **kwargs)
+    res = {k: irl(mdp, trajectories[k], discount, seed, log_dir, **kwargs)
            for k, mdp in mdps.items()}
     rewards = {k: r for k, (r, v) in res.items()}
     mean_reward = np.mean(list(rewards.values()), axis=0)
     return mean_reward
 
 
-def finetune(mean_reward, env_fns, trajectories, discount, log_dir=None, individual_reg=1e-2, **kwargs):
+def finetune(mean_reward, env_fns, trajectories, discount, seed=None,
+             log_dir=None, individual_reg=1e-2, **kwargs):
     """First argument is result of metalearn; individual_reg is regularization
        factor; remaining arguments are passed-through to irl."""
-    return irl(env_fns, trajectories, discount, log_dir,
+    return irl(env_fns, trajectories, discount, seed, log_dir,
                common_reward=mean_reward, regularize=individual_reg,
                **kwargs)
