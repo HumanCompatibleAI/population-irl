@@ -448,13 +448,13 @@ EXPERIMENTS['mountain-car-single'] = {
 }
 EXPERIMENTS['mountain-car-vel'] = {
     'environments': ['pirl/MountainCarContinuous-left-{}-v0'.format(vel)
-                     for vel in [0, 0.1, 1, 10]],
+                     for vel in [0, 0.1, 0.5, 1]],
     'parallel_rollouts': 4,
     'discount': 0.99,
     # simple environment, small number of iterations sufficient to converge
     'expert': 'ppo_cts_short',
     'eval': ['ppo_cts_short'],
-    'irl': ['airl_sa_short', 'airl_random_short'],
+    'irl': ['airl_so_short', 'airl_sa_short', 'airl_random_short'],
     'test_trajectories': [1, 2, 5, 100],
 }
 EXPERIMENTS['reacher-env-comparisons'] = {
