@@ -41,14 +41,14 @@ def nested_dicts_to_df(ds, idxs, transform):
         df.columns.name = idxs[0]
     return df
 
-
 def extract_value(data):
     def unpack_mean_sd_tuple(d):
         return {k: {'mean': v[0], 'se': v[1]} for k, v in d.items()}
     idxs = ['seed', 'eval', 'irl', 'env', 'n', 'm', 'type']
     values = nested_dicts_to_df(data['values'], idxs, unpack_mean_sd_tuple)
-    values = values.stack().unstack('eval')
-    sorted_idx = ['env', 'n', 'm', 'irl', 'seed', 'type']
+    values = values.stack().unstack('irl')
+    values.columns.name = 'irl'
+    sorted_idx = ['env', 'n', 'm', 'eval', 'seed', 'type']
     values = values.reorder_levels(sorted_idx)
 
     idx =  ['seed', 'eval', 'env', 'type']
@@ -59,11 +59,54 @@ def extract_value(data):
     def get_gt(k):
         env, _, _, _, seed, kind = k
         return ground_truth.loc[(env, seed, kind), :]
-    print('values', values.index)
-    print('ground_truth', ground_truth.index)
     values_gt = pd.DataFrame(list(map(get_gt, values.index)), index=values.index)
     return pd.concat([values, values_gt], axis=1)
 
+def load_value(experiment_dir, algo_pattern='(.*)', env_pattern='(.*)', algos=['.*'], dps=2):
+    fname = osp.join(experiment_dir, 'results.pkl')
+    data = pd.read_pickle(fname)
+
+    value = extract_value(data)
+    value.columns = value.columns.str.extract(algo_pattern, expand=False)
+    envs = value.index.levels[0].str.extract(env_pattern, expand=False)
+    value.index = value.index.set_levels(envs, level=0)
+
+    matches = []
+    mask = pd.Series(False, index=value.columns)
+    for p in algos:
+        m = value.columns.str.match(p)
+        matches += list(value.columns[m & (~mask)])
+        mask |= m
+    value = value.loc[:, matches]
+
+    value.columns = value.columns.str.split('_').str.join(' ')  # so lines wrap
+    value = value.round(dps)
+    return value
+
+def aggregate_value(values, n=100):
+    '''Aggregate mean and standard error across seeds. We assume the same number
+       of samples n are used to calculate the mean and s.e. of each seed.'''
+    nil_slices = (slice(None),) * 5
+    means = values.loc[nil_slices + ('mean',), :]
+    means.index = means.index.droplevel('type')
+    ses = values.loc[nil_slices + ('se',), :]
+    ses.index = ses.index.droplevel('type')
+
+    # The mean is just the mean across seeds
+    mean = means.stack().unstack('seed').mean(axis=1).unstack(-1)
+
+    # Reconstruct mean-of-squares
+    squares = (ses * ses * n) + (means * means)
+    mean_square = squares.stack().unstack('seed').mean(axis=1).unstack(-1)
+
+    # Back out standard error
+    var = mean_square - (mean * mean)
+    se = np.sqrt(var) / np.sqrt(n)
+
+    return mean, se
+
+def plot_ci(mean, se):
+    return mean.applymap(lambda x: '{:.3f} +/- '.format(x)) + se.applymap(lambda x: '{:.3f}'.format(1.96 * x))
 
 def _gridworld_heatmap(reward, shape, walls=None, **kwargs):
     reward = reward.reshape(shape)
@@ -224,26 +267,23 @@ def gridworld_cartoon(shape, **kwargs):
     sns.heatmap(idx, **kwargs)
     return fig
 
-def value_bar_chart(values, alpha=0.05, relative=None,
+def value_bar_chart(mean, se, alpha=0.05, relative=None,
                     error=False, ax=None, **kwargs):
-    '''Takes DataFrame with columns corresponding to algorithms, and
-       a MultiIndex with levels [n, type] where n is the number of trajectories
-       and type is either 'mean' or 'se'. It outputs a stacked bar graph.'''
+    '''Takes two DataFrames with columns corresponding to algorithms, and
+       the index to the number of trajectories. It outputs a stacked bar graph.'''
     if ax is None:
         ax = plt.gca()
-    y = values.xs('mean', level='type')
-    se = values.xs('se', level='type')
     z = scipy.stats.norm.ppf(1 - (alpha / 2))
     err = se * z
 
     if relative is not None:
         if error:
-            y = -y.sub(y[relative], 0)
+            mean = -mean.sub(mean[relative], 0)
         else:
-            rel = y[relative]
+            rel = mean[relative]
 
-        y = y.drop(relative, axis=1)
-    y.plot.bar(yerr=err, ax=ax, **kwargs)
+        mean = mean.drop(relative, axis=1)
+    mean.plot.bar(yerr=err, ax=ax, **kwargs)
 
     ax.set_xlabel('Trajectories')
     ax.set_ylabel('Expected Value')
@@ -251,7 +291,7 @@ def value_bar_chart(values, alpha=0.05, relative=None,
         if error:
             ax.set_ylabel('Error')
         else:
-            color = 'C{}'.format(len(y.columns))
+            color = 'C{}'.format(len(mean.columns))
             ax.axhline(rel.iloc[0], xmin=0, xmax=1,
                        linestyle=':', linewidth=0.5,
                        color=color, label=relative)
@@ -294,15 +334,14 @@ def value_bar_chart_by_env(values, envs=None, relative=None, **kwargs):
 
     return fig
 
-def value_latex_table(values, dps=2, relative=None, envs=None):
-    df = values.xs('mean', level='type')
+def value_latex_table(mean, dps=2, relative=None, envs=None):
     if relative is not None:
-        df = df.sub(df[relative], axis=0)
-        df = df.drop(relative, axis=1)
+        mean = mean.sub(mean[relative], axis=0)
+        mean = mean.drop(relative, axis=1)
 
-    df = df.round(dps)
-    df.columns.name = 'algo'
-    df = df.unstack('m')
+    mean = mean.round(dps)
+    mean.columns.name = 'algo'
+    mean = mean.unstack('m')
 
     def bold_group(group):
         best_idx = group.idxmax()
@@ -315,13 +354,13 @@ def value_latex_table(values, dps=2, relative=None, envs=None):
                 group.loc[idx] = r'\textit{' + group.loc[idx] + '}'
         group[best_idx] = r'\textbf{' + group[best_idx] + '}'
         return group
-    df = df.transform(bold_group, axis=1)
-    df = df.stack('m').unstack('env')
-    df.columns = df.columns.reorder_levels(['env', 'algo'])
+    mean = mean.transform(bold_group, axis=1)
+    mean = mean.stack('m').unstack('env')
+    mean.columns = mean.columns.reorder_levels(['env', 'algo'])
     if envs is None:
-        envs = df.columns.levels[0]
-    df = pd.concat([df.loc[:, [x]] for x in envs], axis=1)
-    return df.to_latex(escape=False)
+        envs = mean.columns.levels[0]
+    mean = pd.concat([mean.loc[:, [x]] for x in envs], axis=1)
+    return mean.to_latex(escape=False)
 
 
 def save_figs(figs, prefix):
