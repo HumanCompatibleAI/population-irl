@@ -219,11 +219,11 @@ def pop_maxent(**kwargs):
         vectorized=False,
         uses_gpu=False,
     )
-for reg in range(-2,3):
-    algo = pop_maxent(individual_reg = 10**reg)
+for reg in range(-4,3):
+    algo = pop_maxent(regularize=10**reg)
     POPULATION_IRL_ALGORITHMS['mcep_reg1e{}'.format(reg)] = algo
-POPULATION_IRL_ALGORITHMS['mcep_reg0'] = pop_maxent(individual_reg=0)
-POPULATION_IRL_ALGORITHMS['mcep_shortest_reg0'] = pop_maxent(individual_reg=0,
+POPULATION_IRL_ALGORITHMS['mcep_reg0'] = pop_maxent(regularize=0)
+POPULATION_IRL_ALGORITHMS['mcep_shortest_reg0'] = pop_maxent(regularize=0,
                                                              num_iter=500)
 
 AIRLP_ALGORITHMS = {
@@ -364,6 +364,8 @@ for shape in ['9x9', '4x4']:
                 'mce',
                 'mcec',
                 'mcep_reg0',
+                'mcep_reg1e-4',
+                'mcep_reg1e-3',
                 'mcep_reg1e-2',
                 'mcep_reg1e-1',
                 'mcep_reg1e0',
@@ -371,6 +373,19 @@ for shape in ['9x9', '4x4']:
             'train_trajectories': [1000],
             'test_trajectories': [0, 1, 2, 5, 10, 20, 50, 100],
         }
+EXPERIMENTS['few-jungle-quick-tmp'] = {
+    'train_environments': ['pirl/GridWorld-Jungle-9x9-{}-v0'.format(k)
+                           for k in jungle_types if k != 'Water'],
+    'test_environments': ['pirl/GridWorld-Jungle-9x9-Water-v0'],
+    'discount': 1.00,
+    'expert': 'max_causal_ent',
+    'eval': ['value_iteration'],
+    'irl': [
+        'mcep_reg1e-1',
+    ],
+    'train_trajectories': [1000],
+    'test_trajectories': [0, 1, 2, 5, 10, 20, 50, 100],
+}
 
 # Continuous control
 EXPERIMENTS['continuous-baselines-classic'] = {

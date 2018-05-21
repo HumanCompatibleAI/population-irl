@@ -161,7 +161,6 @@ def irl(mdp, trajectories, discount, seed=None, log_dir=None, demo_counts=None,
             else:
                 grad = delta
         reward.grad = Variable(torch.Tensor(grad))
-        reward.grad = Variable(torch.Tensor(ec - demo_counts))
         optimizer.step()
         scheduler.step()
 
@@ -179,7 +178,7 @@ def irl(mdp, trajectories, discount, seed=None, log_dir=None, demo_counts=None,
 
 
 def metalearn(mdps, trajectories, discount, seed=None, log_dir=None,
-              individual_reg=None, **kwargs):
+              regularize=None, **kwargs):
     """
     Args:
         - mdps(dict<TabularMdpEnv)>): MDPs trajectories were drawn from.
@@ -207,9 +206,9 @@ def metalearn(mdps, trajectories, discount, seed=None, log_dir=None,
 
 
 def finetune(mean_reward, env_fns, trajectories, discount, seed=None,
-             log_dir=None, individual_reg=1e-2, **kwargs):
+             log_dir=None, regularize=1e-2, **kwargs):
     """First argument is result of metalearn; individual_reg is regularization
        factor; remaining arguments are passed-through to irl."""
     return irl(env_fns, trajectories, discount, seed, log_dir,
-               common_reward=mean_reward, regularize=individual_reg,
+               common_reward=mean_reward, regularize=regularize,
                **kwargs)
