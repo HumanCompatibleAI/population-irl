@@ -83,14 +83,26 @@ def load_value(experiment_dir, algo_pattern='(.*)', env_pattern='(.*)', algos=['
     value = value.round(dps)
     return value
 
+def _extract_means_ses(values, with_seed=True):
+    nil_slices = (slice(None),) * (len(values.index.levels) - 1)
+    means = values.loc[nil_slices + ('mean',), :].copy()
+    means.index = means.index.droplevel('type')
+    ses = values.loc[nil_slices + ('se',), :].copy()
+    ses.index = ses.index.droplevel('type')
+    return means, ses
+
+
+def _combine_means_ses(means, ses):
+    means['type'] = 'mean'
+    means = means.set_index('type', append=True)
+    ses['type'] = 'se'
+    ses = ses.set_index('type', append=True)
+    return pd.concat([means, ses])
+
 def aggregate_value(values, n=100):
     '''Aggregate mean and standard error across seeds. We assume the same number
        of samples n are used to calculate the mean and s.e. of each seed.'''
-    nil_slices = (slice(None),) * 5
-    means = values.loc[nil_slices + ('mean',), :]
-    means.index = means.index.droplevel('type')
-    ses = values.loc[nil_slices + ('se',), :]
-    ses.index = ses.index.droplevel('type')
+    means, ses = _extract_means_ses(values)
 
     # The mean is just the mean across seeds
     mean = means.stack().unstack('seed').mean(axis=1).unstack(-1)
@@ -103,10 +115,12 @@ def aggregate_value(values, n=100):
     var = mean_square - (mean * mean)
     se = np.sqrt(var) / np.sqrt(n)
 
-    return mean, se
+    return _combine_means_ses(mean, se)
 
-def plot_ci(mean, se):
-    return mean.applymap(lambda x: '{:.3f} +/- '.format(x)) + se.applymap(lambda x: '{:.3f}'.format(1.96 * x))
+def plot_ci(values, dp=3):
+    mean, se = _extract_means_ses(values)
+    fstr = '{:.' + str(dp) + 'f}'
+    return mean.applymap(lambda x: (fstr + ' +/- ').format(x)) + se.applymap(lambda x: fstr.format(1.96 * x))
 
 def _gridworld_heatmap(reward, shape, walls=None, **kwargs):
     reward = reward.reshape(shape)
@@ -267,10 +281,11 @@ def gridworld_cartoon(shape, **kwargs):
     sns.heatmap(idx, **kwargs)
     return fig
 
-def value_bar_chart(mean, se, alpha=0.05, relative=None,
+def value_bar_chart(values, alpha=0.05, relative=None,
                     error=False, ax=None, **kwargs):
     '''Takes two DataFrames with columns corresponding to algorithms, and
        the index to the number of trajectories. It outputs a stacked bar graph.'''
+    mean, se = _extract_means_ses(values)
     if ax is None:
         ax = plt.gca()
     z = scipy.stats.norm.ppf(1 - (alpha / 2))
@@ -283,7 +298,18 @@ def value_bar_chart(mean, se, alpha=0.05, relative=None,
             rel = mean[relative]
 
         mean = mean.drop(relative, axis=1)
-    mean.plot.bar(yerr=err, ax=ax, **kwargs)
+        err = err.drop(relative, axis=1)
+
+        if not error:
+            # Clip error bars to not be above maximum possible
+            err = err.values  # err: M*N
+            bottom_err = err
+            max_err = rel.values.reshape(-1, 1) - mean.values
+            top_err = np.maximum(0, np.minimum(max_err, err))
+            err = np.array([bottom_err, top_err])
+            err = err.transpose([2, 0, 1])  # err: N*2*M
+            print(err.shape)
+    mean.plot.bar(yerr=err, ax=ax, error_kw=dict(lw=0.5), **kwargs)
 
     ax.set_xlabel('Trajectories')
     ax.set_ylabel('Expected Value')
