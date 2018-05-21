@@ -773,9 +773,11 @@ def run_experiment(cfg, out_dir, video_every, base_seed):
         - info: info dict from IRL algorithms.
         '''
     res = collections.defaultdict(collections.OrderedDict)
-    for seed in range(cfg['seeds']):
-        d = _run_experiment(cfg, out_dir, video_every, base_seed + str(seed))
+    for i in range(cfg['seeds']):
+        log_dir = osp.join(out_dir, str(i))
+        seed = base_seed + str(i)
+        d = _run_experiment(cfg, log_dir, video_every, seed)
         for k, v in d.items():
-            res[k][seed] = v
+            res[k][i] = v
 
     return ray_get_nested_dict(res, level=3)
