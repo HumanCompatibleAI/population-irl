@@ -448,7 +448,7 @@ def _run_population_irl_helper(irl, parallel, discount, seed,
     values = collections.OrderedDict()
 
     for n, ms in num_traj.items():
-        sub_log_dir = osp.join(log_dir, 'irl:{}'.format(n), irl)
+        sub_log_dir = osp.join(log_dir, 'irl', irl)
         r, v = _run_population_irl_train(irl, parallel, discount, seed,
                                          train_trajs, test_trajs, n, ms,
                                          sub_log_dir)
