@@ -1,3 +1,4 @@
+import collections
 import itertools
 import logging
 import math
@@ -258,7 +259,16 @@ def gridworld_ground_truth(envs, shape):
 
 
 def gridworld_cartoon(shape, **kwargs):
-    fig = plt.figure()
+    aspect_ratio = 1
+    width, height = mpl.rcParams['figure.figsize']
+    height = width / aspect_ratio
+
+    fig = plt.figure(figsize=(width, height))
+    gs = gridspec.GridSpec(3, 5)
+    cartoon_ax = fig.add_subplot(gs[0:2, 1:4])
+    legend_ax = fig.add_subplot(gs[2, :])
+    #fig, axs = plt.subplots(2,1, gridspec_kw=dict(height_ratios=[2,1]), figsize=(width, height))
+    #cartoon_ax, legend_ax = axs
     kind_to_colors = {
         'X': '#000000', # 'wall' (unnreachable)
         'A': '#9c755f',  # start state/'dirt' (-1 reward)
@@ -268,9 +278,9 @@ def gridworld_cartoon(shape, **kwargs):
         'S': '#C0C0C0', # silver (+1 reward)
         'W': '#ffd700', # gold (+1 reward)
     }
-    kind_to_colors = list(kind_to_colors.items())
-    kind_to_idx = {k: i for i, (k, color) in enumerate(kind_to_colors)}
-    colors = [color for (k, color) in kind_to_colors]
+    kind_to_colors_list = list(kind_to_colors.items())
+    kind_to_idx = {k: i for i, (k, color) in enumerate(kind_to_colors_list)}
+    colors = [color for (k, color) in kind_to_colors_list]
     cmap = ListedColormap(colors)
 
     topology = jungle_topology['{}x{}'.format(shape[0], shape[1])]
@@ -278,7 +288,24 @@ def gridworld_cartoon(shape, **kwargs):
 
     kwargs.setdefault('cbar', False)
     kwargs.setdefault('cmap', cmap)
-    sns.heatmap(idx, **kwargs)
+    sns.heatmap(idx, ax=cartoon_ax, **kwargs)
+
+    from matplotlib.lines import Line2D
+    legend = collections.OrderedDict([
+        ('A', '-1\n-1\n-1'),
+        ('R', '0\n0\n0'),
+        ('L', '-10\n-10\n-10'),
+        ('S', '0\n1\n1'),
+        ('W', '1\n0\n1'),
+    ])
+    patches = [Line2D([0], [0], linewidth=0, markersize=12, marker='s', color=kind_to_colors[kind])
+               for kind in legend.keys()]
+    labels = list(legend.values())
+    legend_ax.legend(patches, labels, fontsize=8, markerfirst=True,
+                     loc='lower left', bbox_to_anchor=(0.0, 0.0, 1.0, 0.1),
+                     mode='expand', ncol=len(legend) + 1, borderaxespad=0.)
+    legend_ax.axis('off')
+
     return fig
 
 def value_bar_chart(values, alpha=0.05, relative=None,
@@ -308,7 +335,6 @@ def value_bar_chart(values, alpha=0.05, relative=None,
             top_err = np.maximum(0, np.minimum(max_err, err))
             err = np.array([bottom_err, top_err])
             err = err.transpose([2, 0, 1])  # err: N*2*M
-            print(err.shape)
     mean.plot.bar(yerr=err, ax=ax, error_kw=dict(lw=0.5), **kwargs)
 
     ax.set_xlabel('Trajectories')
@@ -351,7 +377,7 @@ def value_bar_chart_by_env(values, envs=None, relative=None, **kwargs):
     leftmost = axs[0].xaxis.get_minpos()
     rightmost = axs[-1].get_position().xmax
     max_width = rightmost - leftmost
-    x0 = leftmost + 0.05 * max_width
+    x0 = leftmost + 0.025 * max_width
     x1 = rightmost - 0.05 * max_width
     num_algos = len(values.columns)
     fig.legend(handles, labels,
