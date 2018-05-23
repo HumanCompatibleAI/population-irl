@@ -114,6 +114,32 @@ def cache(*oargs, **okwargs):
         return helper
     return decorator
 
+def cache_and_log(log_to_tmp):
+    '''cache_and_log(log_to_tmp) returns a decorator that combines utils.cache
+       and log_to_tmp, an instance of utils.log_to_tmp_dir. In particular,
+       the function it decorates must take an argument log_dir. In the event of
+       a cache miss, this decorator produces the same behavior as a function
+       decorated with utils.cache and log_to_tmp sequentially. The advantage
+       comes in the case of a cache hit: cache_and_log will update the symlink
+       to point to the log directory that the *cached* result output to,
+       ensuring a complete set of logs.'''
+    def wrapper(*oargs, ** okwargs):
+        def decorator(func):
+            @functools.wraps(func)
+            def add_log_dir(*args, **kwargs):
+                signature = inspect.signature(func)
+                bound = signature.bind(*args, **kwargs)
+                arguments = bound.arguments
+                log_dir = arguments['log_dir']
+                res = func(*args, **kwargs)
+                return res, log_dir
+
+            okwargs['ignore'] = okwargs.get('ignore', []) + ['log_dir']
+            cached_fn = cache(*oargs, **okwargs)(add_log_dir)
+            return log_to_tmp(cached_fn, returns_log_dir=True)
+        return decorator
+    return wrapper
+
 # Logging
 
 class TrainingIterator(object):
@@ -187,11 +213,10 @@ def log_to_tmp_dir(out_dir):
        Note this should be applied to the function(s) closest to the point
        where logging output is actually produced. In particular, do not apply
        it to two functions that receive the same log_dir!'''
-    def decorator(func):
+    def decorator(func, returns_log_dir=False):
         @functools.wraps(func)
         def wrapper(*args, **kwargs):
             # Inspection & argument extraction
-            func_name = '{}.{}'.format(func.__module__, func.__name__)
             signature = inspect.signature(func)
             bound = signature.bind(*args, **kwargs)
             arguments = bound.arguments
@@ -206,13 +231,19 @@ def log_to_tmp_dir(out_dir):
             # Make the directories
             tmp_symlink = '{}.{}'.format(ultimate_symlink, id_generator())
             os.makedirs(out_dir, exist_ok=True)
-            tmp_log_dir = tempfile.mkdtemp(dir=out_dir, prefix=func_name)
+            tmp_log_dir = tempfile.mkdtemp(dir=out_dir)
             os.makedirs(os.path.dirname(tmp_symlink), exist_ok=True)
             os.symlink(tmp_log_dir, tmp_symlink, target_is_directory=True)
 
             # Call the function
             arguments['log_dir'] = tmp_log_dir
             res = func(*bound.args, **bound.kwargs)
+            if returns_log_dir:
+                res, new_log_dir = res
+                if new_log_dir != tmp_log_dir:
+                    os.rmdir(tmp_log_dir)
+                    os.unlink(tmp_symlink)
+                    os.symlink(new_log_dir, tmp_symlink, target_is_directory=True)
 
             # Success! (If the function threw an exception, we never reach here.)
             try:

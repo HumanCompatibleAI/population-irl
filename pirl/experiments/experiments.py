@@ -6,7 +6,6 @@ import inspect
 import logging
 import os
 import os.path as osp
-import tempfile
 
 from baselines import bench
 from baselines.common.vec_env.dummy_vec_env import DummyVecEnv
@@ -16,12 +15,13 @@ import joblib
 import ray
 
 from pirl import config
-from pirl.utils import cache, create_seed, log_to_tmp_dir, sanitize_env_name, \
-                       safeset, map_nested_dict, ray_get_nested_dict, \
-                       set_cuda_visible_devices
+from pirl.utils import cache_and_log, create_seed, log_to_tmp_dir, \
+                       sanitize_env_name, safeset, map_nested_dict, \
+                       ray_get_nested_dict, set_cuda_visible_devices
 
 logger = logging.getLogger('pirl.experiments.experiments')
 log_to_tmp = log_to_tmp_dir(config.OBJECT_DIR)
+cache = cache_and_log(log_to_tmp)
 
 # Context Managers & Decorators
 
@@ -134,8 +134,7 @@ def ray_remote_variable_resources(**kwargs):
 
 #TODO: remove None defaults (workaround Ray issue #998)
 @ray_remote_variable_resources()
-@log_to_tmp
-@cache(tags=('expert', ), ignore=['log_dir'])
+@cache(tags=('expert', ))
 def _train_policy(rl=None, discount=None, parallel=None, seed=None,
                   env_name=None, log_dir=None):
     # Setup
@@ -161,8 +160,7 @@ def _train_policy(rl=None, discount=None, parallel=None, seed=None,
 
 #TODO: remove None defaults (workaround Ray issue #998)
 @ray_remote_variable_resources()
-@log_to_tmp
-@cache(tags=('expert', ), ignore=['log_dir'])
+@cache(tags=('expert', ))
 def synthetic_data(rl=None, discount=None, parallel=None, seed=None,
                    env_name=None, num_trajectories=None,
                    log_dir=None, video_every=None, policy=None):
@@ -196,8 +194,7 @@ def synthetic_data(rl=None, discount=None, parallel=None, seed=None,
 
 #TODO: remove None defaults (workaround Ray issue #998)
 @ray_remote_variable_resources()
-@log_to_tmp
-@cache(tags=('expert', ), ignore=['log_dir'])
+@cache(tags=('expert', ))
 def _compute_value(rl=None, discount=None, parallel=None, seed=None,
                    env_name=None, log_dir=None, policy=None):
     set_cuda_visible_devices()
@@ -276,8 +273,7 @@ def expert_trajs(cfg, out_dir, video_every, seed):
 ## Population/meta IRL
 
 @ray_remote_variable_resources()
-@log_to_tmp
-@cache(tags=('irl', 'population_irl'), ignore=['log_dir'])
+@cache(tags=('irl', 'population_irl'))
 def _run_population_irl_meta(irl, parallel, discount, seed, trajs, log_dir):
     # Setup
     set_cuda_visible_devices()
@@ -316,8 +312,7 @@ def _run_population_irl_meta(irl, parallel, discount, seed, trajs, log_dir):
 
 
 @ray_remote_variable_resources(num_return_vals=2)
-@log_to_tmp
-@cache(tags=('irl', 'population_irl'), ignore=['log_dir'])
+@cache(tags=('irl', 'population_irl'))
 def _run_population_irl_finetune(irl, parallel, discount, seed,
                                  env, trajs, metainit, log_dir):
     # Setup
@@ -376,7 +371,6 @@ def _run_population_irl_train(irl, parallel, discount, seed,
     return rewards, values
 
 
-#@memory.cache(ignore=['out_dir'])
 @ray.remote(num_return_vals=2)
 def _run_population_irl_helper(irl, parallel, discount, seed,
                                train_envs, test_envs, num_traj,
@@ -413,10 +407,8 @@ def _run_population_irl(irl, parallel, discount, seed, train_envs,
 
 ## Single-task IRL
 
-#@memory.cache(ignore=['out_dir'])
 @ray_remote_variable_resources(num_return_vals=2)
-@log_to_tmp
-@cache(tags=('irl', 'single_irl'), ignore=['log_dir'])
+@cache(tags=('irl', 'single_irl'))
 def _run_single_irl_train(irl, parallel, discount, seed,
                           env_name, log_dir, trajectories):
     # Setup
@@ -539,8 +531,7 @@ def run_irl(cfg, out_dir, trajectories, seed):
 #(for reward wrapper and for the RL policy network).
 #No good way to express this in current framework.
 @ray_remote_variable_resources()
-@log_to_tmp
-@cache(tags=('eval', ), ignore=['log_dir'])
+@cache(tags=('eval', ))
 def _value_helper(irl=None, n=None, m=None, rl=None,
                   parallel=None, discount=None, seed=None,
                   env_name=None, reward=None, log_dir=None):
