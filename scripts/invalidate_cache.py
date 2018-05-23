@@ -10,6 +10,8 @@ def run():
     cache = utils.get_hermes()
     if '*' in tags:
         print('Removing all cache entries')
+        print('Note: this does not remove any of the entries by itself!' 
+              'More efficient to run redis-cli -p 6380 FLUSHALL.')
         cache.clean()
     else:
         print('Removing cache entries with any of tags', tags)
