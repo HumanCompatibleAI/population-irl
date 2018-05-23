@@ -13,17 +13,16 @@ from baselines.common.vec_env.dummy_vec_env import DummyVecEnv
 from baselines.common.vec_env.subproc_vec_env import SubprocVecEnv
 import gym
 import joblib
-from joblib import Memory
-import numpy as np
 import ray
 
 from pirl import config
-from pirl.utils import create_seed, id_generator, sanitize_env_name, safeset, \
-                       map_nested_dict, ray_get_nested_dict, \
+from pirl.utils import cache, create_seed, id_generator, sanitize_env_name, \
+                       safeset, map_nested_dict, ray_get_nested_dict, \
                        set_cuda_visible_devices
 
 logger = logging.getLogger('pirl.experiments.experiments')
-memory = Memory(cachedir=config.CACHE_DIR, verbose=0)
+_cache = None
+
 
 # Context Managers & Decorators
 
@@ -196,6 +195,7 @@ def log_to_tmp_dir(func):
 #TODO: remove None defaults (workaround Ray issue #998)
 @ray_remote_variable_resources()
 @log_to_tmp_dir
+@cache(tags=('train', ))
 def _train_policy(rl=None, discount=None, parallel=None, seed=None,
                   env_name=None, log_dir=None):
     # Setup
@@ -223,6 +223,7 @@ def _train_policy(rl=None, discount=None, parallel=None, seed=None,
 #@memory.cache(ignore=['log_dir', 'video_every', 'policy'])
 @ray_remote_variable_resources()
 @log_to_tmp_dir
+@cache(tags=('train', ))
 def synthetic_data(rl=None, discount=None, parallel=None, seed=None,
                    env_name=None, num_trajectories=None,
                    log_dir=None, video_every=None, policy=None):
@@ -258,6 +259,7 @@ def synthetic_data(rl=None, discount=None, parallel=None, seed=None,
 #@memory.cache(ignore=['log_dir', 'policy'])
 @ray_remote_variable_resources()
 @log_to_tmp_dir
+@cache(tags=('train', ))
 def _compute_value(rl=None, discount=None, parallel=None, seed=None,
                    env_name=None, log_dir=None, policy=None):
     set_cuda_visible_devices()
@@ -337,6 +339,7 @@ def expert_trajs(cfg, out_dir, video_every, seed):
 
 @ray_remote_variable_resources()
 @log_to_tmp_dir
+@cache(tags=('irl', 'population_irl'))
 def _run_population_irl_meta(irl, parallel, discount, seed, trajs, log_dir):
     # Setup
     set_cuda_visible_devices()
@@ -376,6 +379,7 @@ def _run_population_irl_meta(irl, parallel, discount, seed, trajs, log_dir):
 
 @ray_remote_variable_resources(num_return_vals=2)
 @log_to_tmp_dir
+@cache(tags=('irl', 'population_irl'))
 def _run_population_irl_finetune(irl, parallel, discount, seed,
                                  env, trajs, metainit, log_dir):
     # Setup
@@ -474,6 +478,7 @@ def _run_population_irl(irl, parallel, discount, seed, train_envs,
 #@memory.cache(ignore=['out_dir'])
 @ray_remote_variable_resources(num_return_vals=2)
 @log_to_tmp_dir
+@cache(tags=('irl', 'single_irl'))
 def _run_single_irl_train(irl, parallel, discount, seed,
                           env_name, log_dir, trajectories):
     # Setup
@@ -598,6 +603,7 @@ def run_irl(cfg, out_dir, trajectories, seed):
 #No good way to express this in current framework.
 @ray_remote_variable_resources()
 @log_to_tmp_dir
+@cache(tags=('eval'))
 def _value_helper(irl=None, n=None, m=None, rl=None,
                   parallel=None, discount=None, seed=None,
                   env_name=None, reward=None, log_dir=None):

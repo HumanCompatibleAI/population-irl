@@ -1,4 +1,5 @@
 import collections
+import functools
 import logging
 import os
 import random
@@ -6,6 +7,8 @@ import string
 import time
 
 from gym.utils import seeding
+import hermes.backend.dict
+import hermes.backend.redis
 import numpy as np
 import ray
 import ray.services
@@ -46,11 +49,52 @@ def discrete_sample(prob, rng):
        specifies class probabilities."""
     return (np.cumsum(prob) > rng.rand()).argmax()
 
-
 # Modified from https://stackoverflow.com/questions/2257441/random-string-generation-with-upper-case-letters-and-digits-in-python
 def id_generator(size=8):
     choices = random.choices(string.ascii_uppercase + string.digits, k=size)
     return ''.join(choices)
+
+# Caching
+def get_hermes():
+    '''Creates a hermes.Hermes instance if one does not already exist;
+       otherwise, returns the existing instance. This does two things:
+         + Automatically picks between Redis (if available) and dict (if
+           no Redis server is running).
+         + By adding this extra layer of abstraction, prevents cloudpickle
+           from choking on locks/sockets when serializing decorated functions.'''
+    if get_hermes.cache is None:
+        kwargs = {'ttl': None}
+        try:
+            host = os.environ.get('RAY_HEAD_IP', 'localhost')
+            port = 6380
+            db = 0
+            get_hermes.cache = hermes.Hermes(hermes.backend.redis.Backend,
+                                             host=host, port=port, db=0, **kwargs)
+            logger.info('HermesCache: connected to %s:%d [db=%d]',
+                        host, port, db)
+        except ConnectionError:
+            logger.info('HermesCache: no Redis server running on %s:%d, '
+                        'falling back to local dict backend.', host, port)
+            get_hermes.cache = hermes.Hermes(hermes.backend.dict.Backend)
+    return get_hermes.cache
+get_hermes.cache = None
+
+def cache(*oargs, **okwargs):
+    '''Cache decorator taking the same arguments as the callable returned by
+       hermes.Hermes. This is a hack to prevent cloudpickle choking on
+       locks/sockets that are in hermes.Hermes. This decorator simply applies
+       the hermes.Hermes decorator to the function, *when it is first called*,
+       building the Hermes instance using get_hermes().'''
+    def decorator(func):
+        @functools.wraps(func)
+        def helper(*args, **kwargs):
+            if helper.wrapped is None:
+                cache = get_hermes()
+                helper.wrapped = cache(*oargs, **okwargs)(func)
+            return helper.wrapped(*args, **kwargs)
+        helper.wrapped = None
+        return helper
+    return decorator
 
 # Logging
 
