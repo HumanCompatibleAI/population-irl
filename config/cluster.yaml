@@ -45,6 +45,9 @@ worker_setup_commands: []
 
 head_start_ray_commands:
     - ray stop
+    # (Re)start our Redis cache instance
+    - redis-cli -p 6380 shutdown
+    - redis-server $HOME/population-irl/config/redis/cluster.conf
     - ulimit -n 65536; ray start --head --redis-port=6379 --object-manager-port=8076 --autoscaling-config=~/ray_bootstrap_config.yaml
 
 # Command to start ray on worker nodes. You don't need to change this.
