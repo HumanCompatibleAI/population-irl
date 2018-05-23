@@ -27,6 +27,12 @@ To check everything works, you can run:
 	python run_experiments.py dummy-test few-dummy-test dummy-continuous-test
 	pytest
 
+We use HermesCache to cache intermediate results. By default, we use a dummy dict backend, which does no real caching (the cache is lost when the process terminates). This is suitable for quick tests during development, but for real applications start a Redis server by running:
+
+	redis ./config/redis/default.conf 
+
+The program automatically detects if the Redis server is running, so no further configuration should be required. 
+
 ## Jupyter notebooks
 
 There are some Jupyter notebooks in analysis/ that are used for ad-hoc tests/figure generation. Note since these are in a subdirectory, you'll need to set an appropriate PYTHONPATH (which should be an absolute, not relative, path).
