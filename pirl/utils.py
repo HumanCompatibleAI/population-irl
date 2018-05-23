@@ -57,29 +57,29 @@ def id_generator(size=8):
     return ''.join(choices)
 
 # Caching
-def _get_hermes():
+def get_hermes():
     '''Creates a hermes.Hermes instance if one does not already exist;
        otherwise, returns the existing instance. This does two things:
          + Automatically picks between Redis (if available) and dict (if
            no Redis server is running).
          + By adding this extra layer of abstraction, prevents cloudpickle
            from choking on locks/sockets when serializing decorated functions.'''
-    if _get_hermes.cache is None:
+    if get_hermes.cache is None:
         kwargs = {'ttl': None}
         try:
             host = os.environ.get('RAY_HEAD_IP', 'localhost')
             port = 6380
             db = 0
-            _get_hermes.cache = hermes.Hermes(hermes.backend.redis.Backend,
-                                              host=host, port=port, db=0, **kwargs)
+            get_hermes.cache = hermes.Hermes(hermes.backend.redis.Backend,
+                                             host=host, port=port, db=0, **kwargs)
             logger.info('HermesCache: connected to %s:%d [db=%d]',
                         host, port, db)
         except ConnectionError:
             logger.info('HermesCache: no Redis server running on %s:%d, '
                         'falling back to local dict backend.', host, port)
-            _get_hermes.cache = hermes.Hermes(hermes.backend.dict.Backend)
-    return _get_hermes.cache
-_get_hermes.cache = None
+            get_hermes.cache = hermes.Hermes(hermes.backend.dict.Backend)
+    return get_hermes.cache
+get_hermes.cache = None
 
 def ignore_args(mangler, ignore):
     def name_entry(fn, *args, **kwargs):
@@ -101,7 +101,7 @@ def cache(*oargs, **okwargs):
         @functools.wraps(func)
         def helper(*args, **kwargs):
             if helper.wrapped is None:
-                cache = _get_hermes()
+                cache = get_hermes()
 
                 if 'ignore' in okwargs:
                     ignore = okwargs.pop('ignore')
