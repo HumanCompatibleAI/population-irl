@@ -16,13 +16,12 @@ import joblib
 import ray
 
 from pirl import config
-from pirl.utils import cache, create_seed, id_generator, sanitize_env_name, \
+from pirl.utils import cache, create_seed, log_to_tmp_dir, sanitize_env_name, \
                        safeset, map_nested_dict, ray_get_nested_dict, \
                        set_cuda_visible_devices
 
 logger = logging.getLogger('pirl.experiments.experiments')
-_cache = None
-
+log_to_tmp = log_to_tmp_dir(config.OBJECT_DIR)
 
 # Context Managers & Decorators
 
@@ -131,71 +130,12 @@ def ray_remote_variable_resources(**kwargs):
         return func_invoker
     return decorator
 
-
-log_dirs = set()
-def log_to_tmp_dir(func):
-    '''Decorator for functions taking a parameter log_dir.
-
-       Intercepts the log_dir provided by the callee (write ultimate_symlink),
-       and creates a temporary directory (write tmp_log_dir) in config.OBJECT_DIR.
-       A symlink is created from ultimate_symlink + a random suffix to tmp_log_dir.
-       This tmp_log_dir is then passed as log_dir to the underlying function.
-       If the function succeeds, it renames the symlink to ultimate_log_dir,
-       unless this already exists.
-
-       The purpose of this is to make logging robust to tasks being retried
-       by a cluster manager, either due to failure (in which case ultimate_log_dir
-       will not exist) or due to recomputing results evicted from cache (in
-       which case ultimate_log_dir will exist).
-
-       Note this should be applied to the function(s) closest to the point
-       where logging output is actually produced. In particular, do not apply
-       it to two functions that receive the same log_dir!'''
-    @functools.wraps(func)
-    def wrapper(*args, **kwargs):
-        # Inspection & argument extraction
-        func_name = '{}.{}'.format(func.__module__, func.__name__)
-        signature = inspect.signature(func)
-        bound = signature.bind(*args, **kwargs)
-        arguments = bound.arguments
-        ultimate_symlink = os.path.abspath(arguments['log_dir'])
-
-        # Catch common misuse of this decorator
-        if ultimate_symlink in log_dirs:
-            msg = "Duplicate log directory '{}'".format(ultimate_symlink)
-            raise AssertionError(msg)
-        log_dirs.add(ultimate_symlink)
-
-        # Make the directories
-        tmp_symlink = '{}.{}'.format(ultimate_symlink, id_generator())
-        os.makedirs(config.OBJECT_DIR, exist_ok=True)
-        tmp_log_dir = tempfile.mkdtemp(dir=config.OBJECT_DIR, prefix=func_name)
-        os.makedirs(os.path.dirname(tmp_symlink), exist_ok=True)
-        os.symlink(tmp_log_dir, tmp_symlink, target_is_directory=True)
-
-        # Call the function
-        arguments['log_dir'] = tmp_log_dir
-        res = func(*bound.args, **bound.kwargs)
-
-        # Success! (If the function threw an exception, we never reach here.)
-        try:
-            os.link(tmp_symlink, ultimate_symlink)
-            os.unlink(tmp_symlink)
-        except FileExistsError:
-            logger.warning('Destination %s already exists (attempt to ' 
-                           'rename %s Was this a retried task?',
-                           ultimate_symlink, tmp_symlink)
-
-        return res
-    return wrapper
-
-
 ## Trajectory generation
 
 #TODO: remove None defaults (workaround Ray issue #998)
 @ray_remote_variable_resources()
-@log_to_tmp_dir
-@cache(tags=('train', ))
+@log_to_tmp
+@cache(tags=('expert', ), ignore=['log_dir'])
 def _train_policy(rl=None, discount=None, parallel=None, seed=None,
                   env_name=None, log_dir=None):
     # Setup
@@ -220,10 +160,9 @@ def _train_policy(rl=None, discount=None, parallel=None, seed=None,
     return policy
 
 #TODO: remove None defaults (workaround Ray issue #998)
-#@memory.cache(ignore=['log_dir', 'video_every', 'policy'])
 @ray_remote_variable_resources()
-@log_to_tmp_dir
-@cache(tags=('train', ))
+@log_to_tmp
+@cache(tags=('expert', ), ignore=['log_dir'])
 def synthetic_data(rl=None, discount=None, parallel=None, seed=None,
                    env_name=None, num_trajectories=None,
                    log_dir=None, video_every=None, policy=None):
@@ -256,10 +195,9 @@ def synthetic_data(rl=None, discount=None, parallel=None, seed=None,
     return [(obs, acts) for (obs, acts, rews) in samples]
 
 #TODO: remove None defaults (workaround Ray issue #998)
-#@memory.cache(ignore=['log_dir', 'policy'])
 @ray_remote_variable_resources()
-@log_to_tmp_dir
-@cache(tags=('train', ))
+@log_to_tmp
+@cache(tags=('expert', ), ignore=['log_dir'])
 def _compute_value(rl=None, discount=None, parallel=None, seed=None,
                    env_name=None, log_dir=None, policy=None):
     set_cuda_visible_devices()
@@ -338,8 +276,8 @@ def expert_trajs(cfg, out_dir, video_every, seed):
 ## Population/meta IRL
 
 @ray_remote_variable_resources()
-@log_to_tmp_dir
-@cache(tags=('irl', 'population_irl'))
+@log_to_tmp
+@cache(tags=('irl', 'population_irl'), ignore=['log_dir'])
 def _run_population_irl_meta(irl, parallel, discount, seed, trajs, log_dir):
     # Setup
     set_cuda_visible_devices()
@@ -378,8 +316,8 @@ def _run_population_irl_meta(irl, parallel, discount, seed, trajs, log_dir):
 
 
 @ray_remote_variable_resources(num_return_vals=2)
-@log_to_tmp_dir
-@cache(tags=('irl', 'population_irl'))
+@log_to_tmp
+@cache(tags=('irl', 'population_irl'), ignore=['log_dir'])
 def _run_population_irl_finetune(irl, parallel, discount, seed,
                                  env, trajs, metainit, log_dir):
     # Setup
@@ -414,13 +352,13 @@ def _run_population_irl_train(irl, parallel, discount, seed,
                               train_trajs, test_trajs, n, ms, log_dir):
     '''Performs metalearning with irl_name on n training trajectories,
        returning a tuple of rewards and values with shape [env][m].'''
-    # Set up logging and directories
+    # Metalearn
     meta_log_dir = osp.join(log_dir, 'meta:{}'.format(n))
-
     meta_subset = {k: v[:n] for k, v in train_trajs.items()}
-
     metainit = _run_population_irl_meta.remote(irl, parallel, discount,
-                                               seed, meta_subset, log_dir)
+                                               seed, meta_subset, meta_log_dir)
+
+    # Finetune
     rewards = collections.OrderedDict()
     values = collections.OrderedDict()
     for env, trajs in test_trajs.items():
@@ -477,8 +415,8 @@ def _run_population_irl(irl, parallel, discount, seed, train_envs,
 
 #@memory.cache(ignore=['out_dir'])
 @ray_remote_variable_resources(num_return_vals=2)
-@log_to_tmp_dir
-@cache(tags=('irl', 'single_irl'))
+@log_to_tmp
+@cache(tags=('irl', 'single_irl'), ignore=['log_dir'])
 def _run_single_irl_train(irl, parallel, discount, seed,
                           env_name, log_dir, trajectories):
     # Setup
@@ -597,13 +535,12 @@ def run_irl(cfg, out_dir, trajectories, seed):
 
 ## Evaluation
 
-#@memory.cache(ignore=['log_dir'])
 #TODO: this actually requires twice as many GPU resources as other tasks
 #(for reward wrapper and for the RL policy network).
 #No good way to express this in current framework.
 @ray_remote_variable_resources()
-@log_to_tmp_dir
-@cache(tags=('eval'))
+@log_to_tmp
+@cache(tags=('eval', ), ignore=['log_dir'])
 def _value_helper(irl=None, n=None, m=None, rl=None,
                   parallel=None, discount=None, seed=None,
                   env_name=None, reward=None, log_dir=None):
