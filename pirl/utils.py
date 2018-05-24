@@ -59,11 +59,8 @@ def id_generator(size=8):
 # Caching
 def get_hermes():
     '''Creates a hermes.Hermes instance if one does not already exist;
-       otherwise, returns the existing instance. This does two things:
-         + Automatically picks between Redis (if available) and dict (if
-           no Redis server is running).
-         + By adding this extra layer of abstraction, prevents cloudpickle
-           from choking on locks/sockets when serializing decorated functions.'''
+       otherwise, returns the existing instance. Automatically picks between
+       Redis (if available) and dict (if no Redis server is running).'''
     if get_hermes.cache is None:
         kwargs = {'ttl': None}
         try:
@@ -81,8 +78,15 @@ def get_hermes():
     return get_hermes.cache
 get_hermes.cache = None
 
-def ignore_args(mangler, ignore):
+def cache_key_func(mangler, func_module, func_name, ignore=None):
+    @functools.wraps(mangler.nameEntry)
     def name_entry(fn, *args, **kwargs):
+        #TODO: remove the func_name argument once cloudpickle issue #176 is fixed
+        #cloudpickle plays havoc with names of decorated functions, but it
+        #preserves objects that are in a closure correctly. So patch up the
+        #function name (yuck)
+        fn.__module__ = func_module
+        fn.__name__ = func_name
         signature = inspect.signature(fn)
         bound = signature.bind(*args, **kwargs)
         for fld in ignore:
@@ -98,20 +102,18 @@ def cache(*oargs, **okwargs):
        the hermes.Hermes decorator to the function, *when it is first called*,
        building the Hermes instance using get_hermes().'''
     def decorator(func):
-        @functools.wraps(func)
-        def helper(*args, **kwargs):
-            if helper.wrapped is None:
-                cache = get_hermes()
+        cache = get_hermes()
 
-                if 'ignore' in okwargs:
-                    ignore = okwargs.pop('ignore')
-                    assert 'key' not in okwargs
-                    okwargs['key'] = ignore_args(cache.mangler, ignore)
+        ignore = None
+        if 'ignore' in okwargs:
+            ignore = okwargs.pop('ignore')
 
-                helper.wrapped = cache(*oargs, **okwargs)(func)
-            return helper.wrapped(*args, **kwargs)
-        helper.wrapped = None
-        return helper
+        assert 'key' not in okwargs
+        key_fn = cache_key_func(cache.mangler, func.__module__,
+                                func.__name__, ignore)
+        okwargs['key'] = key_fn
+
+        return cache(*oargs, **okwargs)(func)
     return decorator
 
 def cache_and_log(log_to_tmp):
@@ -123,7 +125,7 @@ def cache_and_log(log_to_tmp):
        comes in the case of a cache hit: cache_and_log will update the symlink
        to point to the log directory that the *cached* result output to,
        ensuring a complete set of logs.'''
-    def wrapper(*oargs, ** okwargs):
+    def wrapper(*oargs, **okwargs):
         def decorator(func):
             @functools.wraps(func)
             def add_log_dir(*args, **kwargs):
