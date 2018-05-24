@@ -275,6 +275,7 @@ EXPERIMENTS['dummy-test'] = {
     'irl': ['mce_shortest', 'mcep_shortest_reg0'],
     'train_trajectories': [20, 10],
     'test_trajectories': [20, 10],
+    'seeds': 2,
 }
 EXPERIMENTS['few-dummy-test'] = {
     'train_environments': ['pirl/GridWorld-Simple-v0'],
@@ -285,6 +286,7 @@ EXPERIMENTS['few-dummy-test'] = {
     'irl': ['mce_shortest', 'mce_shortestc', 'mcep_shortest_reg0'],
     'train_trajectories': [20, 10],
     'test_trajectories': [0, 1, 5],
+    'seeds': 2,
 }
 EXPERIMENTS['dummy-test-deterministic'] = {
     'environments': ['pirl/GridWorld-Simple-Deterministic-v0'],
@@ -294,6 +296,7 @@ EXPERIMENTS['dummy-test-deterministic'] = {
     'irl': ['mce_shortest', 'mcep_shortest_reg0'],
     'train_trajectories': [20, 10],
     'test_trajectories': [20, 10],
+    'seeds': 2,
 }
 EXPERIMENTS['dummy-continuous-test'] = {
     'environments': ['Reacher-v2'],
@@ -303,6 +306,7 @@ EXPERIMENTS['dummy-continuous-test'] = {
     'eval': ['ppo_cts_shortest'],
     'irl': ['airl_so_shortest', 'airl_random_shortest'],
     'test_trajectories': [10, 20],
+    'seeds': 2,
 }
 EXPERIMENTS['few-dummy-continuous-test'] = {
     'train_environments': ['pirl/Reacher-fixed-hidden-goal-seed{}-v0'.format(i)
@@ -316,6 +320,7 @@ EXPERIMENTS['few-dummy-continuous-test'] = {
     'irl': ['airl_so_shortest', 'airlp_so_shortest'],
     'train_trajectories': [10, 20],
     'test_trajectories': [10, 20],
+    'seeds': 2,
 }
 EXPERIMENTS['dummy-continuous-test-medium'] = {
     'environments': ['Reacher-v2'],
