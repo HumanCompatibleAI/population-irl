@@ -14,14 +14,12 @@ import gym
 import joblib
 import ray
 
-from pirl import config
-from pirl.utils import cache_and_log, create_seed, log_to_tmp_dir, \
-                       sanitize_env_name, safeset, map_nested_dict, \
-                       ray_get_nested_dict, set_cuda_visible_devices
+from pirl import config, utils
+from pirl.utils import create_seed, sanitize_env_name, safeset
 
 logger = logging.getLogger('pirl.experiments.experiments')
-log_to_tmp = log_to_tmp_dir(config.OBJECT_DIR)
-cache = cache_and_log(log_to_tmp)
+log_to_tmp = utils.log_to_tmp_dir(config.OBJECT_DIR)
+cache = utils.cache_and_log(log_to_tmp)
 
 # Context Managers & Decorators
 
@@ -138,7 +136,7 @@ def ray_remote_variable_resources(**kwargs):
 def _train_policy(rl=None, discount=None, parallel=None, seed=None,
                   env_name=None, log_dir=None):
     # Setup
-    set_cuda_visible_devices()
+    utils.set_cuda_visible_devices()
     logger.debug('%s: training %s [discount=%f, seed=%s, parallel=%d]',
                  env_name, rl, discount, seed, parallel)
     mon_dir = osp.join(log_dir, 'mon')
@@ -167,7 +165,7 @@ def synthetic_data(rl=None, discount=None, parallel=None, seed=None,
     '''Precondition: policy produced by RL algorithm rl.'''
     # Note discount is not used, but is needed as a caching key.
     # Setup
-    set_cuda_visible_devices()
+    utils.set_cuda_visible_devices()
     logger.debug('%s: sampling %d trajectories from %s '
                  '[discount=%f, seed=%s, parallel=%d]',
                  env_name, num_trajectories, rl, discount, seed, parallel)
@@ -197,7 +195,7 @@ def synthetic_data(rl=None, discount=None, parallel=None, seed=None,
 @cache(tags=('expert', ))
 def _compute_value(rl=None, discount=None, parallel=None, seed=None,
                    env_name=None, log_dir=None, policy=None):
-    set_cuda_visible_devices()
+    utils.set_cuda_visible_devices()
     # Note discount is not used, but is needed as a caching key.
     logger.debug('%s: computing value of %s [discount=%f, seed=%s, parallel=%d]',
                  env_name, rl, discount, seed, parallel)
@@ -276,7 +274,7 @@ def expert_trajs(cfg, out_dir, video_every, seed):
 @cache(tags=('irl', 'population_irl'))
 def _run_population_irl_meta(irl, parallel, discount, seed, trajs, log_dir):
     # Setup
-    set_cuda_visible_devices()
+    utils.set_cuda_visible_devices()
     n = len(list(trajs.values())[0])
     logger.debug('meta_irl: %s [meta=%d]', irl, n)
     meta_log_dir = osp.join(log_dir, 'meta:{}'.format(n))
@@ -316,7 +314,7 @@ def _run_population_irl_meta(irl, parallel, discount, seed, trajs, log_dir):
 def _run_population_irl_finetune(irl, parallel, discount, seed,
                                  env, trajs, metainit, log_dir):
     # Setup
-    set_cuda_visible_devices()
+    utils.set_cuda_visible_devices()
     logger.debug('meta_irl: %s [finetune=%d, env=%s]',
                  irl, len(trajs), env)
     finetune_mon_prefix = osp.join(log_dir, 'mon')
@@ -390,9 +388,10 @@ def _run_population_irl_helper(irl, parallel, discount, seed,
         for env in test_trajs.keys():
             safeset(rewards, [env, n], r[env])
             safeset(values, [env, n], v[env])
-
-    # Returns dictionaries of type [env][n][m] = rew and [env][n][m] = val
-    return ray_get_nested_dict(rewards), ray_get_nested_dict(values)
+    # {rewards,value} [env][n][m] -> {reward,value}
+    rewards = utils.ray_get_nested_dict(rewards, level=3)
+    values = utils.ray_get_nested_dict(values, level=3)
+    return rewards, values
 
 
 def _run_population_irl(irl, parallel, discount, seed, train_envs,
@@ -411,7 +410,7 @@ def _run_population_irl(irl, parallel, discount, seed, train_envs,
 def _run_single_irl_train(irl, parallel, discount, seed,
                           env_name, log_dir, trajectories):
     # Setup
-    set_cuda_visible_devices()
+    utils.set_cuda_visible_devices()
     mon_dir = osp.join(log_dir, 'mon')
     os.makedirs(mon_dir)
 
@@ -464,7 +463,9 @@ def _run_single_irl_helper(irl, parallel, discount, seed,
                 safeset(value_res, [env, n, m], value)
 
     # Returns two dictionaries of the form [env][n][m]
-    return ray_get_nested_dict(reward_res), ray_get_nested_dict(value_res)
+    reward_res = utils.ray_get_nested_dict(reward_res, level=3)
+    value_res = utils.ray_get_nested_dict(value_res, level=3)
+    return reward_res, value_res
 
 def _run_single_irl(irl, num_traj, train_envs, test_envs, parallel,
                     discount, seed, out_dir, trajectories):
@@ -535,7 +536,7 @@ def _value_helper(irl=None, n=None, m=None, rl=None,
                   parallel=None, discount=None, seed=None,
                   env_name=None, reward=None, log_dir=None):
     # Setup
-    set_cuda_visible_devices()
+    utils.set_cuda_visible_devices()
     logger.debug('Evaluating %s [meta=%d, finetune=%d] ' 
                  'by %s [discount=%f, seed=%s, parallel=%d] '
                  'on %s (writing to %s)',
@@ -587,7 +588,8 @@ def _value(irl=None, rl=None, parallel=None,
         }
         return _value_helper.remote(**kwargs)
     #SOMEDAY: ray.get inside ray.remote is legal but feels yucky
-    return ray_get_nested_dict(map_nested_dict(reward, reward_map))
+    reward_futures = utils.map_nested_dict(reward, reward_map, level=3)
+    return utils.ray_get_nested_dict(reward_futures, level=3)
 
 def value(cfg, out_dir, rewards, seed):
     '''
@@ -626,7 +628,7 @@ def value(cfg, out_dir, rewards, seed):
     # value_futures: [rl][irl_name] -> Future[[env][n][m] -> (mean, se)]
     value_futures = collections.OrderedDict()
     for rl in cfg['eval']:
-        value_futures[rl] = map_nested_dict(rewards,
+        value_futures[rl] = utils.map_nested_dict(rewards,
                                             functools.partial(reward_map, rl=rl))
 
     # ground_truth_futures: [rl][env] -> (mean, se)
@@ -713,4 +715,4 @@ def run_experiment(cfg, out_dir, video_every, base_seed):
         for k, v in d.items():
             res[k][i] = v
 
-    return ray_get_nested_dict(res, level=3)
+    return utils.ray_leaf_get_nested_dict(res)

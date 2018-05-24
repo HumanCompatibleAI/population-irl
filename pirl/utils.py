@@ -276,19 +276,31 @@ def safeget(dct, keys):
     return dct
 
 
-def map_nested_dict(ob, func, init=[], level=0):
-    if isinstance(ob, collections.Mapping) and (level == 0 or len(init) < level):
+def map_nested_dict(ob, func, init=[], level=1):
+    '''Recurse to level depth in a nested mapping, applying func.'''
+    if len(init) < level:
+        assert isinstance(ob, collections.Mapping)
         return {k: map_nested_dict(v, func, init + [k], level=level)
                 for k, v in ob.items()}
     else:
         return func(ob, init)
 
+def leaf_map_nested_dict(ob, func, init=[]):
+    '''Recurse to the leaf node in a nested mapping. Can be variable depth.'''
+    if isinstance(ob, collections.Mapping):
+        return {k: leaf_map_nested_dict(v, func, init + [k])
+                for k, v in ob.items()}
+    else:
+        return func(ob, init)
 
 def _get_nested_dict_helper(future, _keys):
     return ray.get(future)
 
-def ray_get_nested_dict(ob, level=0):
+def ray_get_nested_dict(ob, level=1):
     return map_nested_dict(ob, _get_nested_dict_helper, level=level)
+
+def ray_leaf_get_nested_dict(ob):
+    return leaf_map_nested_dict(ob, _get_nested_dict_helper)
 
 # GPU Management
 
