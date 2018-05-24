@@ -251,7 +251,7 @@ def log_to_tmp_dir(out_dir):
                 os.unlink(tmp_symlink)
             except FileExistsError:
                 logger.warning('Destination %s already exists (attempt to ' 
-                               'rename %s Was this a retried task?',
+                               'rename %s). Was this a retried task?',
                                ultimate_symlink, tmp_symlink)
 
             return res
@@ -278,7 +278,8 @@ def safeget(dct, keys):
 
 def map_nested_dict(ob, func, init=[], level=0):
     if isinstance(ob, collections.Mapping) and (level == 0 or len(init) < level):
-        return {k: map_nested_dict(v, func, init + [k]) for k, v in ob.items()}
+        return {k: map_nested_dict(v, func, init + [k], level=level)
+                for k, v in ob.items()}
     else:
         return func(ob, init)
 
@@ -292,6 +293,9 @@ def ray_get_nested_dict(ob, level=0):
 # GPU Management
 
 def set_cuda_visible_devices():
+    if ray.worker.global_worker.mode == ray.worker.PYTHON_MODE:
+        # Debug mode. get_gpu_ids() not supported -- do nothing.
+        return
     ids = ray.get_gpu_ids()
     real_num_gpus = ray.services._autodetect_num_gpus()
     gpus = ','.join([str(x % real_num_gpus) for x in ids])

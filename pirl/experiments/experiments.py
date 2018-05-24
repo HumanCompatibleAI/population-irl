@@ -348,7 +348,7 @@ def _run_population_irl_train(irl, parallel, discount, seed,
     '''Performs metalearning with irl_name on n training trajectories,
        returning a tuple of rewards and values with shape [env][m].'''
     # Metalearn
-    meta_log_dir = osp.join(log_dir, 'meta:{}'.format(n))
+    meta_log_dir = osp.join(log_dir, 'irl', irl, 'meta:{}'.format(n))
     meta_subset = {k: v[:n] for k, v in train_trajs.items()}
     metainit = _run_population_irl_meta.remote(irl, parallel, discount,
                                                seed, meta_subset, meta_log_dir)
@@ -384,10 +384,9 @@ def _run_population_irl_helper(irl, parallel, discount, seed,
     values = collections.OrderedDict()
 
     for n, ms in num_traj.items():
-        sub_log_dir = osp.join(log_dir, 'irl', irl)
         r, v = _run_population_irl_train(irl, parallel, discount, seed,
                                          train_trajs, test_trajs, n, ms,
-                                         sub_log_dir)
+                                         log_dir)
         for env in test_trajs.keys():
             safeset(rewards, [env, n], r[env])
             safeset(values, [env, n], v[env])
