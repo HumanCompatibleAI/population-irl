@@ -29,7 +29,7 @@ worker_nodes:
     # IMPORTANT: If you update the instance type, also update --num-gpus
     # in worker_start_ray_commands
     InstanceType: p2.xlarge
-    ImageId:  ami-0746609283760e6c3  # Custom AMI with our code pre-installed
+    ImageId:  ami-0d67d8b8d39619be5  # Custom AMI with our code pre-installed
     KeyName: Population-IRL
     InstanceMarketOptions:
         MarketType: spot  # max price defaults to the on-demand price
