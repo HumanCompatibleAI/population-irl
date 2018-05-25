@@ -457,15 +457,16 @@ EXPERIMENTS['billiards'] = {
     'test_trajectories': [1000],
 }
 EXPERIMENTS['mountain-car-single'] = {
-    'environments': ['pirl/MountainCarContinuous-{}-0-0.1-v0'.format(side)
-                     for side in ['left', 'right']],
+    'environments': ['pirl/MountainCarContinuous-left-0-0.1-v0'],
     'parallel_rollouts': 4,
     'discount': 0.99,
     # simple environment, small number of iterations sufficient to converge
     'expert': 'ppo_cts_short',
     'eval': ['ppo_cts_short'],
-    'irl': ['airl_so_short', 'airl_sa_short', 'airl_random_short'],
-    'test_trajectories': [1, 2, 5, 10, 50, 100],
+    'irl': ['airl_so_short', 'airl_so',
+            'airl_sa_short', 'airl_sa',
+            'airl_random_short', 'airl_random'],
+    'test_trajectories': [1, 2, 5, 100],
 }
 EXPERIMENTS['mountain-car-vel'] = {
     'environments': ['pirl/MountainCarContinuous-left-{}-{}-v0'.format(vel, initial_noise)
