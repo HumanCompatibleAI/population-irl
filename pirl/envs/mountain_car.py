@@ -13,7 +13,7 @@ class ContinuousMountainCarPopulationEnv(gym.Env):
         'video.frames_per_second': 30
     }
 
-    def __init__(self, side, vel_penalty):
+    def __init__(self, side, vel_penalty, initial_noise):
         # As goal may appear on either side, I have chosen symmetric bounds [-1,1];
         # this is larger width than the original Gym environment, so I have
         # scaled up other constants by a factor of 10/9 to make them comparable.
@@ -24,6 +24,7 @@ class ContinuousMountainCarPopulationEnv(gym.Env):
         self.max_speed = 0.08
         self.goal_position = 0.83 * side
         self.vel_penalty = vel_penalty
+        self.initial_noise = initial_noise
         self.power = 0.0017
 
         self.low_state = np.array([self.min_position, -self.max_speed])
@@ -69,7 +70,7 @@ class ContinuousMountainCarPopulationEnv(gym.Env):
         return self.state, reward, done, {}
 
     def reset(self):
-        self.state = np.array([self.np_random.uniform(low=-0.1, high=0.1), 0])
+        self.state = np.array([self.np_random.uniform(low=-self.initial_noise, high=self.initial_noise), 0])
         return np.array(self.state)
 
     def _height(self, xs):

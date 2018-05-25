@@ -83,13 +83,19 @@ for kind, cells in cfg.items():
 ## MountainCar
 for name, sign in {'left': -1, 'right': 1}.items():
     for vel_penalty in [0, 0.1, 0.5, 1]:
-        register(
-            id='pirl/MountainCarContinuous-{}-{}-v0'.format(name, vel_penalty),
-            entry_point='pirl.envs.mountain_car:ContinuousMountainCarPopulationEnv',
-            max_episode_steps=999,
-            reward_threshold=90.0,
-            kwargs={'side': sign, 'vel_penalty': vel_penalty},
-        )
+        for initial_noise in [0.1, 0.2, 0.5]:
+            register(
+                id='pirl/MountainCarContinuous-{}-{}-{}-v0'.format(
+                    name, vel_penalty, initial_noise),
+                entry_point='pirl.envs.mountain_car:ContinuousMountainCarPopulationEnv',
+                max_episode_steps=999,
+                reward_threshold=90.0,
+                kwargs={
+                    'side': sign,
+                    'vel_penalty': vel_penalty,
+                    'initial_noise': initial_noise
+                },
+            )
 
 ## Reacher
 for seed in range(10):

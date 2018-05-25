@@ -456,7 +456,7 @@ EXPERIMENTS['billiards'] = {
     'test_trajectories': [1000],
 }
 EXPERIMENTS['mountain-car-single'] = {
-    'environments': ['pirl/MountainCarContinuous-{}-0-v0'.format(side)
+    'environments': ['pirl/MountainCarContinuous-{}-0-0.1-v0'.format(side)
                      for side in ['left', 'right']],
     'parallel_rollouts': 4,
     'discount': 0.99,
@@ -467,15 +467,18 @@ EXPERIMENTS['mountain-car-single'] = {
     'test_trajectories': [1, 2, 5, 10, 50, 100],
 }
 EXPERIMENTS['mountain-car-vel'] = {
-    'environments': ['pirl/MountainCarContinuous-left-{}-v0'.format(vel)
-                     for vel in [0, 0.1, 0.5, 1]],
+    'environments': ['pirl/MountainCarContinuous-left-{}-{}-v0'.format(vel, initial_noise)
+                     for vel in [0, 0.1, 0.5, 1]
+                     for initial_noise in [0.1, 0.2, 0.5]
+                    ],
     'parallel_rollouts': 4,
     'discount': 0.99,
     # simple environment, small number of iterations sufficient to converge
     'expert': 'ppo_cts_short',
-    'eval': ['ppo_cts_short'],
-    'irl': ['airl_so_short', 'airl_sa_short', 'airl_random_short'],
+    'eval': [],#'ppo_cts_short'],
+    'irl': ['airl_so_short'], #'airl_sa_short', 'airl_random_short'],
     'test_trajectories': [1, 2, 5, 100],
+    'seeds': 3,
 }
 EXPERIMENTS['reacher-env-comparisons'] = {
     'environments': ['Reacher-v2', 'pirl/Reacher-baseline-seed0-v0',
@@ -513,7 +516,7 @@ EXPERIMENTS['dummy-reacher-metalearning'] = {
     'test_trajectories': [5],
 }
 EXPERIMENTS['mountain-car-meta'] = {
-    'environments': ['pirl/MountainCarContinuous-{}-0-v0'.format(side)
+    'environments': ['pirl/MountainCarContinuous-{}-0-0.1-v0'.format(side)
                      for side in ['left', 'right']],
     'parallel_rollouts': 4,
     'discount': 0.99,
