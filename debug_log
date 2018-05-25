@@ -1,8 +1,0 @@
-2018-05-19 22:37:12,065 [DEBUG] matplotlib: CACHEDIR=/home/adam/.cache/matplotlib
-2018-05-19 22:37:12,067 [DEBUG] matplotlib.font_manager: Using fontManager instance from /home/adam/.cache/matplotlib/fontList.json
-2018-05-19 22:37:12,207 [DEBUG] matplotlib.backends: backend Qt5Agg version 5.9.2
-2018-05-19 22:37:12,799 [INFO] pirl.experiments.cli: CLI args: Namespace(experiments=['dummy-test', 'dummy-continuous-test'], num_cpu=None, num_gpu=4, ray_server=None, seed='foobar', video_every=0)
-2018-05-19 22:37:15,685 [DEBUG] git.cmd: Popen(['git', 'cat-file', '--batch-check'], cwd=/home/adam/dev/population-irl, universal_newlines=False, shell=None)
-2018-05-19 22:37:33,319 [INFO] pirl.experiments.cli: Experiment dummy-test completed. Outcome:
- {'value_iteration': {'mce_shortest': {'pirl/GridWorld-Simple-v0': {20: {10: (4084.163022117757, 0), 20: (4084.163022117757, 0)}, 10: {10: (4084.163022117757, 0)}}}, 'mcep_shortest_reg0': {'pirl/GridWorld-Simple-v0': {20: {20: (4084.163022117757, 0), 10: (4084.163022117757, 0)}, 10: {10: (4084.163022117757, 0)}}}}, 'irl': {'mce_shortest': {'pirl/GridWorld-Simple-v0': {20: {10: (4045.6560119102705, 0), 20: (4064.9051662520824, 0)}, 10: {10: (4045.6560119102705, 0)}}}, 'mcep_shortest_reg0': {'pirl/GridWorld-Simple-v0': {20: {20: (4064.9051662520824, 0), 10: (4045.6560119102705, 0)}, 10: {10: (4045.6560119102705, 0)}}}}}. Saving to /home/adam/dev/population-irl/data/experiments/dummy-test-20180519_223715-300b712d76154ef93d55969b47654772294ad825.
-2018-05-19 22:37:33,322 [DEBUG] git.cmd: Popen(['git', 'cat-file', '--batch-check'], cwd=/home/adam/dev/population-irl, universal_newlines=False, shell=None)

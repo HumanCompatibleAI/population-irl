@@ -136,6 +136,8 @@ dependencies:
   - qt=5.9.5
   - qtconsole=4.3.1
   - readline=7.0
+  - redis=4.0.9
+  - redis-py=2.10.6
   - requests=2.18.4
   - rhash=1.3.5
   - s3transfer=0.1.13
@@ -171,6 +173,7 @@ dependencies:
   - zlib=1.2.11
   - cuda90=1.0
   - pytorch=0.4.0
+  - pyyaml=3.12
   - torchvision=0.2.1
   - pip:
     - absl-py==0.2.1
@@ -191,6 +194,7 @@ dependencies:
     - glfw==1.6.0
     - grpcio==1.12.0
     - git+git://github.com/AdamGleave/gym.git@all-fixes#egg=gym
+    - git+git://github.com/AdamGleave/HermesCache.git@master#egg=HermesCache
     - imageio==2.3.0
     - joblib==0.11
     - mpi4py==3.0.0
@@ -204,9 +208,7 @@ dependencies:
     - pyopengl==3.1.0
     - pyprind==2.11.2
     - python-utils==2.3.0
-    - pyyaml==3.12
     - ray==0.4.0
-    - redis==2.10.6
     - git+git://github.com/AdamGleave/rllab.git@master#egg=rllab
     - https://storage.googleapis.com/tensorflow/linux/gpu/tensorflow_gpu-1.8.0-cp36-cp36m-linux_x86_64.whl
     - termcolor==1.1.0

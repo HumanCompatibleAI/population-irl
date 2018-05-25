@@ -50,8 +50,7 @@ FIELD_TYPES = {
     'test_trajectories': _list_of(int),
     'discount': float,
     # Number of seeds to use
-    'expert_seeds': int,
-    'irl_seeds': int,
+    'seeds': int,
 }
 
 MANDATORY_FIELDS = ['discount', 'expert', 'irl', 'eval', 'test_trajectories']

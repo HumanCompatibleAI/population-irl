@@ -12,24 +12,24 @@ provider:
     availability_zone: us-west-2a  # this AZ is generally the cheapest
 auth:
     ssh_user: ec2-user
-    ssh_private_key: ./scripts/population-irl.pem
+    ssh_private_key: ./config/population-irl.pem
 
 # Node templates
 head_node:
     #TODO: when Ray issue #2106 is fixed, switch this to non-GPU (e.g. m5)
     InstanceType: p2.xlarge
-    ImageId: ami-099e28043c783216a  # Custom AMI with our code pre-installed
+    ImageId: ami-017106882a595fe38  # Custom AMI with our code pre-installed
     KeyName: Population-IRL
 
 file_mounts: {
-    "/tmp/current_branch_sha": "./.git/refs/heads/master",
+    "/tmp/current_branch_sha": "./.git/refs/heads/cache",
 }
 
 worker_nodes:
     # IMPORTANT: If you update the instance type, also update --num-gpus
     # in worker_start_ray_commands
     InstanceType: p2.xlarge
-    ImageId: ami-099e28043c783216a  # Custom AMI with our code pre-installed
+    ImageId:  ami-017106882a595fe38  # Custom AMI with our code pre-installed
     KeyName: Population-IRL
     InstanceMarketOptions:
         MarketType: spot  # max price defaults to the on-demand price
@@ -45,7 +45,11 @@ worker_setup_commands: []
 
 head_start_ray_commands:
     - ray stop
-    - ulimit -n 65536; ray start --head --redis-port=6379 --object-manager-port=8076 --autoscaling-config=~/ray_bootstrap_config.yaml
+    # (Re)start our Redis cache instance
+    - redis-cli -p 6380 shutdown || true
+    - redis-server $HOME/population-irl/config/redis/cluster.conf
+    # Pretend we have more GPUs to workaround Ray issue #402.
+    - ulimit -n 65536; ray start --num-gpus=4 --head --redis-port=6379 --object-manager-port=8076 --autoscaling-config=~/ray_bootstrap_config.yaml
 
 # Command to start ray on worker nodes. You don't need to change this.
 worker_start_ray_commands:

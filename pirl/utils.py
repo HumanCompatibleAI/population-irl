@@ -1,11 +1,16 @@
 import collections
+import functools
 import logging
+import inspect
 import os
 import random
 import string
+import tempfile
 import time
 
 from gym.utils import seeding
+import hermes.backend.dict
+import hermes.backend.redis
 import numpy as np
 import ray
 import ray.services
@@ -46,11 +51,96 @@ def discrete_sample(prob, rng):
        specifies class probabilities."""
     return (np.cumsum(prob) > rng.rand()).argmax()
 
-
 # Modified from https://stackoverflow.com/questions/2257441/random-string-generation-with-upper-case-letters-and-digits-in-python
 def id_generator(size=8):
     choices = random.choices(string.ascii_uppercase + string.digits, k=size)
     return ''.join(choices)
+
+# Caching
+def get_hermes():
+    '''Creates a hermes.Hermes instance if one does not already exist;
+       otherwise, returns the existing instance. Automatically picks between
+       Redis (if available) and dict (if no Redis server is running).'''
+    if get_hermes.cache is None:
+        kwargs = {'ttl': None}
+        try:
+            host = os.environ.get('RAY_HEAD_IP', 'localhost')
+            port = 6380
+            db = 0
+            get_hermes.cache = hermes.Hermes(hermes.backend.redis.Backend,
+                                             host=host, port=port, db=0, **kwargs)
+            logger.info('HermesCache: connected to %s:%d [db=%d]',
+                        host, port, db)
+        except ConnectionError:
+            logger.info('HermesCache: no Redis server running on %s:%d, '
+                        'falling back to local dict backend.', host, port)
+            get_hermes.cache = hermes.Hermes(hermes.backend.dict.Backend)
+    return get_hermes.cache
+get_hermes.cache = None
+
+def cache_key_func(mangler, func_module, func_name, ignore=None):
+    @functools.wraps(mangler.nameEntry)
+    def name_entry(fn, *args, **kwargs):
+        #TODO: remove the func_name argument once cloudpickle issue #176 is fixed
+        #cloudpickle plays havoc with names of decorated functions, but it
+        #preserves objects that are in a closure correctly. So patch up the
+        #function name (yuck)
+        fn.__module__ = func_module
+        fn.__name__ = func_name
+        signature = inspect.signature(fn)
+        bound = signature.bind(*args, **kwargs)
+        for fld in ignore:
+            if fld in bound.arguments:
+                del bound.arguments[fld]
+        return mangler.nameEntry(fn, *bound.args, **bound.kwargs)
+    return name_entry
+
+def cache(*oargs, **okwargs):
+    '''Cache decorator taking the same arguments as the callable returned by
+       hermes.Hermes. This is a hack to prevent cloudpickle choking on
+       locks/sockets that are in hermes.Hermes. This decorator simply applies
+       the hermes.Hermes decorator to the function, *when it is first called*,
+       building the Hermes instance using get_hermes().'''
+    def decorator(func):
+        cache = get_hermes()
+
+        ignore = None
+        if 'ignore' in okwargs:
+            ignore = okwargs.pop('ignore')
+
+        assert 'key' not in okwargs
+        key_fn = cache_key_func(cache.mangler, func.__module__,
+                                func.__name__, ignore)
+        okwargs['key'] = key_fn
+
+        return cache(*oargs, **okwargs)(func)
+    return decorator
+
+def cache_and_log(log_to_tmp):
+    '''cache_and_log(log_to_tmp) returns a decorator that combines utils.cache
+       and log_to_tmp, an instance of utils.log_to_tmp_dir. In particular,
+       the function it decorates must take an argument log_dir. In the event of
+       a cache miss, this decorator produces the same behavior as a function
+       decorated with utils.cache and log_to_tmp sequentially. The advantage
+       comes in the case of a cache hit: cache_and_log will update the symlink
+       to point to the log directory that the *cached* result output to,
+       ensuring a complete set of logs.'''
+    def wrapper(*oargs, **okwargs):
+        def decorator(func):
+            @functools.wraps(func)
+            def add_log_dir(*args, **kwargs):
+                signature = inspect.signature(func)
+                bound = signature.bind(*args, **kwargs)
+                arguments = bound.arguments
+                log_dir = arguments['log_dir']
+                res = func(*args, **kwargs)
+                return res, log_dir
+
+            okwargs['ignore'] = okwargs.get('ignore', []) + ['log_dir']
+            cached_fn = cache(*oargs, **okwargs)(add_log_dir)
+            return log_to_tmp(cached_fn, returns_log_dir=True)
+        return decorator
+    return wrapper
 
 # Logging
 
@@ -106,6 +196,70 @@ class TrainingIterator(object):
     def record(self, k, v):
         self._vals.setdefault(k, collections.OrderedDict())[self._i] = v
 
+log_dirs = set()
+def log_to_tmp_dir(out_dir):
+    '''Decorator for functions taking a parameter log_dir.
+
+       Intercepts the log_dir provided by the callee (write ultimate_symlink),
+       and creates a temporary directory (write tmp_log_dir) in config.OBJECT_DIR.
+       A symlink is created from ultimate_symlink + a random suffix to tmp_log_dir.
+       This tmp_log_dir is then passed as log_dir to the underlying function.
+       If the function succeeds, it renames the symlink to ultimate_log_dir,
+       unless this already exists.
+
+       The purpose of this is to make logging robust to tasks being retried
+       by a cluster manager, either due to failure (in which case ultimate_log_dir
+       will not exist) or due to recomputing results evicted from cache (in
+       which case ultimate_log_dir will exist).
+
+       Note this should be applied to the function(s) closest to the point
+       where logging output is actually produced. In particular, do not apply
+       it to two functions that receive the same log_dir!'''
+    def decorator(func, returns_log_dir=False):
+        @functools.wraps(func)
+        def wrapper(*args, **kwargs):
+            # Inspection & argument extraction
+            signature = inspect.signature(func)
+            bound = signature.bind(*args, **kwargs)
+            arguments = bound.arguments
+            ultimate_symlink = os.path.abspath(arguments['log_dir'])
+
+            # Catch common misuse of this decorator
+            if ultimate_symlink in log_dirs:
+                msg = "Duplicate log directory '{}'".format(ultimate_symlink)
+                raise AssertionError(msg)
+            log_dirs.add(ultimate_symlink)
+
+            # Make the directories
+            tmp_symlink = '{}.{}'.format(ultimate_symlink, id_generator())
+            os.makedirs(out_dir, exist_ok=True)
+            tmp_log_dir = tempfile.mkdtemp(dir=out_dir)
+            os.makedirs(os.path.dirname(tmp_symlink), exist_ok=True)
+            os.symlink(tmp_log_dir, tmp_symlink, target_is_directory=True)
+
+            # Call the function
+            arguments['log_dir'] = tmp_log_dir
+            res = func(*bound.args, **bound.kwargs)
+            if returns_log_dir:
+                res, new_log_dir = res
+                if new_log_dir != tmp_log_dir:
+                    os.rmdir(tmp_log_dir)
+                    os.unlink(tmp_symlink)
+                    os.symlink(new_log_dir, tmp_symlink, target_is_directory=True)
+
+            # Success! (If the function threw an exception, we never reach here.)
+            try:
+                os.link(tmp_symlink, ultimate_symlink)
+                os.unlink(tmp_symlink)
+            except FileExistsError:
+                logger.warning('Destination %s already exists (attempt to ' 
+                               'rename %s). Was this a retried task?',
+                               ultimate_symlink, tmp_symlink)
+
+            return res
+        return wrapper
+    return decorator
+
 # Convenience functions for nested dictionaries
 
 # Modified from:
@@ -124,22 +278,38 @@ def safeget(dct, keys):
     return dct
 
 
-def map_nested_dict(ob, func, init=[], level=0):
-    if isinstance(ob, collections.Mapping) and (level == 0 or len(init) < level):
-        return {k: map_nested_dict(v, func, init + [k]) for k, v in ob.items()}
+def map_nested_dict(ob, func, init=[], level=1):
+    '''Recurse to level depth in a nested mapping, applying func.'''
+    if len(init) < level:
+        assert isinstance(ob, collections.Mapping)
+        return {k: map_nested_dict(v, func, init + [k], level=level)
+                for k, v in ob.items()}
     else:
         return func(ob, init)
 
+def leaf_map_nested_dict(ob, func, init=[]):
+    '''Recurse to the leaf node in a nested mapping. Can be variable depth.'''
+    if isinstance(ob, collections.Mapping):
+        return {k: leaf_map_nested_dict(v, func, init + [k])
+                for k, v in ob.items()}
+    else:
+        return func(ob, init)
 
 def _get_nested_dict_helper(future, _keys):
     return ray.get(future)
 
-def ray_get_nested_dict(ob, level=0):
+def ray_get_nested_dict(ob, level=1):
     return map_nested_dict(ob, _get_nested_dict_helper, level=level)
+
+def ray_leaf_get_nested_dict(ob):
+    return leaf_map_nested_dict(ob, _get_nested_dict_helper)
 
 # GPU Management
 
 def set_cuda_visible_devices():
+    if ray.worker.global_worker.mode == ray.worker.PYTHON_MODE:
+        # Debug mode. get_gpu_ids() not supported -- do nothing.
+        return
     ids = ray.get_gpu_ids()
     real_num_gpus = ray.services._autodetect_num_gpus()
     gpus = ','.join([str(x % real_num_gpus) for x in ids])
