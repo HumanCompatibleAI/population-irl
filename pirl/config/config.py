@@ -105,6 +105,7 @@ def ppo_cts_pol(num_timesteps):
     return RLAlgorithm(train, sample, value, vectorized=True, uses_gpu=True)
 RL_ALGORITHMS['ppo_cts'] = ppo_cts_pol(1e6)
 RL_ALGORITHMS['ppo_cts_500k'] = ppo_cts_pol(5e5)
+RL_ALGORITHMS['ppo_cts_200k'] = ppo_cts_pol(2e5)
 RL_ALGORITHMS['ppo_cts_short'] = ppo_cts_pol(1e5)
 RL_ALGORITHMS['ppo_cts_shortest'] = ppo_cts_pol(1e4)
 
@@ -309,9 +310,9 @@ EXPERIMENTS['dummy-continuous-test'] = {
     'seeds': 2,
 }
 EXPERIMENTS['few-dummy-continuous-test'] = {
-    'train_environments': ['pirl/Reacher-fixed-hidden-goal-seed{}-v0'.format(i)
+    'train_environments': ['pirl/Reacher-seed{}-0.1-v0'.format(i)
                            for i in range(0, 2)],
-    'test_environments': ['pirl/Reacher-fixed-hidden-goal-seed{}-v0'.format(i)
+    'test_environments': ['pirl/Reacher-seed{}-0.1-v0'.format(i)
                           for i in range(1, 3)],
     'parallel_rollouts': 4,
     'discount': 0.99,
@@ -480,22 +481,23 @@ EXPERIMENTS['mountain-car-vel'] = {
     'test_trajectories': [1, 2, 5, 100],
     'seeds': 3,
 }
-EXPERIMENTS['reacher-env-comparisons'] = {
-    'environments': ['Reacher-v2', 'pirl/Reacher-baseline-seed0-v0',
-                     'pirl/Reacher-variable-hidden-goal-seed0-v0',
-                     'pirl/Reacher-fixed-hidden-goal-seed0-v0'],
+EXPERIMENTS['reacher-var'] = {
+    'environments': ['pirl/Reacher-seed{}-{}-v0'.format(seed, noise)
+                     for seed in range(0,3) for noise in [0.1, 0.5, 1.0]],
     'parallel_rollouts': 4,
     'discount': 0.99,
-    'expert': 'ppo_cts',
-    'eval': ['ppo_cts'],
-    'irl': [],
-    'test_trajectories': [1000],
+    # simple environment, small number of iterations sufficient to converge
+    'expert': 'ppo_cts_200k',
+    'irl': ['airl_so_short'],
+    'eval': [],
+    'test_trajectories': [1, 2, 5, 100],
+    'seeds': 3,
 }
 
 # Few-shot continuous control
 EXPERIMENTS['reacher-metalearning'] = {
-    'train_environments': ['pirl/Reacher-fixed-hidden-goal-seed{}-v0'.format(seed) for seed in range(0,5)],
-    'test_environments': ['pirl/Reacher-fixed-hidden-goal-seed{}-v0'.format(seed) for seed in range(5, 10)],
+    'train_environments': ['pirl/Reacher-seed{}-0.1-v0'.format(seed) for seed in range(0,5)],
+    'test_environments': ['pirl/Reacher-seed{}-0.1-v0'.format(seed) for seed in range(5, 10)],
     'parallel_rollouts': 4,
     'discount': 0.99,
     'expert': 'ppo_cts',
@@ -505,8 +507,8 @@ EXPERIMENTS['reacher-metalearning'] = {
     'test_trajectories': [1, 5, 10, 100],
 }
 EXPERIMENTS['dummy-reacher-metalearning'] = {
-    'train_environments': ['pirl/Reacher-fixed-hidden-goal-seed{}-v0'.format(seed) for seed in range(0,2)],
-    'test_environments': ['pirl/Reacher-fixed-hidden-goal-seed{}-v0'.format(seed) for seed in range(5,6)],
+    'train_environments': ['pirl/Reacher-seed{}-0.1-v0'.format(seed) for seed in range(0,2)],
+    'test_environments': ['pirl/Reacher-seed{}-0.1-v0'.format(seed) for seed in range(5,6)],
     'parallel_rollouts': 4,
     'discount': 0.99,
     'expert': 'ppo_cts_shortest',

@@ -99,41 +99,18 @@ for name, sign in {'left': -1, 'right': 1}.items():
 
 ## Reacher
 for seed in range(10):
-    register(
-        id='pirl/Reacher-baseline-seed{}-v0'.format(seed),
-        entry_point='pirl.envs.reacher:ReacherPopulationEnv',
-        max_episode_steps=50,
-        kwargs={
-            'seed': seed,
-            'start_variance': 0.1,
-            'goal_state_pos': 'variable',
-            'goal_state_access': True,
-        }
-    )
-
-    register(
-        id='pirl/Reacher-variable-hidden-goal-seed{}-v0'.format(seed),
-        entry_point='pirl.envs.reacher:ReacherPopulationEnv',
-        max_episode_steps=50,
-        kwargs={
-            'seed': seed,
-            'start_variance': 0.1,
-            'goal_state_pos': 'variable',
-            'goal_state_access': False,
-        },
-    )
-
-    register(
-        id='pirl/Reacher-fixed-hidden-goal-seed{}-v0'.format(seed),
-        entry_point='pirl.envs.reacher:ReacherPopulationEnv',
-        max_episode_steps=50,
-        kwargs={
-            'seed': seed,
-            'start_variance': 0.1,
-            'goal_state_pos': 'fixed',
-            'goal_state_access': False,
-        },
-    )
+    for start_variance in [0.1, 0.5, 1.0]:
+        register(
+            id='pirl/Reacher-seed{}-{}-v0'.format(seed, start_variance),
+            entry_point='pirl.envs.reacher:ReacherPopulationEnv',
+            max_episode_steps=50,
+            kwargs={
+                'seed': seed,
+                'start_variance': start_variance * np.pi,
+                'goal_state_pos': 'fixed',
+                'goal_state_access': False,
+            }
+        )
 
 ## Billiards
 billiard_params = [
