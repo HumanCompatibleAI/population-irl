@@ -1,7 +1,7 @@
 cluster_name: pirl
 # Autoscaler
 min_workers: 0
-max_workers: 10
+max_workers: 20
 target_utilization_fraction: 0.8
 idle_timeout_minutes: 5
 
