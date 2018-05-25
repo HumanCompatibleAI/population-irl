@@ -4,6 +4,7 @@ import logging
 import inspect
 import os
 import random
+import socket
 import string
 import tempfile
 import time
@@ -63,18 +64,17 @@ def get_hermes():
        Redis (if available) and dict (if no Redis server is running).'''
     if get_hermes.cache is None:
         kwargs = {'ttl': None}
-        try:
-            host = os.environ.get('RAY_HEAD_IP', 'localhost')
-            port = 6380
-            db = 0
-            get_hermes.cache = hermes.Hermes(hermes.backend.redis.Backend,
-                                             host=host, port=port, db=0, **kwargs)
-            logger.info('HermesCache: connected to %s:%d [db=%d]',
-                        host, port, db)
-        except ConnectionError:
-            logger.info('HermesCache: no Redis server running on %s:%d, '
-                        'falling back to local dict backend.', host, port)
-            get_hermes.cache = hermes.Hermes(hermes.backend.dict.Backend)
+        # Use socket.gethostname() not localhost.
+        # If running on the master, the function might get cloudpickle'd
+        # and sent to a remote machine, in which case we want
+        # the address to point back to us.
+        host = os.environ.get('RAY_HEAD_IP', socket.gethostname())
+        port = 6380
+        db = 0
+        get_hermes.cache = hermes.Hermes(hermes.backend.redis.Backend,
+                                         host=host, port=port, db=0, **kwargs)
+        logger.info('HermesCache: connected to %s:%d [db=%d]',
+                    host, port, db)
     return get_hermes.cache
 get_hermes.cache = None
 
