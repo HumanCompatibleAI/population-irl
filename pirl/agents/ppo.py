@@ -10,7 +10,6 @@ import pickle
 import time
 
 import cloudpickle
-from gym.utils import seeding
 import numpy as np
 import tensorflow as tf
 
@@ -22,7 +21,6 @@ from baselines.common.vec_env.vec_normalize import VecNormalize
 from baselines.ppo2.policies import MlpPolicy
 
 from pirl.agents.sample import SampleVecMonitor
-from pirl.utils import set_cuda_visible_devices
 
 logger = logging.getLogger('pirl.agents.ppo')
 

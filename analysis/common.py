@@ -18,15 +18,11 @@ import seaborn as sns
 
 from pirl.envs import jungle_topology
 
-
-logger = logging.getLogger('pirl.experiments.plots')
-
+logger = logging.getLogger('analysis.common')
 THIS_DIR = osp.join(os.path.dirname(os.path.realpath(__file__)))
 
 def style(name):
     return osp.join(THIS_DIR, '{}.mplstyle'.format(name))
-
-plt.style.use(style('default'))
 
 def nested_dicts_to_df(ds, idxs, transform):
     if len(idxs) == 2:

@@ -8,12 +8,11 @@ import gym
 import numpy as np
 import tensorflow as tf
 
-from rllab.envs.base import Env, EnvSpec, Step
+from rllab.envs.base import Env, EnvSpec
 import rllab.misc.logger as rl_logger
 from sandbox.rocky.tf.envs.base import TfEnv, to_tf_space
 from rllab.baselines.linear_feature_baseline import LinearFeatureBaseline
 from rllab.envs.gym_env import convert_gym_space
-from sandbox.rocky.tf.misc import tensor_utils
 
 from rllab.core.serializable import Serializable
 from rllab.spaces import Box

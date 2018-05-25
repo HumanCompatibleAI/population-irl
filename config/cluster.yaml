@@ -22,7 +22,7 @@ head_node:
     KeyName: Population-IRL
 
 file_mounts: {
-    "/tmp/current_branch_sha": "./.git/refs/heads/cache",
+    "/tmp/current_branch_sha": "./.git/refs/heads/master",
 }
 
 worker_nodes:

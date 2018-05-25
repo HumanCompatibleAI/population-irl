@@ -1,20 +1,13 @@
 import numpy as np
 from gym.envs.registration import register
-
-from pirl.envs import gridworld, tabular_mdp
-from pirl.envs.gridworld import GridWorldMdpEnv
-from pirl.envs.tabular_mdp import TabularMdpEnv
-from pirl.envs.mountain_car import ContinuousMountainCarPopulationEnv
-from pirl.envs.reacher import ReacherPopulationEnv
-from pirl.envs.billiards import BilliardsEnv
-from pirl.envs.seaquest import SeaquestPopulationEnv
+from pirl.envs import gridworld
 
 ### Gridworlds
 
 ## Only intended for testing code, entirely unrealistic
 register(
     id='pirl/GridWorld-Simple-v0',
-    entry_point='pirl.envs:GridWorldMdpEnv.from_string',
+    entry_point='pirl.envs.gridworld:GridWorldMdpEnv.from_string',
     max_episode_steps=100,
     kwargs={
         'grid': ['A X1',
@@ -28,7 +21,7 @@ register(
 
 register(
     id='pirl/GridWorld-Simple-Deterministic-v0',
-    entry_point='pirl.envs:GridWorldMdpEnv.from_string',
+    entry_point='pirl.envs.gridworld:GridWorldMdpEnv.from_string',
     max_episode_steps=100,
     kwargs={
         'grid': ['A X1',
@@ -76,7 +69,7 @@ for kind, cells in cfg.items():
         reward = fn(topology)
         register(
             id='pirl/GridWorld-Jungle-{}-{}-v0'.format(scale, kind),
-            entry_point='pirl.envs:GridWorldMdpEnv',
+            entry_point='pirl.envs.gridworld:GridWorldMdpEnv',
             max_episode_steps=100,
             kwargs={
                 'walls': topology == 'X',
@@ -92,7 +85,7 @@ for name, sign in {'left': -1, 'right': 1}.items():
     for vel_penalty in [0, 0.1, 0.5, 1]:
         register(
             id='pirl/MountainCarContinuous-{}-{}-v0'.format(name, vel_penalty),
-            entry_point='pirl.envs:ContinuousMountainCarPopulationEnv',
+            entry_point='pirl.envs.mountain_car:ContinuousMountainCarPopulationEnv',
             max_episode_steps=999,
             reward_threshold=90.0,
             kwargs={'side': sign, 'vel_penalty': vel_penalty},
@@ -102,7 +95,7 @@ for name, sign in {'left': -1, 'right': 1}.items():
 for seed in range(10):
     register(
         id='pirl/Reacher-baseline-seed{}-v0'.format(seed),
-        entry_point='pirl.envs:ReacherPopulationEnv',
+        entry_point='pirl.envs.reacher:ReacherPopulationEnv',
         max_episode_steps=50,
         kwargs={
             'seed': seed,
@@ -114,7 +107,7 @@ for seed in range(10):
 
     register(
         id='pirl/Reacher-variable-hidden-goal-seed{}-v0'.format(seed),
-        entry_point='pirl.envs:ReacherPopulationEnv',
+        entry_point='pirl.envs.reacher:ReacherPopulationEnv',
         max_episode_steps=50,
         kwargs={
             'seed': seed,
@@ -126,7 +119,7 @@ for seed in range(10):
 
     register(
         id='pirl/Reacher-fixed-hidden-goal-seed{}-v0'.format(seed),
-        entry_point='pirl.envs:ReacherPopulationEnv',
+        entry_point='pirl.envs.reacher:ReacherPopulationEnv',
         max_episode_steps=50,
         kwargs={
             'seed': seed,
@@ -147,7 +140,7 @@ for seed in range(10):
     for num_balls in range(1, len(billiard_params) + 1):
         register(
             id='pirl/Billiards{}-seed{}-v0'.format(num_balls, seed),
-            entry_point='pirl.envs:BilliardsEnv',
+            entry_point='pirl.envs.billiards:BilliardsEnv',
             max_episode_steps=200,
             kwargs={
                 'params': billiard_params,
@@ -159,7 +152,7 @@ for seed in range(10):
 ## Seaquest
 register(
     id='pirl/SeaquestPopulation-v0',
-    entry_point='pirl.envs:SeaquestPopulationEnv',
+    entry_point='pirl.envs.seaquest:SeaquestPopulationEnv',
     max_episode_steps=100000,
     kwargs={},
 )
