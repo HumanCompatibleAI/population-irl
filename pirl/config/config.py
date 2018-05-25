@@ -182,7 +182,7 @@ for k, kwargs in AIRL_ALGORITHMS.items():
 
     for k2, v in {'short': 100, 'shortest': 10}.items():
         kwds = dict(kwargs)
-        training_cfg = kwds.get('training_cfg', dict())
+        training_cfg = dict(kwds.get('training_cfg', dict()))
         training_cfg['n_itr'] = v
         kwds['training_cfg'] = training_cfg
         train = functools.partial(irl.airl.irl, tf_cfg=TENSORFLOW, **kwds)
