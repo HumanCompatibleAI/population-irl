@@ -149,7 +149,7 @@ def _convert_trajectories(trajs):
             for obs, actions in trajs]
 
 
-def irl(venv, trajectories, discount, seed, log_dir, *, tf_cfg, model_cfg={},
+def irl(venv, trajectories, discount, seed, log_dir, *, tf_cfg, model_cfg=None,
         policy_cfg=None, training_cfg={}, warmstart=None):
     envs = VecGymEnv(venv)
     envs = TfEnv(envs)
