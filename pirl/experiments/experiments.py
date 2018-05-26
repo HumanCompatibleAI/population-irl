@@ -18,8 +18,7 @@ from pirl import config, utils
 from pirl.utils import create_seed, sanitize_env_name, safeset
 
 logger = logging.getLogger('pirl.experiments.experiments')
-log_to_tmp = utils.log_to_tmp_dir(config.OBJECT_DIR)
-cache = utils.cache_and_log(log_to_tmp)
+cache = utils.cache_and_log(config.OBJECT_DIR)
 
 # Context Managers & Decorators
 

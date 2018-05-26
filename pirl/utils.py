@@ -1,4 +1,5 @@
 import collections
+from distutils.dir_util import copy_tree
 import functools
 import logging
 import inspect
@@ -6,6 +7,7 @@ import os
 import random
 import socket
 import string
+import sys
 import tempfile
 import time
 
@@ -88,7 +90,7 @@ def cache_key_func(mangler, func_module, func_name, ignore=None):
         fn.__module__ = func_module
         fn.__name__ = func_name
         signature = inspect.signature(fn)
-        bound = signature.bind(*args, **kwargs)
+        bound = signature.bind_partial(*args, **kwargs)
         for fld in ignore:
             if fld in bound.arguments:
                 del bound.arguments[fld]
@@ -104,7 +106,7 @@ def cache(*oargs, **okwargs):
     def decorator(func):
         cache = get_hermes()
 
-        ignore = None
+        ignore = []
         if 'ignore' in okwargs:
             ignore = okwargs.pop('ignore')
 
@@ -115,32 +117,6 @@ def cache(*oargs, **okwargs):
 
         return cache(*oargs, **okwargs)(func)
     return decorator
-
-def cache_and_log(log_to_tmp):
-    '''cache_and_log(log_to_tmp) returns a decorator that combines utils.cache
-       and log_to_tmp, an instance of utils.log_to_tmp_dir. In particular,
-       the function it decorates must take an argument log_dir. In the event of
-       a cache miss, this decorator produces the same behavior as a function
-       decorated with utils.cache and log_to_tmp sequentially. The advantage
-       comes in the case of a cache hit: cache_and_log will update the symlink
-       to point to the log directory that the *cached* result output to,
-       ensuring a complete set of logs.'''
-    def wrapper(*oargs, **okwargs):
-        def decorator(func):
-            @functools.wraps(func)
-            def add_log_dir(*args, **kwargs):
-                signature = inspect.signature(func)
-                bound = signature.bind(*args, **kwargs)
-                arguments = bound.arguments
-                log_dir = arguments['log_dir']
-                res = func(*args, **kwargs)
-                return res, log_dir
-
-            okwargs['ignore'] = okwargs.get('ignore', []) + ['log_dir']
-            cached_fn = cache(*oargs, **okwargs)(add_log_dir)
-            return log_to_tmp(cached_fn, returns_log_dir=True)
-        return decorator
-    return wrapper
 
 # Logging
 
@@ -196,69 +172,113 @@ class TrainingIterator(object):
     def record(self, k, v):
         self._vals.setdefault(k, collections.OrderedDict())[self._i] = v
 
+def _temporary_error(exc):
+    '''Kills the worker reporting the exception exc. This causes Ray to retry
+       the task, whereas if we raise the Exception it will mark the task as
+       permanently failed.'''
+    #TODO: Must be a better way? See Ray issue #2141
+    logger.critical('Fatal error. This is probably a node-specific error; '
+                    ' killing worker to force a retry.', exc_info=exc)
+    sys.exit(-1)
+
 log_dirs = set()
-def log_to_tmp_dir(out_dir):
-    '''Decorator for functions taking a parameter log_dir.
+def cache_and_log(out_dir):
+    '''Given an argument out_dir, returns a decorator that will log results to
+       out_dir, logging to a temporary directory during execution. Handles
+       node failures and caching.
 
-       Intercepts the log_dir provided by the callee (write ultimate_symlink),
-       and creates a temporary directory (write tmp_log_dir) in config.OBJECT_DIR.
-       A symlink is created from ultimate_symlink + a random suffix to tmp_log_dir.
-       This tmp_log_dir is then passed as log_dir to the underlying function.
-       If the function succeeds, it renames the symlink to ultimate_log_dir,
-       unless this already exists.
+       Specifically, the decorated function must take a parameter log_dir.
+       The decorator intercepts the log_dir provided by the callee,
+       and creates a temporary directory on the local machine.
 
-       The purpose of this is to make logging robust to tasks being retried
-       by a cluster manager, either due to failure (in which case ultimate_log_dir
-       will not exist) or due to recomputing results evicted from cache (in
-       which case ultimate_log_dir will exist).
+       If the task is successful, this temporary directory is copied to out_dir,
+       with a unique object id. A symlink to this directory is then made from
+       the callee-specified log_dir.
+
+       No entry is made when the task is unsuccessful.
+
+       If it encounters an error that appears to be related to a node failure
+       (inability to access out_dir), it will kill the worker, forcing Ray
+       to retry the task. (These semantics aren't ideal).
 
        Note this should be applied to the function(s) closest to the point
        where logging output is actually produced. In particular, do not apply
        it to two functions that receive the same log_dir!'''
-    def decorator(func, returns_log_dir=False):
-        @functools.wraps(func)
-        def wrapper(*args, **kwargs):
-            # Inspection & argument extraction
-            signature = inspect.signature(func)
-            bound = signature.bind(*args, **kwargs)
-            arguments = bound.arguments
-            ultimate_symlink = os.path.abspath(arguments['log_dir'])
+    def make_decorator(*oargs, **okwargs):
+        def decorator(func):
+            @functools.wraps(func)
+            def pre_cache_wrapper(*args, **kwargs):
+                '''Creates a temporary directory tmp_dir for logging,
+                   and calls func(*args, **kwargs, log_dir=tmp_dir).
+                   Upon completion of the function, it copies tmp_dir over to
+                   a newly created directory in out_dir.
+                   The main purpose of this is to isolate errors in the function
+                   from errors in accessing out_dir.'''
+                with tempfile.TemporaryDirectory(prefix='pirl') as tmp_dir:
+                    # Run the function
+                    res = func(*args, **kwargs, log_dir=tmp_dir)
 
-            # Catch common misuse of this decorator
-            if ultimate_symlink in log_dirs:
-                msg = "Duplicate log directory '{}'".format(ultimate_symlink)
-                raise AssertionError(msg)
-            log_dirs.add(ultimate_symlink)
+                    # Success! (If an exception happens, we never reach here)
+                    # Copy results to a new directory in out_dir
+                    try:
+                        os.makedirs(out_dir, exist_ok=True)
+                        permanent_dir = tempfile.mkdtemp(dir=out_dir)
+                        copy_tree(tmp_dir, permanent_dir)
+                    except OSError as e:
+                        # Copying could fail for two reasons.
+                        # (1) Node failure -- either it is being preempted,
+                        # or has some other error (e.g. network failure).
+                        # (2) out_dir is wrong (e.g. permissions errors).
+                        # We're going to pretend it's always (1), but complain
+                        # loudly in the logs in case it's (2).
+                        _temporary_error(e)
 
-            # Make the directories
-            tmp_symlink = '{}.{}'.format(ultimate_symlink, id_generator())
-            os.makedirs(out_dir, exist_ok=True)
-            tmp_log_dir = tempfile.mkdtemp(dir=out_dir)
-            os.makedirs(os.path.dirname(tmp_symlink), exist_ok=True)
-            os.symlink(tmp_log_dir, tmp_symlink, target_is_directory=True)
+                # Append permanent_dir to return value, so caller knows where
+                # to look for results.
+                return res, permanent_dir
 
-            # Call the function
-            arguments['log_dir'] = tmp_log_dir
-            res = func(*bound.args, **bound.kwargs)
-            if returns_log_dir:
-                res, new_log_dir = res
-                if new_log_dir != tmp_log_dir:
-                    os.rmdir(tmp_log_dir)
-                    os.unlink(tmp_symlink)
-                    os.symlink(new_log_dir, tmp_symlink, target_is_directory=True)
+            cached_fn = cache(*oargs, **okwargs)(pre_cache_wrapper)
 
-            # Success! (If the function threw an exception, we never reach here.)
-            try:
-                os.link(tmp_symlink, ultimate_symlink)
-                os.unlink(tmp_symlink)
-            except FileExistsError:
-                logger.warning('Destination %s already exists (attempt to ' 
-                               'rename %s). Was this a retried task?',
-                               ultimate_symlink, tmp_symlink)
+            @functools.wraps(cached_fn)
+            def post_cache_wrapper(*args, **kwargs):
+                '''Calls cached_fn(*args, **kwargs_exc) where kwargs_exc has
+                   had log_dir removed from it. It adds a symlink at log_dir
+                   pointing to the log directory returned by cached_fn, and
+                   returns the result returned originally by func.'''
+                # Inspection & argument extraction
+                signature = inspect.signature(func)
+                bound = signature.bind(*args, **kwargs)
+                arguments = bound.arguments
 
-            return res
-        return wrapper
-    return decorator
+                # sym_fname is the user-requested log directory.
+                # However, we log to a temporary directory, only making a
+                # symbolic link to the temporary directory once finished.
+                ultimate_log_dir = arguments.pop('log_dir')
+                sym_fname = os.path.abspath(ultimate_log_dir)
+                # Catch common misuse of this decorator
+                if sym_fname in log_dirs:
+                    msg = "Duplicate log directory '{}'".format(sym_fname)
+                    raise AssertionError(msg)
+                log_dirs.add(sym_fname)
+
+                res, permanent_log_dir = cached_fn(*bound.args, **bound.kwargs)
+
+                try:
+                    os.makedirs(os.path.dirname(sym_fname), exist_ok=True)
+                    os.symlink(permanent_log_dir, sym_fname,
+                               target_is_directory=True)
+                except FileExistsError:
+                    logger.warning('Destination %s already exists (attempt to '
+                                   'link to %s). Did we retry a successful task?',
+                                   sym_fname, permanent_log_dir)
+                except OSError as e:
+                    _temporary_error(e)
+
+                return res
+
+            return post_cache_wrapper
+        return decorator
+    return make_decorator
 
 # Convenience functions for nested dictionaries
 
