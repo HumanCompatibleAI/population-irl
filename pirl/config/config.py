@@ -302,8 +302,6 @@ EXPERIMENTS['dummy-test-deterministic'] = {
 }
 EXPERIMENTS['dummy-continuous-test'] = {
     'environments': ['Reacher-v2'],
-    'parallel_rollouts': 4,
-    'discount': 0.99,
     'expert': 'ppo_cts_shortest',
     'eval': ['ppo_cts_shortest'],
     'irl': ['airl_so_shortest', 'airl_random_shortest'],
@@ -315,8 +313,6 @@ EXPERIMENTS['few-dummy-continuous-test'] = {
                            for i in range(0, 2)],
     'test_environments': ['pirl/Reacher-seed{}-0.1-v0'.format(i)
                           for i in range(1, 3)],
-    'parallel_rollouts': 4,
-    'discount': 0.99,
     'expert': 'ppo_cts_shortest',
     'eval': ['ppo_cts_shortest'],
     'irl': ['airl_so_shortest', 'airlp_so_shortest'],
@@ -326,8 +322,6 @@ EXPERIMENTS['few-dummy-continuous-test'] = {
 }
 EXPERIMENTS['dummy-continuous-test-medium'] = {
     'environments': ['Reacher-v2'],
-    'parallel_rollouts': 4,
-    'discount': 0.99,
     'expert': 'ppo_cts_short',
     'eval': ['ppo_cts_short'],
     'irl': ['airl_so'],
@@ -335,8 +329,6 @@ EXPERIMENTS['dummy-continuous-test-medium'] = {
 }
 EXPERIMENTS['dummy-continuous-test-slow'] = {
     'environments': ['Reacher-v2'],
-    'parallel_rollouts': 4,
-    'discount': 0.99,
     'expert': 'ppo_cts',
     'eval': ['ppo_cts'],
     'irl': ['airl_so'],
@@ -356,7 +348,7 @@ EXPERIMENTS['unexpected-optimal'] = {
     'test_trajectories': [200],
 }
 
-# Few-shot learning
+# Few-shot learning in gridworlds
 jungle_types = ['Soda', 'Water', 'Liquid']
 for shape in ['9x9', '4x4']:
     for few_shot in jungle_types:
@@ -394,7 +386,7 @@ EXPERIMENTS['few-jungle-quick-tmp'] = {
     'test_trajectories': [0, 1, 2, 5, 10, 20, 50, 100],
 }
 
-# Continuous control
+# Baselines for continuous control
 EXPERIMENTS['continuous-baselines-classic'] = {
     # continuous state space but (mostly) discrete action spaces
     'environments': [
@@ -405,8 +397,6 @@ EXPERIMENTS['continuous-baselines-classic'] = {
         # 'MountainCar-v0',
         # 'Pendulum-v0',
     ],
-    'parallel_rollouts': 4,
-    'discount': 0.99,
     'expert': 'ppo_cts_short',
     'eval': ['ppo_cts_short'],
     'irl': ['airl_so_short', 'airl_random_short'],
@@ -414,8 +404,6 @@ EXPERIMENTS['continuous-baselines-classic'] = {
 }
 EXPERIMENTS['continuous-reacher'] = {
     'environments': ['Reacher-v2'],
-    'parallel_rollouts': 4,
-    'discount': 0.99,
     'expert': 'ppo_cts',
     'eval': ['ppo_cts'],
     'irl': ['airl_so', 'airl_random'],
@@ -427,8 +415,6 @@ EXPERIMENTS['continuous-baselines-easy'] = {
         'InvertedPendulum-v2',
         'InvertedDoublePendulum-v2'
     ],
-    'parallel_rollouts': 4,
-    'discount': 0.99,
     'expert': 'ppo_cts',
     'eval': ['ppo_cts'],
     'irl': ['airl_so', 'airl_random'],
@@ -440,18 +426,16 @@ EXPERIMENTS['continuous-baselines-medium'] = {
         'Hopper-v2',
         'HalfCheetah-v2',
     ],
-    'parallel_rollouts': 4,
-    'discount': 0.99,
     'expert': 'ppo_cts',
     'eval': ['ppo_cts'],
     'irl': ['airl_so', 'airl_random'],
     'test_trajectories': [1000],
 }
+
+# Continuous control
 EXPERIMENTS['billiards'] = {
     'environments': ['pirl/Billiards{}-seed{}-v0'.format(n, i)
                      for n in [2,3,4] for i in range(1)],
-    'parallel_rollouts': 4,
-    'discount': 0.99,
     'expert': 'ppo_cts',
     'eval': [],
     'irl': ['airl_so'],
@@ -459,8 +443,6 @@ EXPERIMENTS['billiards'] = {
 }
 EXPERIMENTS['mountain-car-single'] = {
     'environments': ['pirl/MountainCarContinuous-left-0-0.1-v0'],
-    'parallel_rollouts': 4,
-    'discount': 0.99,
     # simple environment, small number of iterations sufficient to converge
     'expert': 'ppo_cts_short',
     'eval': ['ppo_cts_short'],
@@ -474,8 +456,6 @@ EXPERIMENTS['mountain-car-vel'] = {
                      for vel in [0, 0.1, 0.5, 1]
                      for initial_noise in [0.1, 0.2, 0.5]
                     ],
-    'parallel_rollouts': 4,
-    'discount': 0.99,
     # simple environment, small number of iterations sufficient to converge
     'expert': 'ppo_cts_short',
     'eval': [],#'ppo_cts_short'],
@@ -485,8 +465,6 @@ EXPERIMENTS['mountain-car-vel'] = {
 EXPERIMENTS['reacher-var'] = {
     'environments': ['pirl/Reacher-seed{}-{}-v0'.format(seed, noise)
                      for seed in range(0,3) for noise in [0.1, 0.5, 1.0]],
-    'parallel_rollouts': 4,
-    'discount': 0.99,
     # simple environment, small number of iterations sufficient to converge
     'expert': 'ppo_cts_200k',
     'irl': ['airl_so_short'],
@@ -498,8 +476,6 @@ EXPERIMENTS['reacher-var'] = {
 EXPERIMENTS['reacher-metalearning'] = {
     'train_environments': ['pirl/Reacher-seed{}-0.1-v0'.format(seed) for seed in range(0,5)],
     'test_environments': ['pirl/Reacher-seed{}-0.1-v0'.format(seed) for seed in range(5, 10)],
-    'parallel_rollouts': 4,
-    'discount': 0.99,
     'expert': 'ppo_cts',
     'eval': ['ppo_cts'],
     'irl': ['airl_so'] + ['airlp_so_lr1e-{}'.format(i) for i in range(1,4)],
@@ -509,8 +485,6 @@ EXPERIMENTS['reacher-metalearning'] = {
 EXPERIMENTS['dummy-reacher-metalearning'] = {
     'train_environments': ['pirl/Reacher-seed{}-0.1-v0'.format(seed) for seed in range(0,2)],
     'test_environments': ['pirl/Reacher-seed{}-0.1-v0'.format(seed) for seed in range(5,6)],
-    'parallel_rollouts': 4,
-    'discount': 0.99,
     'expert': 'ppo_cts_shortest',
     'eval': ['ppo_cts_shortest'],
     'irl': ['airl_so_shortest', 'airlp_so_shortest'],
@@ -520,8 +494,6 @@ EXPERIMENTS['dummy-reacher-metalearning'] = {
 EXPERIMENTS['mountain-car-meta'] = {
     'environments': ['pirl/MountainCarContinuous-{}-0-0.1-v0'.format(side)
                      for side in ['left', 'right']],
-    'parallel_rollouts': 4,
-    'discount': 0.99,
     # simple environment, small number of iterations sufficient to converge
     'expert': 'ppo_cts_short',
     'eval': ['ppo_cts_short'],
@@ -540,7 +512,6 @@ for n in [1, 4, 8, 16]:
             'InvertedDoublePendulum-v2'
         ],
         'parallel_rollouts': n,
-        'discount': 0.99,
         'expert': 'ppo_cts',
         'eval': [],#['ppo_cts'],
         'irl': ['airl_so'],
@@ -553,7 +524,6 @@ for n in [1, 4, 8, 16]:
             'InvertedDoublePendulum-v2'
         ],
         'parallel_rollouts': n,
-        'discount': 0.99,
         'expert': 'ppo_cts',
         'eval': [],
         'irl': ['airl_so_shortest'],
@@ -564,7 +534,6 @@ for n in [1, 4, 8, 16]:
             'Reacher-v2',
         ],
         'parallel_rollouts': n,
-        'discount': 0.99,
         'expert': 'ppo_cts',
         'eval': [],
         'irl': ['airl_so'],
@@ -575,7 +544,6 @@ for n in [1, 4, 8, 16]:
             'Reacher-v2',
         ],
         'parallel_rollouts': n,
-        'discount': 0.99,
         'expert': 'ppo_cts',
         'eval': [],
         'irl': ['airl_so_shortest'],
@@ -586,7 +554,6 @@ for n in [1, 4, 8, 16]:
             'Reacher-v2',
         ],
         'parallel_rollouts': n,
-        'discount': 0.99,
         'expert': 'ppo_cts_shortest',
         'eval': [],
         'irl': [],
@@ -597,7 +564,6 @@ for n in [1, 4, 8, 16]:
             'Humanoid-v2',
         ],
         'parallel_rollouts': n,
-        'discount': 0.99,
         'expert': 'ppo_cts_shortest',
         'eval': [],
         'irl': [],

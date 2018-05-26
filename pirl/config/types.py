@@ -51,13 +51,17 @@ FIELD_TYPES = {
     'discount': float,
     # Number of seeds to use
     'seeds': int,
+    'parallel_rollouts': int,
 }
 
-MANDATORY_FIELDS = ['discount', 'expert', 'irl', 'eval', 'test_trajectories']
+MANDATORY_FIELDS = ['expert', 'irl', 'eval', 'test_trajectories']
 OPTIONAL_FIELDS = {
     # 'field': default_value
-    'train_trajectories': None,
+    'discount': 0.99,
     'seeds': 3,
+    'train_trajectories': None,
+    # note parallel_rollouts is ignored for non-vectorized (I)RL algorithms
+    'parallel_rollouts': 4,
 }
 
 def parse_config(experiment, cfg,
