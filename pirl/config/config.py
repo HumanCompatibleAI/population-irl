@@ -3,6 +3,7 @@ import itertools
 import os.path as osp
 
 import tensorflow as tf
+from airl import envs  # used for side-effects (register Gym environments)
 
 from pirl import agents, irl
 from pirl.config.types import RLAlgorithm, IRLAlgorithm, MetaIRLAlgorithm
@@ -168,6 +169,18 @@ AIRL_ALGORITHMS = {
     'so': dict(),
     'sa': dict(model_cfg={'model': irl.airl.AIRLStateAction, 'max_itrs': 10}),
     'random': dict(policy_cfg={'policy': irl.airl.GaussianPolicy}),
+    # parameters to match scripts/pendulum_irl.py from adversarial-irl
+    'orig_pendulum': {
+        'model_cfg': {
+            'model': irl.airl.AIRLStateAction,
+            'max_itrs': 100,
+        },
+        'training_cfg': {
+            'n_itr': 200,
+            'batch_size': 1000,
+            'discrim_train_itrs': 50,
+        }
+    },
 }
 airl_reward = functools.partial(irl.airl.airl_reward_wrapper, tf_cfg=TENSORFLOW)
 airl_value = functools.partial(agents.sample.value,
@@ -430,6 +443,28 @@ EXPERIMENTS['continuous-baselines-medium'] = {
     'eval': ['ppo_cts'],
     'irl': ['airl_so', 'airl_random'],
     'test_trajectories': [1000],
+}
+# Designed to closely match tests from adversarial-irl repository
+# Differences: expert is PPO rather than TRPO, parallel rollouts,
+# and number of trajectories (I've tried to match it closely)
+EXPERIMENTS['airl-baselines-pendulum'] = {
+    'environments': ['Pendulum-v0'],
+    'expert': 'ppo_cts',
+    'irl': ['airl_orig_pendulum'],
+    'eval': ['ppo_cts'],
+    # In scripts/pendulum_irl.py, loads 5 iterations * 1000 batch size = 5000 steps.
+    # Episode is at most 100 steps long, so this corresponds to 500 trajectories.for
+    # (This is quite a lot for such a simple task.)
+    'test_trajectories': [500],
+}
+EXPERIMENTS['airl-baselines-ant'] = {
+    'environments': ['airl/CustomAnt-v0'],
+    'expert': 'ppo_cts',
+    'irl': ['airl_so'],
+    'eval': ['ppo_cts'],
+    # scripts/ant_irl.py loads 2 iterations * 4 runs * 20000 batch size
+    # = 160,000 steps. Episode is at most 500 steps long, so 320 trajectories.
+    'test_trajectories': [320],
 }
 
 # Continuous control
