@@ -163,11 +163,10 @@ def irl(venv, trajectories, discount, seed, log_dir, *, tf_cfg, model_cfg={},
             model_cfg = {'model': AIRLStateOnly,
                          'state_only': True,
                          'max_itrs': 10}
-        else:
-            model_cfg = dict(model_cfg)
-        model_cls = model_cfg.pop('model')
+        model_kwargs = dict(model_cfg)
+        model_cls = model_kwargs.pop('model')
         irl_model = model_cls(env_spec=envs.spec, expert_trajs=experts,
-                              **model_cfg)
+                              **model_kwargs)
 
         if policy_cfg is None:
             policy_cfg = {'policy': GaussianMLPPolicy, 'hidden_sizes': (32, 32)}
@@ -215,7 +214,7 @@ def irl(venv, trajectories, discount, seed, log_dir, *, tf_cfg, model_cfg={},
                 # since parameters in policy will not survive across tf sessions.
                 policy_pkl = pickle.dumps(policy)
 
-    reward = model_kwargs, reward_params
+    reward = model_cfg, reward_params
     return reward, policy_pkl
 
 
@@ -235,6 +234,15 @@ def metalearn(venvs, trajectories, discount, seed, log_dir, *, tf_cfg, outer_itr
     with train_graph.as_default():
         tf.set_random_seed(seed)
 
+        if model_cfg is None:
+            model_cfg = {'model': AIRLStateOnly,
+                         'state_only': True,
+                         'max_itrs': 10}
+        model_kwargs = dict(model_cfg)
+        model_cls = model_kwargs.pop('model')
+        irl_model = model_cls(env_spec=envs.spec, expert_trajs=experts,
+                              **model_kwargs)
+
         if policy_cfg is None:
             policy_cfg = {'policy': GaussianMLPPolicy, 'hidden_sizes': (32, 32)}
         policy_fn = policy_cfg.pop('policy')
@@ -251,7 +259,6 @@ def metalearn(venvs, trajectories, discount, seed, log_dir, *, tf_cfg, outer_itr
             'store_paths': False,
         }
         training_kwargs.update(training_cfg)
-        irl_model = AIRL(env_spec=env_spec, **model_kwargs)
 
         #TODO: avoid duplication of everything? (all that's changing is environment)
         #TODO: actually this will likely do bad things due to storing paths etc
@@ -332,27 +339,35 @@ def _setup_model(env, new_reward, tf_cfg):
     env_spec = EnvSpec(
         observation_space=to_tf_space(convert_gym_space(env.observation_space)),
         action_space=to_tf_space(convert_gym_space(env.action_space)))
-    model_kwargs, reward_params = new_reward
+    model_cfg, reward_params = new_reward
     infer_graph = tf.Graph()
     with infer_graph.as_default():
-        irl_model = AIRL(env_spec=env_spec, expert_trajs=None, **model_kwargs)
+        model_kwargs = dict(model_cfg)
+        model_cls = model_kwargs.pop('model')
+        irl_model = model_cls(env_spec=env_spec, expert_trajs=None, **model_kwargs)
+        if model_cls == AIRLStateOnly:
+            reward_var = irl_model.reward
+        elif model_cls == AIRLStateAction:
+            reward_var = irl_model.energy
+        else:
+            assert False, "Unsupported model type"
         sess = tf.Session(config=tf_cfg)
         with sess.as_default():
             irl_model.set_params(reward_params)
-    return sess, irl_model
+    return sess, irl_model, reward_var
 
 
 class AIRLRewardWrapper(gym.Wrapper):
     """Wrapper for a Env, using a reward network."""
     def __init__(self, env, new_reward, tf_cfg):
-        self.sess, self.irl_model = _setup_model(env, new_reward, tf_cfg)
+        self.sess, self.irl_model, self.reward_var = _setup_model(env, new_reward, tf_cfg)
         super().__init__(env)
 
     def step(self, action):
         obs, old_reward, done, info = self.env.step(action)
         feed_dict = {self.irl_model.act_t: np.array([action]),
                      self.irl_model.obs_t: np.array([obs])}
-        new_reward = self.sess.run(self.irl_model.reward, feed_dict=feed_dict)
+        new_reward = self.sess.run(self.reward_var, feed_dict=feed_dict)
         return obs, new_reward[0][0], done, info
 
     def reset(self, **kwargs):
@@ -366,7 +381,7 @@ class AIRLRewardWrapper(gym.Wrapper):
 class AIRLVecRewardWrapper(VecEnvWrapper):
     """Wrapper for a VecEnv, using a reward network."""
     def __init__(self, venv, new_reward, tf_cfg):
-        self.sess, self.irl_model = _setup_model(venv, new_reward, tf_cfg)
+        self.sess, self.irl_model, self.reward_var = _setup_model(venv, new_reward, tf_cfg)
         super().__init__(venv)
 
     def step_async(self, actions):
@@ -377,7 +392,7 @@ class AIRLVecRewardWrapper(VecEnvWrapper):
         obs, _old_rewards, dones, info = self.venv.step_wait()
         feed_dict = {self.irl_model.act_t: np.array(self.last_actions),
                      self.irl_model.obs_t: np.array(obs)}
-        new_reward = self.sess.run(self.irl_model.reward, feed_dict=feed_dict)
+        new_reward = self.sess.run(self.reward_var, feed_dict=feed_dict)
         return obs, new_reward.flat, dones, info
 
     def reset(self):
