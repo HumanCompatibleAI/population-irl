@@ -18,7 +18,7 @@ auth:
 head_node:
     #TODO: when Ray issue #2106 is fixed, switch this to non-GPU (e.g. m5)
     InstanceType: p2.xlarge
-    ImageId: ami-017106882a595fe38  # Custom AMI with our code pre-installed
+    ImageId: ami-0abc2a39829aff56b  # Custom AMI with our code pre-installed
     KeyName: Population-IRL
 
 file_mounts: {
@@ -29,7 +29,7 @@ worker_nodes:
     # IMPORTANT: If you update the instance type, also update --num-gpus
     # in worker_start_ray_commands
     InstanceType: p2.xlarge
-    ImageId:  ami-017106882a595fe38  # Custom AMI with our code pre-installed
+    ImageId:  ami-0abc2a39829aff56b  # Custom AMI with our code pre-installed
     KeyName: Population-IRL
     InstanceMarketOptions:
         MarketType: spot  # max price defaults to the on-demand price
