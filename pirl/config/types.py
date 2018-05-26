@@ -57,7 +57,7 @@ MANDATORY_FIELDS = ['discount', 'expert', 'irl', 'eval', 'test_trajectories']
 OPTIONAL_FIELDS = {
     # 'field': default_value
     'train_trajectories': None,
-    'seeds': 5,
+    'seeds': 3,
 }
 
 def parse_config(experiment, cfg,

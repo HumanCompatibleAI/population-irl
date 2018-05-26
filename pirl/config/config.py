@@ -480,7 +480,6 @@ EXPERIMENTS['mountain-car-vel'] = {
     'eval': [],#'ppo_cts_short'],
     'irl': ['airl_so_short'], #'airl_sa_short', 'airl_random_short'],
     'test_trajectories': [1, 2, 5, 100],
-    'seeds': 3,
 }
 EXPERIMENTS['reacher-var'] = {
     'environments': ['pirl/Reacher-seed{}-{}-v0'.format(seed, noise)
@@ -492,7 +491,6 @@ EXPERIMENTS['reacher-var'] = {
     'irl': ['airl_so_short'],
     'eval': [],
     'test_trajectories': [1, 2, 5, 100],
-    'seeds': 3,
 }
 
 # Few-shot continuous control
