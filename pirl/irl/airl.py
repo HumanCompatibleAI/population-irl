@@ -21,7 +21,8 @@ from sandbox.rocky.tf.policies.base import StochasticPolicy
 from sandbox.rocky.tf.policies.gaussian_mlp_policy import GaussianMLPPolicy
 
 from airl.algos.irl_trpo import IRLTRPO
-from airl.models.airl_state import AIRL
+from airl.models.airl_state import AIRL as AIRLStateOnly
+from airl.models.imitation_learning import AIRLStateAction
 from airl.utils.log_utils import rllab_logdir
 
 from pirl.agents.sample import SampleVecMonitor
@@ -158,9 +159,15 @@ def irl(venv, trajectories, discount, seed, log_dir, *, tf_cfg, model_cfg={},
     with train_graph.as_default():
         tf.set_random_seed(seed)
 
-        model_kwargs = {'state_only': True, 'max_itrs': 10}
-        model_kwargs.update(model_cfg)
-        irl_model = AIRL(env_spec=envs.spec, expert_trajs=experts, **model_kwargs)
+        if model_cfg is None:
+            model_cfg = {'model': AIRLStateOnly,
+                         'state_only': True,
+                         'max_itrs': 10}
+        else:
+            model_cfg = dict(model_cfg)
+        model_cls = model_cfg.pop('model')
+        irl_model = model_cls(env_spec=envs.spec, expert_trajs=experts,
+                              **model_cfg)
 
         if policy_cfg is None:
             policy_cfg = {'policy': GaussianMLPPolicy, 'hidden_sizes': (32, 32)}

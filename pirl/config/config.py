@@ -163,9 +163,10 @@ SINGLE_IRL_ALGORITHMS = {
     ),
 }
 
+from airl.models.imitation_learning import AIRLStateAction
 AIRL_ALGORITHMS = {
     'so': dict(),
-    'sa': dict(training_cfg={'state_only': False}),
+    'sa': dict(model_cfg={'model': irl.airl.AIRLStateAction, 'max_itrs': 10}),
     'random': dict(policy_cfg={'policy': irl.airl.GaussianPolicy}),
 }
 airl_reward = functools.partial(irl.airl.airl_reward_wrapper, tf_cfg=TENSORFLOW)
