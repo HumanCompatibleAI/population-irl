@@ -193,7 +193,7 @@ dependencies:
     - gast==0.2.0
     - glfw==1.6.0
     - grpcio==1.12.0
-    - git+git://github.com/AdamGleave/gym.git@all-fixes#egg=gym
+    - git+git://github.com/AdamGleave/gym.git@double-wrap#egg=gym
     - git+git://github.com/AdamGleave/HermesCache.git@master#egg=HermesCache
     - imageio==2.3.0
     - joblib==0.11
