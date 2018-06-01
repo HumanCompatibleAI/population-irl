@@ -16,8 +16,7 @@ import pickle
 import git
 import ray
 
-from pirl import config
-from pirl.experiments import experiments
+from pirl import config, experiments
 
 logger = logging.getLogger('pirl.experiments.cli')
 

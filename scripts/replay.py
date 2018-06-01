@@ -1,11 +1,9 @@
 import argparse
-from baselines.common.vec_env.dummy_vec_env import DummyVecEnv
 import gym
 from gym.wrappers import Monitor
 import joblib
 
-from pirl.agents import ppo
-from pirl import config
+from pirl import config, experiments
 
 
 class InteractiveMonitor(gym.Wrapper):
@@ -29,30 +27,40 @@ class InteractiveMonitor(gym.Wrapper):
         print('START ', self.episode)
         return self.env.reset()
 
+
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument('checkpoint', type=str, help='path to PPO checkpoint')
+    parser.add_argument('algo', type=str, help='algorithm name')
+    parser.add_argument('policy', type=str, help='path to policy checkpoint')
     parser.add_argument('env', type=str, help='name of Gym environment.')
     parser.add_argument('--out-dir', dest='out_dir', metavar='DIR', type=str, default='/tmp/play-ppo')
     parser.add_argument('--num-episodes', dest='num_episodes', metavar='N', type=int, default=1)
     parser.add_argument('--seed', dest='seed', metavar='N', type=int, default=0)
     args = parser.parse_args()
 
-    print('Loading checkpoint from ', args.checkpoint)
-    policy = joblib.load(args.checkpoint)
+    algo_search = {'rl': config.RL_ALGORITHMS,
+                   'sirl': config.SINGLE_IRL_ALGORITHMS,
+                   'pirl': config.POPULATION_IRL_ALGORITHMS}
+    for k, d in algo_search.items():
+        if args.algo in d:
+            print('Found {} in {}'.format(args.algo, k))
+            algo = d[args.algo]
 
-    def make_env():
-        env = gym.make(args.env)
-        env.seed(args.seed)
-        env = Monitor(env, directory=args.out_dir,
-                          force=True, video_callable=lambda x: True)
-        env = InteractiveMonitor(env)
-        return env
-    venv = DummyVecEnv([make_env])
+    print('Loading checkpoint from ', args.policy)
+    policy = joblib.load(args.policy)
+
     print('Sampling {} in {}, saving videos to {}'.format(
            args.num_episodes, args.env, args.out_dir))
-    ppo.sample(venv, policy, args.num_episodes,
-               args.seed, tf_config=config.TENSORFLOW)
+    def wrapper(env):
+        env = Monitor(env, directory=args.out_dir,
+                      force=True, video_callable=lambda x: True)
+        return InteractiveMonitor(env)
+
+    with experiments.make_envs(args.env, algo.vectorized, parallel=1,
+                               base_seed=args.seed, pre_wrapper=wrapper,
+                               log_prefix=args.out_dir) as envs:
+        algo.sample(envs, policy, args.num_episodes, args.seed)
+
 
 if __name__ == '__main__':
     main()

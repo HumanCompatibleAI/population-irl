@@ -4,7 +4,7 @@ import pytest
 import gym
 import numpy as np
 
-from pirl.experiments import experiments
+from pirl import experiments
 from pirl.agents import tabular
 from pirl.irl import tabular_maxent
 

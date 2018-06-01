@@ -4,13 +4,68 @@ import sys
 import gym
 
 # Algorithms
-RES_FLDS = ['vectorized', 'uses_gpu']
-RLAlgorithm = namedtuple('RLAlgorithm', ['train', 'sample', 'value'] + RES_FLDS)
+RES_FLDS = ['sample', 'vectorized', 'uses_gpu']
+RES_FLDS_DOC = '''\n
+sample has signature (env, policy, num_episodes, seed) where
+num_episodes is the number of trajectories to sample, and seed is used
+to sample deterministically. It returns a list of 3-tuples
+(states, actions, rewards), each of which is a list.
+
+vectorized is a boolean flag indicating if the algorithm takes VecEnv's.
+
+uses_gpu is a boolean flag indicating whether the algorithm requires a GPU.
+'''
+
+RLAlgorithm = namedtuple('RLAlgorithm', ['train', 'value'] + RES_FLDS)
+RLAlgorithm.__doc__ = '''\
+train has signature (env, discount, seed, log_dir), where env is a gym.Env,
+discount is a float, seed is an integer and log_dir is a writable directory.
+They return a policy (algorithm-specific object).
+
+value has signature (env, policy, discount, seed).
+It returns (mean, se) where mean is the estimated reward and se is the
+standard error (0 for exact methods).''' + RES_FLDS_DOC
 IRLAlgorithm = namedtuple('IRLAlgorithm',
                           ['train', 'reward_wrapper', 'value'] + RES_FLDS)
+IRLAlgorithm.__doc__ = '''\
+train signature (env, trajectories, discount, seed, log_dir) where:
+- env is a gym.Env.
+- trajectories is a dict of environment IDs to lists of trajectories.
+- discount is a float in [0,1].
+- seed is an integer.
+- log_dir is a directory which may be used for logging or other temporary output.
+It returns a tuple (reward, policy), both of which are algorithm-specific
+objects. reward must be comprehensible to RL algorithms (if any) specified in
+the 'eval' key in the experimental config.
+
+reward_wrapper is a class with signature __init__(env, reward).
+It wraps environment (that may be a vector environment) and overrides step()
+to return the reward learnt by the IRL algorithm.
+
+value has signature (env, policy, discount, seed) where:
+- env is a gym.Env.
+- policy is as returned by the IRL algorithm.
+- discount is a float in [0,1].
+- seed is an integer.
+It returns (mean, se) where mean is the estimated reward and se is the
+standard error (0 for exact methods).''' + RES_FLDS_DOC
 MetaIRLAlgorithm = namedtuple('MetaIRLAlgorithm',
                               ['metalearn', 'finetune',
                                'reward_wrapper', 'value'] + RES_FLDS)
+MetaIRLAlgorithm.__doc__ = '''\
+Values take the form: (metalearn, finetune, reward_wrapper, compute_value).
+
+metalearn has signature (envs, trajectories, discount, seed, log_dir), where:
+- envs is a dictionary mapping to gym.Env
+- trajectories is a dictionary mapping to trajectories
+- discount, seed and log_dir are as in the single-IRL case.
+It returns an algorithm-specific object.
+
+finetune has signature (metainit, env, trajectories, discount, seed, log_dir),
+where metainit is the return value of metalearn; the remaining arguments and
+the return value are as in the single-IRL case.
+
+reward_wrapper and compute_value are the same as for IRLAlgorithm.'''
 
 def validate_config(rl_algos, single_irl_algos, population_irl_algos):
     '''Checks the defined algorithms are of the appropriate type,

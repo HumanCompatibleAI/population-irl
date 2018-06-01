@@ -59,20 +59,6 @@ LOG_CFG = {
 
 # RL Algorithms
 
-# Values take form (gen_policy, sample, compute_value).
-#
-# gen_policy has signature (env, discount, seed, log_dir), where env is a gym.Env,
-# discount is a float, seed is an integer and log_dir is a writable directory.
-# They return a policy (algorithm-specific object).
-#
-# sample has signature (env, policy, num_episodes, seed) where
-# num_episodes is the number of trajectories to sample, and seed is used
-# to sample deterministically. It returns a list of 3-tuples
-# (states, actions, rewards), each of which is a list.
-#
-# compute_value has signature (env, policy, discount, seed).
-# It returns (mean, se) where mean is the estimated reward and se is the
-# standard error (0 for exact methods).
 RL_ALGORITHMS = {
     'value_iteration': RLAlgorithm(
         train=agents.tabular.policy_env_wrapper(agents.tabular.q_iteration_policy),
@@ -114,34 +100,12 @@ RL_ALGORITHMS['ppo_cts_shortest'] = ppo_cts_pol(1e4)
 
 ## Single environment IRL algorithms (not population)
 
-# Values take the form: (irl, reward_wrapper, compute_value).
-#
-# irl signature (env, trajectories, discount, seed, log_dir) where:
-# - env is a gym.Env.
-# - trajectories is a dict of environment IDs to lists of trajectories.
-# - discount is a float in [0,1].
-# - seed is an integer.
-# - log_dir is a directory which may be used for logging or other temporary output.
-# It returns a tuple (reward, policy), both of which are algorithm-specific
-# objects. reward must be comprehensible to RL algorithms (if any) specified in
-# the 'eval' key in the experimental config.
-#
-# reward_wrapper is a class with signature __init__(env, reward).
-# It wraps environment (that may be a vector environment) and overrides step()
-# to return the reward learnt by the IRL algorithm.
-#
-# compute_value has signature (env, policy, discount, seed) where:
-# - env is a gym.Env.
-# - policy is as returned by the IRL algorithm.
-# - discount is a float in [0,1].
-# - seed is an integer.
-# It returns (mean, se) where mean is the estimated reward and se is the
-# standard error (0 for exact methods).
 SINGLE_IRL_ALGORITHMS = {
     # Maximum Causal Entropy (Ziebart 2010)
     'mce': IRLAlgorithm(
         train=irl.tabular_maxent.irl,
         reward_wrapper=agents.tabular.TabularRewardWrapper,
+        sample=agents.tabular.sample,
         value=agents.tabular.value_in_mdp,
         vectorized=False,
         uses_gpu=False,
@@ -149,6 +113,7 @@ SINGLE_IRL_ALGORITHMS = {
     'mce_shortest': IRLAlgorithm(
         train=functools.partial(irl.tabular_maxent.irl, num_iter=500),
         reward_wrapper=agents.tabular.TabularRewardWrapper,
+        sample=agents.tabular.sample,
         value=agents.tabular.value_in_mdp,
         vectorized=False,
         uses_gpu=False,
@@ -158,6 +123,7 @@ SINGLE_IRL_ALGORITHMS = {
         train=functools.partial(irl.tabular_maxent.irl,
                                 planner=irl.tabular_maxent.max_ent_policy),
         reward_wrapper=agents.tabular.TabularRewardWrapper,
+        sample=agents.tabular.sample,
         value=agents.tabular.value_in_mdp,
         vectorized=False,
         uses_gpu=False,
@@ -183,13 +149,14 @@ AIRL_ALGORITHMS = {
     },
 }
 airl_reward = functools.partial(irl.airl.airl_reward_wrapper, tf_cfg=TENSORFLOW)
-airl_value = functools.partial(agents.sample.value,
-                               functools.partial(irl.airl.sample, tf_cfg=TENSORFLOW))
+airl_sample = functools.partial(irl.airl.sample, tf_cfg=TENSORFLOW)
+airl_value = functools.partial(agents.sample.value, airl_sample)
 for k, kwargs in AIRL_ALGORITHMS.items():
     train = functools.partial(irl.airl.irl, tf_cfg=TENSORFLOW, **kwargs)
     SINGLE_IRL_ALGORITHMS['airl_{}'.format(k)] = IRLAlgorithm(
         train=train,
         reward_wrapper=airl_reward,
+        sample=airl_sample,
         value=airl_value,
         vectorized=True,
         uses_gpu=True,
@@ -204,6 +171,7 @@ for k, kwargs in AIRL_ALGORITHMS.items():
         SINGLE_IRL_ALGORITHMS['airl_{}_{}'.format(k, k2)] = IRLAlgorithm(
             train=train,
             reward_wrapper=airl_reward,
+            sample=airl_sample,
             value=airl_value,
             vectorized=True,
             uses_gpu=True,
@@ -211,25 +179,13 @@ for k, kwargs in AIRL_ALGORITHMS.items():
 
 ## Population IRL algorithms
 
-# Values take the form: (metalearn, finetune, reward_wrapper, compute_value).
-#
-# metalearn has signature (envs, trajectories, discount, seed, log_dir), where:
-# - envs is a dictionary mapping to gym.Env
-# - trajectories is a dictionary mapping to trajectories
-# - discount, seed and log_dir are as in the single-IRL case.
-# It returns an algorithm-specific object.
-#
-# finetune has signature (metainit, env, trajectories, discount, seed, log_dir),
-# where metainit is the return value of metalearn; the remaining arguments and
-# the return value are as in the single-IRL case.
-#
-# reward_wrapper and compute_value are the same as in the single-IRL case.
 POPULATION_IRL_ALGORITHMS = dict()
 def pop_maxent(**kwargs):
     return MetaIRLAlgorithm(
         metalearn=functools.partial(irl.tabular_maxent.metalearn, **kwargs),
         finetune=functools.partial(irl.tabular_maxent.finetune, **kwargs),
         reward_wrapper=agents.tabular.TabularRewardWrapper,
+        sample=agents.tabular.sample,
         value=agents.tabular.value_in_mdp,
         vectorized=False,
         uses_gpu=False,
@@ -259,8 +215,13 @@ for k, (common, meta, fine) in AIRLP_ALGORITHMS.items():
     fine = dict(fine, **common)
     metalearn_fn = functools.partial(irl.airl.metalearn, tf_cfg=TENSORFLOW, **meta)
     finetune_fn = functools.partial(irl.airl.finetune, tf_cfg=TENSORFLOW, **fine)
-    entry = MetaIRLAlgorithm(metalearn_fn, finetune_fn, airl_reward, airl_value,
-                             vectorized=True, uses_gpu=True)
+    entry = MetaIRLAlgorithm(metalearn=metalearn_fn,
+                             finetune=finetune_fn,
+                             reward_wrapper=airl_reward,
+                             sample=airl_sample,
+                             value=airl_value,
+                             vectorized=True,
+                             uses_gpu=True)
     POPULATION_IRL_ALGORITHMS['airlp_{}'.format(k)] = entry
 
 def traditional_to_concat(singleirl):
@@ -270,9 +231,13 @@ def traditional_to_concat(singleirl):
     def finetune(train_trajectories, envs, test_trajectories, discount, seed, **kwargs):
         concat_trajectories = train_trajectories + test_trajectories
         return singleirl.train(envs, concat_trajectories, discount, seed, **kwargs)
-    return MetaIRLAlgorithm(metalearner, finetune,
-                            singleirl.reward_wrapper, singleirl.value,
-                            singleirl.vectorized, singleirl.uses_gpu)
+    return MetaIRLAlgorithm(metalearn=metalearner,
+                            finetune=finetune,
+                            reward_wrapper=singleirl.reward_wrapper,
+                            sample=singleirl.sample,
+                            value=singleirl.value,
+                            vectorized=singleirl.vectorized,
+                            uses_gpu=singleirl.uses_gpu)
 
 for name, algo in SINGLE_IRL_ALGORITHMS.items():
     POPULATION_IRL_ALGORITHMS[name + 'c'] = traditional_to_concat(algo)
@@ -412,7 +377,7 @@ EXPERIMENTS['continuous-baselines-classic'] = {
     ],
     'expert': 'ppo_cts_short',
     'eval': ['ppo_cts_short'],
-    'irl': ['airl_so_short', 'airl_random_short'],
+    'irl': ['airl_so_short', 'airl_sa_short', 'airl_random_short'],
     'test_trajectories': [1000],
 }
 EXPERIMENTS['continuous-reacher'] = {
@@ -493,8 +458,8 @@ EXPERIMENTS['mountain-car-vel'] = {
                     ],
     # simple environment, small number of iterations sufficient to converge
     'expert': 'ppo_cts_short',
-    'eval': [],#'ppo_cts_short'],
-    'irl': ['airl_so_short'], #'airl_sa_short', 'airl_random_short'],
+    'eval': ['ppo_cts_short'],
+    'irl': ['airl_so_short', 'airl_sa_short', 'airl_random_short'],
     'test_trajectories': [1, 2, 5, 100],
 }
 EXPERIMENTS['reacher-var'] = {

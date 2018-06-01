@@ -23,8 +23,8 @@ cache = utils.cache_and_log(config.OBJECT_DIR)
 # Context Managers & Decorators
 
 @contextmanager
-def _make_envs(env_name, vectorized, parallel, base_seed, log_prefix,
-               pre_wrapper=None, post_wrapper=None):
+def make_envs(env_name, vectorized, parallel, base_seed, log_prefix,
+              pre_wrapper=None, post_wrapper=None):
     def helper(i):
         env = gym.make(env_name)
         env = bench.Monitor(env, log_prefix + str(i), allow_early_resets=True)
@@ -144,8 +144,8 @@ def _train_policy(rl=None, discount=None, parallel=None, seed=None,
 
     # Generate the policy
     rl_algo = config.RL_ALGORITHMS[rl]
-    with _make_envs(env_name, rl_algo.vectorized, parallel, train_seed,
-                    log_prefix=osp.join(mon_dir, 'train')) as envs:
+    with make_envs(env_name, rl_algo.vectorized, parallel, train_seed,
+                   log_prefix=osp.join(mon_dir, 'train')) as envs:
         # This nested parallelism is unfortunate. We're mostly doing this
         # as algorithms differ in their resource reservation.
         policy = rl_algo.train(envs, discount=discount, seed=train_seed,
@@ -183,9 +183,9 @@ def synthetic_data(rl=None, discount=None, parallel=None, seed=None,
 
     data_seed = create_seed(seed + 'data')
     rl_algo = config.RL_ALGORITHMS[rl]
-    with _make_envs(env_name, rl_algo.vectorized, parallel, data_seed,
-                    log_prefix=osp.join(mon_dir, 'synthetic'),
-                    pre_wrapper=monitor) as envs:
+    with make_envs(env_name, rl_algo.vectorized, parallel, data_seed,
+                   log_prefix=osp.join(mon_dir, 'synthetic'),
+                   pre_wrapper=monitor) as envs:
         samples = rl_algo.sample(envs, policy, num_trajectories, data_seed)
     return [(obs, acts) for (obs, acts, rews) in samples]
 
@@ -207,8 +207,8 @@ def _compute_value(rl=None, discount=None, parallel=None, seed=None,
 
     # Compute value of policy
     eval_seed = create_seed(seed + 'eval')
-    with _make_envs(env_name, rl_algo.vectorized, parallel, eval_seed,
-                    log_prefix=osp.join(mon_dir, 'eval')) as envs:
+    with make_envs(env_name, rl_algo.vectorized, parallel, eval_seed,
+                   log_prefix=osp.join(mon_dir, 'eval')) as envs:
         value = rl_algo.value(envs, policy, discount=1.00, seed=eval_seed)
 
     return value
@@ -289,8 +289,8 @@ def _run_population_irl_meta(irl, parallel, discount, seed, trajs, log_dir):
     ctxs = {}
     for env in trajs.keys():
         log_prefix = osp.join(mon_dir, sanitize_env_name(env) + '-')
-        ctxs[env] = _make_envs(env, irl_algo.vectorized, parallel,
-                               irl_seed, log_prefix=log_prefix)
+        ctxs[env] = make_envs(env, irl_algo.vectorized, parallel,
+                              irl_seed, log_prefix=log_prefix)
     meta_envs = {k: v.__enter__() for k, v in ctxs.items()}
 
     # Run metalearning
@@ -324,16 +324,16 @@ def _run_population_irl_finetune(irl, parallel, discount, seed,
     finetune_seed = create_seed(seed + 'irlfinetune')
 
     # Finetune IRL algorithm (i.e. run it) from meta-initialization
-    with _make_envs(env, irl_algo.vectorized, parallel,
-                    finetune_seed,
-                    log_prefix=finetune_mon_prefix) as envs:
+    with make_envs(env, irl_algo.vectorized, parallel,
+                   finetune_seed,
+                   log_prefix=finetune_mon_prefix) as envs:
         r, p = irl_algo.finetune(metainit, envs, trajs, discount=discount,
                                  seed=finetune_seed, log_dir=log_dir)
 
     # Compute value of finetuned policy
-    with _make_envs(env, irl_algo.vectorized, parallel,
-                    finetune_seed,
-                    log_prefix=finetune_mon_prefix) as envs:
+    with make_envs(env, irl_algo.vectorized, parallel,
+                   finetune_seed,
+                   log_prefix=finetune_mon_prefix) as envs:
         eval_seed = create_seed(seed + 'eval')
         v = irl_algo.value(envs, p, discount=1.0, seed=eval_seed)
 
@@ -415,8 +415,8 @@ def _run_single_irl_train(irl, parallel, discount, seed,
 
     irl_algo = config.SINGLE_IRL_ALGORITHMS[irl]
     irl_seed = create_seed(seed + 'irl')
-    with _make_envs(env_name, irl_algo.vectorized, parallel, irl_seed,
-                    log_prefix=osp.join(mon_dir, 'train')) as envs:
+    with make_envs(env_name, irl_algo.vectorized, parallel, irl_seed,
+                   log_prefix=osp.join(mon_dir, 'train')) as envs:
         reward, policy = irl_algo.train(envs, trajectories, discount=discount,
                                         seed=irl_seed, log_dir=log_dir)
 
@@ -425,8 +425,8 @@ def _run_single_irl_train(irl, parallel, discount, seed,
     joblib.dump(policy, osp.join(log_dir, 'policy.pkl'))
 
     eval_seed = create_seed(seed + 'eval')
-    with _make_envs(env_name, irl_algo.vectorized, parallel, eval_seed,
-                    log_prefix=osp.join(mon_dir, 'eval')) as envs:
+    with make_envs(env_name, irl_algo.vectorized, parallel, eval_seed,
+                   log_prefix=osp.join(mon_dir, 'eval')) as envs:
         value = irl_algo.value(envs, policy, discount=1.00, seed=eval_seed)
 
     return reward, value
@@ -553,15 +553,15 @@ def _value_helper(irl=None, n=None, m=None, rl=None,
     rl_algo = config.RL_ALGORITHMS[rl]
 
     train_seed = create_seed(seed + 'eval_train')
-    with _make_envs(env_name, rl_algo.vectorized, parallel,
-                    train_seed, post_wrapper=rw,
-                    log_prefix=osp.join(mon_dir, 'train')) as envs:
+    with make_envs(env_name, rl_algo.vectorized, parallel,
+                   train_seed, post_wrapper=rw,
+                   log_prefix=osp.join(mon_dir, 'train')) as envs:
         p = rl_algo.train(envs, discount=discount,
                           seed=train_seed, log_dir=log_dir)
 
     eval_seed = create_seed(seed + 'eval_eval')
-    with _make_envs(env_name, rl_algo.vectorized, parallel,
-                    eval_seed, log_prefix=osp.join(mon_dir, 'eval')) as envs:
+    with make_envs(env_name, rl_algo.vectorized, parallel,
+                   eval_seed, log_prefix=osp.join(mon_dir, 'eval')) as envs:
         v = rl_algo.value(envs, p, discount=1.00, seed=eval_seed)
 
     return v
@@ -569,7 +569,7 @@ def _value_helper(irl=None, n=None, m=None, rl=None,
 @ray.remote
 def _value(irl=None, rl=None, parallel=None,
            out_dir=None, reward=None, discount=None, seed=None):
-    def reward_map(rew, keys):
+    def mapper(rew, keys):
         env_name, n, m = keys
         log_dir = osp.join(out_dir, 'eval', sanitize_env_name(env_name),
                            '{}:{}:{}'.format(irl, m, n), rl)
@@ -587,8 +587,8 @@ def _value(irl=None, rl=None, parallel=None,
         }
         return _value_helper.remote(**kwargs)
     #SOMEDAY: ray.get inside ray.remote is legal but feels yucky
-    reward_futures = utils.map_nested_dict(reward, reward_map, level=3)
-    return utils.ray_get_nested_dict(reward_futures, level=3)
+    value_futures = utils.map_nested_dict(reward, mapper, level=3)
+    return utils.ray_get_nested_dict(value_futures, level=3)
 
 def value(cfg, out_dir, rewards, seed):
     '''
