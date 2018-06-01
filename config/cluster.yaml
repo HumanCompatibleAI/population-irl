@@ -9,7 +9,7 @@ idle_timeout_minutes: 5
 provider:
     type: aws
     region: us-west-2
-    availability_zone: us-west-2a  # this AZ is generally the cheapest
+    availability_zone: us-west-2c  # this AZ is generally the cheapest
 auth:
     ssh_user: ec2-user
     ssh_private_key: ./config/population-irl.pem
