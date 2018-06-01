@@ -9,7 +9,6 @@ import os.path as osp
 
 from baselines import bench
 from baselines.common.vec_env.dummy_vec_env import DummyVecEnv
-from baselines.common.vec_env.subproc_vec_env import SubprocVecEnv
 import gym
 import joblib
 import ray

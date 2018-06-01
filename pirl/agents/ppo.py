@@ -424,5 +424,4 @@ def sample(envs=None, policy=None, num_episodes=None,
                 obs, r, dones, info = norm_envs.step(a)
                 completed += np.sum(dones)
 
-            envs.close()
-            return envs_monitor.trajectories
+    return envs_monitor.trajectories

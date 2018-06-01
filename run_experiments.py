@@ -12,8 +12,8 @@ from datetime import datetime
 import logging.config
 import os
 import pickle
+import subprocess
 
-import git
 import ray
 
 from pirl import config, experiments
@@ -47,9 +47,9 @@ def parse_args():
     return parser.parse_args()
 
 def git_hash():
-    repo = git.Repo(path=os.path.realpath(__file__),
-                    search_parent_directories=True)
-    return repo.head.object.hexsha
+    hash = subprocess.check_output(['git', 'rev-parse', 'HEAD'],
+                                   cwd=config.PROJECT_DIR)
+    return hash.decode().strip()
 
 
 # We pretend we have more GPUs to workaround Ray issue #402.

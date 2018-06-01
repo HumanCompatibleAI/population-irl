@@ -4,7 +4,7 @@ import numpy as np
 from pirl.config import types
 from pirl.config.config import RL_ALGORITHMS, SINGLE_IRL_ALGORITHMS, \
         POPULATION_IRL_ALGORITHMS, EXPERIMENTS, LOG_CFG, TENSORFLOW, \
-        RAY_SERVER, EXPERIMENTS_DIR, OBJECT_DIR, CACHE_DIR
+        RAY_SERVER, PROJECT_DIR, EXPERIMENTS_DIR, OBJECT_DIR, CACHE_DIR
 
 def node_setup():
     logging.config.dictConfig(LOG_CFG)
