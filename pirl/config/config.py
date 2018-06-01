@@ -89,7 +89,11 @@ def ppo_cts_pol(num_timesteps):
                               num_timesteps=num_timesteps)
     sample = functools.partial(agents.ppo.sample, tf_config=TENSORFLOW)
     value = functools.partial(agents.sample.value, sample)
-    return RLAlgorithm(train, sample, value, vectorized=True, uses_gpu=True)
+    return RLAlgorithm(train=train,
+                       sample=sample,
+                       value=value,
+                       vectorized=True,
+                       uses_gpu=True)
 RL_ALGORITHMS['ppo_cts'] = ppo_cts_pol(1e6)
 RL_ALGORITHMS['ppo_cts_500k'] = ppo_cts_pol(5e5)
 RL_ALGORITHMS['ppo_cts_200k'] = ppo_cts_pol(2e5)
@@ -133,7 +137,10 @@ SINGLE_IRL_ALGORITHMS = {
 from airl.models.imitation_learning import AIRLStateAction
 AIRL_ALGORITHMS = {
     'so': dict(),
+    'so_ent': dict(training_cfg={'entropy_weight': 1.0}),
     'sa': dict(model_cfg={'model': irl.airl.AIRLStateAction, 'max_itrs': 10}),
+    'sa_ent': dict(model_cfg={'model': irl.airl.AIRLStateAction, 'max_itrs': 10},
+                   training_cfg={'entropy_weight': 1.0}),
     'random': dict(policy_cfg={'policy': irl.airl.GaussianPolicy}),
     # parameters to match scripts/pendulum_irl.py from adversarial-irl
     'orig_pendulum': {
@@ -162,7 +169,8 @@ for k, kwargs in AIRL_ALGORITHMS.items():
         uses_gpu=True,
     )
 
-    for k2, v in {'short': 100, 'shortest': 10}.items():
+    iterations = {'short': 100, 'shorter': 50, 'dummy': 2}
+    for k2, v in iterations.items():
         kwds = dict(kwargs)
         training_cfg = dict(kwds.get('training_cfg', dict()))
         training_cfg['n_itr'] = v
@@ -282,7 +290,7 @@ EXPERIMENTS['dummy-continuous-test'] = {
     'environments': ['Reacher-v2'],
     'expert': 'ppo_cts_shortest',
     'eval': ['ppo_cts_shortest'],
-    'irl': ['airl_so_shortest', 'airl_random_shortest'],
+    'irl': ['airl_so_dummy', 'airl_random_dummy'],
     'test_trajectories': [10, 20],
     'seeds': 2,
 }
@@ -293,7 +301,7 @@ EXPERIMENTS['few-dummy-continuous-test'] = {
                           for i in range(1, 3)],
     'expert': 'ppo_cts_shortest',
     'eval': ['ppo_cts_shortest'],
-    'irl': ['airl_so_shortest', 'airlp_so_shortest'],
+    'irl': ['airl_so_dummy', 'airlp_so_shortest'],
     'train_trajectories': [10, 20],
     'test_trajectories': [10, 20],
     'seeds': 2,
@@ -446,9 +454,9 @@ EXPERIMENTS['mountain-car-single'] = {
     # simple environment, small number of iterations sufficient to converge
     'expert': 'ppo_cts_short',
     'eval': ['ppo_cts_short'],
-    'irl': ['airl_so_short', 'airl_so',
-            'airl_sa_short', 'airl_sa',
-            'airl_random_short', 'airl_random'],
+    'irl': ['airl_so_short', 'airl_so_ent_short', 'airl_so_shorter',
+            'airl_sa_short', 'airl_sa_ent_short', 'airl_sa_shorter',
+            'airl_random_short', 'airl_sa_shorter'],
     'test_trajectories': [1, 2, 5, 100],
 }
 EXPERIMENTS['mountain-car-vel'] = {
@@ -487,7 +495,7 @@ EXPERIMENTS['dummy-reacher-metalearning'] = {
     'test_environments': ['pirl/Reacher-seed{}-0.1-v0'.format(seed) for seed in range(5,6)],
     'expert': 'ppo_cts_shortest',
     'eval': ['ppo_cts_shortest'],
-    'irl': ['airl_so_shortest', 'airlp_so_shortest'],
+    'irl': ['airl_so_dummy', 'airlp_so_shortest'],
     'train_trajectories': [1000],
     'test_trajectories': [5],
 }
@@ -526,7 +534,7 @@ for n in [1, 4, 8, 16]:
         'parallel_rollouts': n,
         'expert': 'ppo_cts',
         'eval': [],
-        'irl': ['airl_so_shortest'],
+        'irl': ['airl_so_dummy'],
         'test_trajectories': [1000],
     }
     EXPERIMENTS['parallel-cts-reacher-{}'.format(n)] = {
@@ -546,7 +554,7 @@ for n in [1, 4, 8, 16]:
         'parallel_rollouts': n,
         'expert': 'ppo_cts',
         'eval': [],
-        'irl': ['airl_so_shortest'],
+        'irl': ['airl_so_dummy'],
         'test_trajectories': [1000],
     }
     EXPERIMENTS['parallel-cts-reacher-fast-rl-{}'.format(n)] = {
