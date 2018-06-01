@@ -326,6 +326,17 @@ def ray_leaf_get_nested_dict(ob):
 
 # GPU Management
 
+def autodetect_num_gpus():
+    """Attempt to detect the number of GPUs on this machine."""
+    # Based on code from Ray
+    if 'NUM_GPUS' in os.environ:
+        return os.environ['NUM_GPUS']
+    else:
+        proc_gpus_path = "/proc/driver/nvidia/gpus"
+        if os.path.isdir(proc_gpus_path):
+            return len(os.listdir(proc_gpus_path))
+        return 0
+
 def set_cuda_visible_devices():
     if ray.worker.global_worker.mode == ray.worker.PYTHON_MODE:
         # Debug mode. get_gpu_ids() not supported -- do nothing.

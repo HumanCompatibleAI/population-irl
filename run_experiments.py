@@ -54,7 +54,7 @@ def git_hash():
 
 # We pretend we have more GPUs to workaround Ray issue #402.
 # This can be overridden by specifying --num-gpu.
-GPU_MULTIPLIER = 4  #
+GPU_MULTIPLIER = 4
 # Timestamp for logging
 ISO_TIMESTAMP = "%Y%m%d_%H%M%S"
 

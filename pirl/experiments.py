@@ -37,10 +37,13 @@ def make_envs(env_name, vectorized, parallel, base_seed, log_prefix,
     try:
         if vectorized:
             env_fns = [functools.partial(helper, i) for i in range(parallel)]
-            if parallel and len(env_fns) > 1:
-                env = SubprocVecEnv(env_fns)
-            else:
-                env = DummyVecEnv(env_fns)
+            #SOMEDAY: use SubprocVecEnv when parallel above a certain threshold.
+            # Avoided this since (a) it's not much faster, and (b) it fails
+            # on some machines for MuJoCo environments. (Never pinpointed
+            # exact issue -- import fails in spawned worker, but only after
+            # TensorFlow code has run, intermittent issue. Suspect GPU drivers.)
+            # If you fix this, change num_cpus in ray_remote_variable_resources.
+            env = DummyVecEnv(env_fns)
         else:  # not vectorized
             env = helper(0)
 
@@ -68,7 +71,7 @@ def ray_remote_variable_resources(**kwargs):
        substantially. This isn't a problem in our application.'''
     def decorator(func):
         parameter_set = collections.OrderedDict([
-            ('num_cpus', list(range(1, 16))),
+            ('num_cpus', [1]),
             ('num_gpus', [0,1]),
         ])
         cache = {}
@@ -94,7 +97,6 @@ def ray_remote_variable_resources(**kwargs):
             arguments = bound.arguments
             rl = arguments.get('rl')
             irl = arguments.get('irl')
-            parallel = arguments.get('parallel')
 
             uses_gpu = False
             if rl is not None:
@@ -106,11 +108,10 @@ def ray_remote_variable_resources(**kwargs):
                 uses_gpu |= algo.uses_gpu
             else:
                 raise ValueError("No 'rl' or 'irl' parameters")
-            num_gpus = bool(uses_gpu)
-            # TODO: should parallelism of environments be the only factor?
-            # TODO: is 2 the appropriate fudge factor?
-            num_cpus = max(1, parallel // 2)
-
+            num_gpus = int(uses_gpu)
+            # NOTE: If we switch from DummyVecEnv to SubprocVecEnv,
+            # should make num_cpus depend on parallel (with some fudge factor)
+            num_cpus = 1
             try:
                 fn = cache[(num_cpus, num_gpus)]
             except KeyError:
