@@ -223,6 +223,7 @@ def cache_and_log(out_dir):
                     try:
                         os.makedirs(out_dir, exist_ok=True)
                         permanent_dir = tempfile.mkdtemp(dir=out_dir)
+                        os.chmod(out_dir, 0o755)
                         copy_tree(tmp_dir, permanent_dir)
                     except OSError as e:
                         # Copying could fail for two reasons.
