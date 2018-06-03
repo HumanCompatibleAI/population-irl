@@ -377,22 +377,15 @@ EXPERIMENTS['continuous-baselines-classic'] = {
     # continuous state space but (mostly) discrete action spaces
     'environments': [
         'MountainCarContinuous-v0',
+        'Pendulum-v0',
         # below are discrete which AIRL cannot currently work with
         # 'Acrobot-v1',
         # 'CartPole-v1',
         # 'MountainCar-v0',
-        # 'Pendulum-v0',
     ],
     'expert': 'ppo_cts_short',
     'eval': ['ppo_cts_short'],
     'irl': ['airl_so_short', 'airl_sa_short', 'airl_random_short'],
-    'test_trajectories': [1000],
-}
-EXPERIMENTS['continuous-reacher'] = {
-    'environments': ['Reacher-v2'],
-    'expert': 'ppo_cts',
-    'eval': ['ppo_cts'],
-    'irl': ['airl_so', 'airl_random'],
     'test_trajectories': [1000],
 }
 EXPERIMENTS['continuous-baselines-easy'] = {
@@ -403,7 +396,7 @@ EXPERIMENTS['continuous-baselines-easy'] = {
     ],
     'expert': 'ppo_cts',
     'eval': ['ppo_cts'],
-    'irl': ['airl_so', 'airl_random'],
+    'irl': ['airl_so', 'airl_sa', 'airl_random'],
     'test_trajectories': [1000],
 }
 EXPERIMENTS['continuous-baselines-medium'] = {
@@ -414,7 +407,7 @@ EXPERIMENTS['continuous-baselines-medium'] = {
     ],
     'expert': 'ppo_cts',
     'eval': ['ppo_cts'],
-    'irl': ['airl_so', 'airl_random'],
+    'irl': ['airl_so', 'airl_sa', 'airl_random'],
     'test_trajectories': [1000],
 }
 # Designed to closely match tests from adversarial-irl repository
