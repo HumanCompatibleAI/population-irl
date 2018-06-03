@@ -136,8 +136,8 @@ def _train_policy(rl=None, discount=None, parallel=None, seed=None,
                   env_name=None, log_dir=None):
     # Setup
     utils.set_cuda_visible_devices()
-    logger.debug('%s: training %s [discount=%f, seed=%s, parallel=%d]',
-                 env_name, rl, discount, seed, parallel)
+    logger.debug('[TRAIN] %s [discount=%f, seed=%s, parallel=%d] on %s',
+                 rl, discount, seed, parallel, env_name)
     mon_dir = osp.join(log_dir, 'mon')
     os.makedirs(mon_dir, exist_ok=True)
     train_seed = create_seed(seed + 'train')
@@ -160,32 +160,23 @@ def _train_policy(rl=None, discount=None, parallel=None, seed=None,
 @cache(tags=('expert', ))
 def synthetic_data(rl=None, discount=None, parallel=None, seed=None,
                    env_name=None, num_trajectories=None,
-                   log_dir=None, video_every=None, policy=None):
+                   log_dir=None, policy=None):
     '''Precondition: policy produced by RL algorithm rl.'''
-    # Note discount is not used, but is needed as a caching key.
     # Setup
     utils.set_cuda_visible_devices()
-    logger.debug('%s: sampling %d trajectories from %s '
-                 '[discount=%f, seed=%s, parallel=%d]',
-                 env_name, num_trajectories, rl, discount, seed, parallel)
+    logger.debug('[SAMPLE] %s [discount=%f, seed=%s, parallel=%d] '
+                 'for %d trajectories on %s',
+                 rl, discount, seed, parallel, num_trajectories, env_name)
 
-    video_dir = osp.join(log_dir, 'videos')
-    if video_every is None:
-        video_callable = lambda x: False
-    else:
-        video_callable = lambda x: x % video_every == 0
-    def  monitor(env):
-        return gym.wrappers.Monitor(env, video_dir,
-                                    video_callable=video_callable, force=True)
-
+    # Create and set up logging directory
     mon_dir = osp.join(log_dir, 'mon')
     os.makedirs(mon_dir, exist_ok=True)
 
+    # Sample from policy
     data_seed = create_seed(seed + 'data')
     rl_algo = config.RL_ALGORITHMS[rl]
     with make_envs(env_name, rl_algo.vectorized, parallel, data_seed,
-                   log_prefix=osp.join(mon_dir, 'synthetic'),
-                   pre_wrapper=monitor) as envs:
+                   log_prefix=osp.join(mon_dir, 'synthetic')) as envs:
         samples = rl_algo.sample(envs, policy, num_trajectories, data_seed)
     return [(obs, acts) for (obs, acts, rews) in samples]
 
@@ -196,8 +187,8 @@ def _compute_value(rl=None, discount=None, parallel=None, seed=None,
                    env_name=None, log_dir=None, policy=None):
     utils.set_cuda_visible_devices()
     # Note discount is not used, but is needed as a caching key.
-    logger.debug('%s: computing value of %s [discount=%f, seed=%s, parallel=%d]',
-                 env_name, rl, discount, seed, parallel)
+    logger.debug('[VALUE] %s [discount=%f, seed=%s, parallel=%d] on %s',
+                 rl, discount, seed, parallel, env_name)
     # Each RL algorithm specifies a method to compute the value of its policy
     rl_algo = config.RL_ALGORITHMS[rl]
 
@@ -215,7 +206,7 @@ def _compute_value(rl=None, discount=None, parallel=None, seed=None,
 
 
 def _expert_trajs(env_name, num_trajectories, rl, discount,
-                  parallel, seed, video_every, log_dir):
+                  parallel, seed, log_dir):
     '''Trains a policy on env_name with rl_name, sampling num_trajectories from
        the policy and computing the value of the policy (typically by sampling,
        but in the tabular case by value iteration).
@@ -235,12 +226,12 @@ def _expert_trajs(env_name, num_trajectories, rl, discount,
     trajs_future = synthetic_data.remote(rl, discount, parallel, seed, env_name,
                                          num_trajectories,
                                          osp.join(log_dir, 'sample'),
-                                         video_every, policy_future)
+                                         policy_future)
     # Return promises
     return trajs_future, value_future
 
 
-def expert_trajs(cfg, out_dir, video_every, seed):
+def expert_trajs(cfg, out_dir, seed):
     log_dir = osp.join(out_dir, 'expert')
     parallel = cfg.get('parallel_rollouts', 1)
 
@@ -259,7 +250,7 @@ def expert_trajs(cfg, out_dir, video_every, seed):
     values = collections.OrderedDict()
     for env, traj in num_traj.items():
         t, v = _expert_trajs(env, traj, cfg['expert'], cfg['discount'],
-                             parallel, seed, video_every, log_dir)
+                             parallel, seed, log_dir)
         trajectories[env] = t
         values[env] = v
 
@@ -275,7 +266,9 @@ def _run_population_irl_meta(irl, parallel, discount, seed, trajs, log_dir):
     # Setup
     utils.set_cuda_visible_devices()
     n = len(list(trajs.values())[0])
-    logger.debug('meta_irl: %s [meta=%d]', irl, n)
+    logger.debug('[IRL] meta: algo = %s [discount=%f, seed=%s, parallel=%d], ' 
+                 'n = %d, envs = %s',
+                 irl, discount, seed, parallel, n, trajs.keys())
     meta_log_dir = osp.join(log_dir, 'meta:{}'.format(n))
     mon_dir = osp.join(meta_log_dir, 'mon')
     os.makedirs(mon_dir)
@@ -314,8 +307,9 @@ def _run_population_irl_finetune(irl, parallel, discount, seed,
                                  env, trajs, metainit, log_dir):
     # Setup
     utils.set_cuda_visible_devices()
-    logger.debug('meta_irl: %s [finetune=%d, env=%s]',
-                 irl, len(trajs), env)
+    logger.debug('[IRL] finetune: algo = %s [discount=%f, seed=%s, parallel=%d]' 
+                 ', m = %d, env = %s',
+                 irl, discount, seed, parallel, len(trajs), env)
     finetune_mon_prefix = osp.join(log_dir, 'mon')
 
     # Get algorithm from config
@@ -408,6 +402,9 @@ def _run_population_irl(irl, parallel, discount, seed, train_envs,
 @cache(tags=('irl', 'single_irl'))
 def _run_single_irl_train(irl, parallel, discount, seed,
                           env_name, log_dir, trajectories):
+    logger.debug('[IRL] algo = %s [discount=%f, seed=%s, parallel=%d], ' 
+                 'env = %s, n = %d',
+                 irl, discount, seed, parallel, env_name, len(trajectories))
     # Setup
     utils.set_cuda_visible_devices()
     mon_dir = osp.join(log_dir, 'mon')
@@ -436,9 +433,6 @@ def _run_single_irl_train(irl, parallel, discount, seed,
 def _run_single_irl_helper(irl, parallel, discount, seed,
                            num_traj, test_envs, log_dir, *trajectories):
     trajectories = {k: v for k, v in zip(test_envs, trajectories)}
-    # n = testing trajectories (m doesn't matter in the single_irl case)
-    logger.debug('running IRL algo: %s [%s]', irl, num_traj)
-
     reward_res = collections.OrderedDict()
     value_res = collections.OrderedDict()
 
@@ -536,7 +530,7 @@ def _value_helper(irl=None, n=None, m=None, rl=None,
                   env_name=None, reward=None, log_dir=None):
     # Setup
     utils.set_cuda_visible_devices()
-    logger.debug('Evaluating %s [meta=%d, finetune=%d] ' 
+    logger.debug('[EVAL] %s [meta=%d, finetune=%d] ' 
                  'by %s [discount=%f, seed=%s, parallel=%d] '
                  'on %s (writing to %s)',
                  irl, n, m,
@@ -656,11 +650,11 @@ def value(cfg, out_dir, rewards, seed):
 
 ## General
 
-def _run_experiment(cfg, out_dir, video_every, seed):
+def _run_experiment(cfg, out_dir, seed):
     # Generate synthetic data
     # trajs: dict, env -> Future[list of np arrays]
     # expert_vals: dict, env -> Future[(mean, s.e.)]
-    trajs, expert_vals = expert_trajs(cfg, out_dir, video_every, seed)
+    trajs, expert_vals = expert_trajs(cfg, out_dir, seed)
     # Run IRL
     # rewards: dict, irl -> Future[env -> n -> m -> reward]
     # irl_values: dict, irl -> Future[env -> n -> m -> (mean, s.e.)]
@@ -683,7 +677,7 @@ def _run_experiment(cfg, out_dir, video_every, seed):
     return res
 
 
-def run_experiment(cfg, out_dir, video_every, base_seed):
+def run_experiment(cfg, out_dir, base_seed):
     '''Run experiment defined in config.EXPERIMENTS.
 
     Args:
@@ -710,7 +704,7 @@ def run_experiment(cfg, out_dir, video_every, base_seed):
     for i in range(cfg['seeds']):
         log_dir = osp.join(out_dir, str(i))
         seed = base_seed + str(i)
-        d = _run_experiment(cfg, log_dir, video_every, seed)
+        d = _run_experiment(cfg, log_dir, seed)
         for k, v in d.items():
             res[k][i] = v
 

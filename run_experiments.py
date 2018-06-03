@@ -35,8 +35,6 @@ def parse_args():
     desc = 'Log trajectories from an RL algorithm.'
     parser = argparse.ArgumentParser(description=desc)
     parser.add_argument('--seed', metavar='STR', default='foobar', type=str)
-    parser.add_argument('--video-every', metavar='N', default=0, type=int,
-                        help='video every N episodes; disabled by default.')
     parser.add_argument('--num-cpu', metavar='N', default=None, type=int)
     parser.add_argument('--num-gpu', metavar='N', default=None, type=int)
     parser.add_argument('--ray-server', metavar='HOST',
@@ -61,7 +59,6 @@ ISO_TIMESTAMP = "%Y%m%d_%H%M%S"
 if __name__ == '__main__':
     # Argument parsing
     args = parse_args()
-    video_every = args.video_every if args.video_every != 0 else None
     logger.info('CLI args: %s', args)
 
     if args.ray_server is None:  # run locally
@@ -85,7 +82,7 @@ if __name__ == '__main__':
         os.makedirs(path)
 
         cfg = config.EXPERIMENTS[experiment]
-        res = experiments.run_experiment(cfg, path, video_every, args.seed)
+        res = experiments.run_experiment(cfg, path, args.seed)
 
         logger.info('Experiment %s completed. Outcome:\n %s. Saving to %s.',
                     experiment, res['values'], path)

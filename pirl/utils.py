@@ -62,8 +62,7 @@ def id_generator(size=8):
 # Caching
 def get_hermes():
     '''Creates a hermes.Hermes instance if one does not already exist;
-       otherwise, returns the existing instance. Automatically picks between
-       Redis (if available) and dict (if no Redis server is running).'''
+       otherwise, returns the existing instance.''' 
     if get_hermes.cache is None:
         kwargs = {'ttl': None}
         # Use socket.gethostname() not localhost.

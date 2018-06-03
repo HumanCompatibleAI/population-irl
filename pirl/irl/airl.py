@@ -2,8 +2,6 @@ import pickle
 import random
 
 from baselines.common.vec_env import VecEnvWrapper
-from baselines.common.vec_env.dummy_vec_env import DummyVecEnv
-from baselines.common.vec_env.subproc_vec_env import SubprocVecEnv
 import gym
 import numpy as np
 import tensorflow as tf
@@ -42,16 +40,8 @@ class VecInfo(VecEnvWrapper):
         return obs, rewards, dones, {}
 
     def terminate(self):
-        # Normally we'd close environments, but this is done for us in
-        # pirl.experiments.experiments.
+        # Normally we'd close environments, but pirl.experiments handles this
         pass
-
-
-def _make_vec_env(env_fns, parallel):
-    if parallel and len(env_fns) > 1:
-        return SubprocVecEnv(env_fns)
-    else:
-        return DummyVecEnv(env_fns)
 
 
 class VecGymEnv(Env):
@@ -69,8 +59,7 @@ class VecGymEnv(Env):
         return self._action_space
 
     def terminate(self):
-        # Normally we'd close environments, but this is done for us in
-        # pirl.experiments.experiments.
+        # Normally we'd close environments, but pirl.experiments handles this.
         pass
 
     @property
