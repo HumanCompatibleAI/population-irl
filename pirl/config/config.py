@@ -388,6 +388,14 @@ EXPERIMENTS['continuous-baselines-classic'] = {
     'irl': ['airl_so_short', 'airl_sa_short', 'airl_random_short'],
     'test_trajectories': [1000],
 }
+EXPERIMENTS['debug-pendulum'] = {
+    'environments': ['Pendulum-v0'],
+    'expert': 'ppo_cts',
+    'discount': 0.95,
+    'irl': [],
+    'test_trajectories': [1000],
+    'eval': ['ppo_cts'],
+}
 EXPERIMENTS['continuous-baselines-easy'] = {
     'environments': [
         'Reacher-v2',
@@ -426,7 +434,7 @@ EXPERIMENTS['airl-baselines-pendulum'] = {
 EXPERIMENTS['airl-baselines-ant'] = {
     'environments': ['airl/CustomAnt-v0'],
     'expert': 'ppo_cts',
-    'irl': ['airl_so'],
+    'irl': ['airl_so', 'airl_sa', 'airl_random'],
     'eval': ['ppo_cts'],
     # scripts/ant_irl.py loads 2 iterations * 4 runs * 20000 batch size
     # = 160,000 steps. Episode is at most 500 steps long, so 320 trajectories.
@@ -443,7 +451,7 @@ EXPERIMENTS['billiards'] = {
     'test_trajectories': [1000],
 }
 EXPERIMENTS['mountain-car-single'] = {
-    'environments': ['pirl/MountainCarContinuous-left-0-0.1-v0'],
+    'environments': ['pirl/MountainCarContinuous-2-left-0-0.05-v0'],
     # simple environment, small number of iterations sufficient to converge
     'expert': 'ppo_cts_short',
     'eval': ['ppo_cts_short'],
@@ -453,14 +461,14 @@ EXPERIMENTS['mountain-car-single'] = {
     'test_trajectories': [1, 2, 5, 100],
 }
 EXPERIMENTS['mountain-car-vel'] = {
-    'environments': ['pirl/MountainCarContinuous-left-{}-{}-v0'.format(vel, initial_noise)
+    'environments': ['pirl/MountainCarContinuous-2-left-{}-{}-v0'.format(vel, initial_noise)
                      for vel in [0, 0.1, 0.5, 1]
-                     for initial_noise in [0.1, 0.2, 0.5]
+                     for initial_noise in [0.05, 0.1, 0.25]
                     ],
     # simple environment, small number of iterations sufficient to converge
     'expert': 'ppo_cts_short',
     'eval': ['ppo_cts_short'],
-    'irl': ['airl_so_short', 'airl_sa_short', 'airl_random_short'],
+    'irl': ['airl_so_short', 'airl_sa_short'],
     'test_trajectories': [1, 2, 5, 100],
 }
 EXPERIMENTS['reacher-var'] = {
@@ -493,7 +501,7 @@ EXPERIMENTS['dummy-reacher-metalearning'] = {
     'test_trajectories': [5],
 }
 EXPERIMENTS['mountain-car-meta'] = {
-    'environments': ['pirl/MountainCarContinuous-{}-0-0.1-v0'.format(side)
+    'environments': ['pirl/MountainCarContinuous-2-{}-0-0.05-v0'.format(side)
                      for side in ['left', 'right']],
     # simple environment, small number of iterations sufficient to converge
     'expert': 'ppo_cts_short',

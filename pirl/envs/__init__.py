@@ -81,21 +81,41 @@ for kind, cells in cfg.items():
         )
 
 ## MountainCar
-for name, sign in {'left': -1, 'right': 1}.items():
+for num_peaks in [2, 3, 4]:
     for vel_penalty in [0, 0.1, 0.5, 1]:
-        for initial_noise in [0.1, 0.2, 0.5]:
-            register(
-                id='pirl/MountainCarContinuous-{}-{}-{}-v0'.format(
-                    name, vel_penalty, initial_noise),
-                entry_point='pirl.envs.mountain_car:ContinuousMountainCarPopulationEnv',
-                max_episode_steps=999,
-                reward_threshold=90.0,
-                kwargs={
-                    'side': sign,
-                    'vel_penalty': vel_penalty,
-                    'initial_noise': initial_noise
-                },
-            )
+        for initial_noise in [0.05, 0.1, 0.25]:
+            GOAL_POS = {'left': [0], 'right': [num_peaks], 'random': None}
+            for side, pos in GOAL_POS.items():
+                register(
+                    id='pirl/MountainCarContinuous-{}-{}-{}-{}-v0'.format(
+                        num_peaks, side, vel_penalty, initial_noise),
+                    entry_point='pirl.envs.mountain_car:ContinuousMountainCarPopulationEnv',
+                    max_episode_steps=999,
+                    reward_threshold=90.0,
+                    kwargs={
+                        'num_peaks': num_peaks,
+                        'goal_reward': [100],
+                        'goal_position': pos,
+                        'vel_penalty': vel_penalty,
+                        'initial_noise': initial_noise
+                    },
+                )
+
+            GOAL_REWARDS = {'red': [100, -100], 'blue': [-100, 100]}
+            for good_goal, reward in GOAL_REWARDS.items():
+                register(
+                    id='pirl/MountainCarContinuous-{}-{}-{}-{}-v0'.format(
+                        num_peaks, good_goal, vel_penalty, initial_noise),
+                    entry_point='pirl.envs.mountain_car:ContinuousMountainCarPopulationEnv',
+                    max_episode_steps=999,
+                    reward_threshold=90.0,
+                    kwargs={
+                        'num_peaks': num_peaks,
+                        'goal_reward': reward,
+                        'vel_penalty': vel_penalty,
+                        'initial_noise': initial_noise
+                    },
+                )
 
 ## Reacher
 for seed in range(10):
