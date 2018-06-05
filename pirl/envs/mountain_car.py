@@ -87,9 +87,8 @@ class ContinuousMountainCarPopulationEnv(gym.Env):
         if (position == self.min_position and velocity<0): velocity = 0
         if (position == self.max_position and velocity>0): velocity = 0
 
-        goal_positions = self.state[2:]
-        left_before = (old_position < goal_positions)
-        left_after = (position < goal_positions)
+        left_before = (old_position < self.goal_position)
+        left_after = (position < self.goal_position)
         switched_side = left_before ^ left_after
         done = np.any(switched_side)
         reward = 0
@@ -100,7 +99,11 @@ class ContinuousMountainCarPopulationEnv(gym.Env):
             reward -= 100.0 * vel_cost
         reward -= math.pow(action[0], 2) * 0.1
 
-        self.state = np.concatenate(([position, velocity], goal_positions))
+        if self.static_goal_position is not None:
+            self.state = np.array([position, velocity])
+        else:
+            self.state = np.concatenate(([position, velocity],
+                                         self.goal_position))
         return np.array(self.state), reward, done, {}
 
     def reset(self):
@@ -109,15 +112,16 @@ class ContinuousMountainCarPopulationEnv(gym.Env):
         noise = self.np_random.uniform(low=-1, high=1) * self.initial_noise
         pos = trough + 0.5 + noise
 
+        self.state = np.array([pos, 0])
         if self.static_goal_position is not None:
-            goal_position = self.static_goal_position
+            self.goal_position = self.static_goal_position
         else:
-            goal_position = np.random.choice([self.min_position + 0.02,
-                                              self.max_position - 0.02],
-                                             size=len(self.goal_reward),
-                                             replace=False)
+            self.goal_position = np.random.choice([self.min_position,
+                                                   self.max_position],
+                                                  size=len(self.goal_reward),
+                                                  replace=False)
+            self.state = np.concatenate((self.state, self.goal_position))
 
-        self.state = np.concatenate((np.array([pos, 0]), goal_position))
         return np.array(self.state)
 
     def _ys(self, xs):
@@ -167,8 +171,7 @@ class ContinuousMountainCarPopulationEnv(gym.Env):
             backwheel.set_color(.5, .5, .5)
             self.viewer.add_geom(backwheel)
 
-        goal_positions = self.state[2:]
-        for color, pos in zip(GOAL_COLORS, goal_positions):
+        for color, pos in zip(GOAL_COLORS, self.goal_position):
             flagx = self._xs(pos) * x_scale
             flagy1 = self._ys(pos) * y_scale
             flagy2 = flagy1 + 50
