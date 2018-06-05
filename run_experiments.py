@@ -56,10 +56,12 @@ GPU_MULTIPLIER = 4
 # Timestamp for logging
 ISO_TIMESTAMP = "%Y%m%d_%H%M%S"
 
+def node_setup(_cfg):
+    logging.config.dictConfig(config.LOG_CFG)
+
 if __name__ == '__main__':
     # Argument parsing
     args = parse_args()
-    logger.info('CLI args: %s', args)
 
     if args.ray_server is None:  # run locally
         num_gpu = args.num_gpu
@@ -71,6 +73,10 @@ if __name__ == '__main__':
         ray.init(driver_mode=ray.worker.PYTHON_MODE)
     else:  # connect to existing server (could still be a single machine)
         ray.init(redis_address=args.ray_server)
+
+    # Setup logging
+    ray.worker.global_worker.run_function_on_all_workers(node_setup)
+    logger.info('CLI args: %s', args)
 
     # Experiment loop
     for experiment in args.experiments:
