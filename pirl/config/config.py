@@ -471,6 +471,22 @@ EXPERIMENTS['mountain-car-vel'] = {
     'irl': ['airl_so_short', 'airl_sa_short'],
     'test_trajectories': [1, 2, 5, 100],
 }
+EXPERIMENTS['mountain-car-numpeaks'] = {
+    'environments': ['pirl/MountainCarContinuous-{}-left-0-0.1-v0'.format(n)
+                     for n in [2, 3, 4]],
+    'expert': 'ppo_cts_short',
+    'eval': ['ppo_cts_short'],
+    'irl': ['airl_so_short', 'airl_sa_short', 'airl_random_short'],
+    'test_trajectories': [1, 2, 5, 100],
+}
+EXPERIMENTS['mountain-car-multigoals'] = {
+    'environments': ['pirl/MountainCarContinuous-{}-red-0-0.1-v0'.format(n)
+                     for n in [2, 3, 4]],
+    'expert': 'ppo_cts_short',
+    'eval': ['ppo_cts_short'],
+    'irl': ['airl_so_short', 'airl_sa_short', 'airl_random_short'],
+    'test_trajectories': [1, 2, 5, 100],
+}
 EXPERIMENTS['reacher-var'] = {
     'environments': ['pirl/Reacher-seed{}-{}-v0'.format(seed, noise)
                      for seed in range(0,3) for noise in [0.1, 0.5, 1.0]],
