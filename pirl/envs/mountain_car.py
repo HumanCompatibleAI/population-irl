@@ -44,9 +44,16 @@ class ContinuousMountainCarPopulationEnv(gym.Env):
 
         self.low_state = np.array([self.min_position, -self.max_speed])
         self.high_state = np.array([self.max_position, self.max_speed])
-
-        self.action_space = spaces.Box(low=self.min_action, high=self.max_action, shape=(1,))
-        self.observation_space = spaces.Box(low=self.low_state, high=self.high_state)
+        if goal_position is None:
+            num_goals = len(goal_reward)
+            low_goals = [self.min_position] * num_goals
+            high_goals = [self.max_position] * num_goals
+            self.low_state = np.concatenate((self.low_state, low_goals))
+            self.high_state = np.concatenate((self.high_state, high_goals))
+        self.action_space = spaces.Box(low=self.min_action, high=self.max_action,
+                                       shape=(1,))
+        self.observation_space = spaces.Box(low=self.low_state,
+                                            high=self.high_state)
 
         self.goal_reward = np.array(goal_reward)
         self.static_goal_position = None
