@@ -55,8 +55,8 @@ head_start_ray_commands:
 worker_start_ray_commands:
     - ray stop
     # (Re)start spot termination monitor
-    - pkill -f aws_termination
-    - python $HOME/population-irl/scripts/aws_termination.py >> /tmp/raylogs/aws_termination.log 2>&1 & disown
+    - pkill -x -f "python $HOME/population-irl/scripts/aws_termination.py" || true
+    - python $HOME/population-irl/scripts/aws_termination.py >> /tmp/aws_termination.log 2>&1 & disown
     # Pretend we have more GPUs to workaround Ray issue #402.
     # IMPORTANT: If you use an instance with more/better GPUs, increase this
     # amount! A value of 4 per K80 and 6 per V100 has worked well so far.
