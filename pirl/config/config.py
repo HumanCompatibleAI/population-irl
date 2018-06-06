@@ -472,7 +472,7 @@ EXPERIMENTS['mountain-car-vel'] = {
     'test_trajectories': [1, 2, 5, 100],
 }
 EXPERIMENTS['mountain-car-numpeaks'] = {
-    'environments': ['pirl/MountainCarContinuous-{}-left-0-0.1-v0'.format(n)
+    'environments': ['pirl/MountainCarContinuous-{}-left-0-0.05-v0'.format(n)
                      for n in [2, 3, 4]],
     'expert': 'ppo_cts_short',
     'eval': ['ppo_cts_short'],
@@ -480,7 +480,7 @@ EXPERIMENTS['mountain-car-numpeaks'] = {
     'test_trajectories': [1, 2, 5, 100],
 }
 EXPERIMENTS['mountain-car-multigoals'] = {
-    'environments': ['pirl/MountainCarContinuous-{}-red-0-0.1-v0'.format(n)
+    'environments': ['pirl/MountainCarContinuous-{}-red-0-0.05-v0'.format(n)
                      for n in [2, 3, 4]],
     'expert': 'ppo_cts_short',
     'eval': ['ppo_cts_short'],

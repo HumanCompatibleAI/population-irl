@@ -94,8 +94,8 @@ class ContinuousMountainCarPopulationEnv(gym.Env):
         if (position == self.min_position and velocity<0): velocity = 0
         if (position == self.max_position and velocity>0): velocity = 0
 
-        left_before = old_position < self.goal_position
-        left_after = position < self.goal_position
+        left_before = old_position <= self.goal_position
+        left_after = position <= self.goal_position
         switched_side = left_before ^ left_after
         done = np.any(switched_side)
         reward = 0
@@ -123,8 +123,8 @@ class ContinuousMountainCarPopulationEnv(gym.Env):
         if self.static_goal_position is not None:
             self.goal_position = self.static_goal_position
         else:
-            self.goal_position = np.random.choice([self.min_position,
-                                                   self.max_position],
+            self.goal_position = np.random.choice([self.min_position + 0.01,
+                                                   self.max_position - 0.01],
                                                   size=len(self.goal_reward),
                                                   replace=False)
             self.state = np.concatenate((self.state, self.goal_position))
