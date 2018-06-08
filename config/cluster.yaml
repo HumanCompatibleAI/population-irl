@@ -44,6 +44,8 @@ head_setup_commands: []
 worker_setup_commands: []
 
 head_start_ray_commands:
+    # Set up alarm for if node is left running by mistake
+    - $HOME/population-irl/scripts/cloudwatch_alarms.sh
     - ray stop
     # (Re)start our Redis cache instance
     - redis-cli -p 6380 shutdown || true
