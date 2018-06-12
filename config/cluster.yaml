@@ -51,7 +51,7 @@ head_start_ray_commands:
     - redis-cli -p 6380 shutdown || true
     - redis-server $HOME/population-irl/config/redis/cluster.conf
     # Pretend we have more GPUs to workaround Ray issue #402.
-    - ulimit -n 65536; ray start --num-gpus=4 --head --redis-port=6379 --object-manager-port=8076 --autoscaling-config=~/ray_bootstrap_config.yaml
+    - ulimit -n 65536; ray start --num-gpus=2 --num-cpus=2 --head --redis-port=6379 --object-manager-port=8076 --autoscaling-config=~/ray_bootstrap_config.yaml
 
 # Command to start ray on worker nodes. You don't need to change this.
 worker_start_ray_commands:
