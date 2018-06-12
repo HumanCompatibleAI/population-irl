@@ -295,9 +295,9 @@ EXPERIMENTS['dummy-continuous-test'] = {
     'seeds': 2,
 }
 EXPERIMENTS['few-dummy-continuous-test'] = {
-    'train_environments': ['pirl/Reacher-seed{}-0.1-v0'.format(i)
+    'train_environments': ['pirl/ReacherGoal-seed{}-0.1-v0'.format(i)
                            for i in range(0, 2)],
-    'test_environments': ['pirl/Reacher-seed{}-0.1-v0'.format(i)
+    'test_environments': ['pirl/ReacherGoal-seed{}-0.1-v0'.format(i)
                           for i in range(1, 3)],
     'expert': 'ppo_cts_shortest',
     'eval': ['ppo_cts_shortest'],
@@ -488,7 +488,16 @@ EXPERIMENTS['mountain-car-multigoals'] = {
     'test_trajectories': [1, 2, 5, 100],
 }
 EXPERIMENTS['reacher-multigoals'] = {
-    'environments': ['pirl/Reacher-seed{}-{}-v0'.format(seed, noise)
+    'environments': ['pirl/ReacherGoal-seed{}-{}-v0'.format(seed, noise)
+                     for seed in range(0,3) for noise in [0.1, 0.5, 1.0]],
+    # simple environment, small number of iterations sufficient to converge
+    'expert': 'ppo_cts_200k',
+    'irl': ['airl_so_short', 'airl_sa_short', 'airl_random_short'],
+    'eval': ['ppo_cts_200k'],
+    'test_trajectories': [1, 2, 5, 100],
+}
+EXPERIMENTS['reacher-wall'] = {
+    'environments': ['pirl/ReacherWall-seed{}-{}-v0'.format(seed, noise)
                      for seed in range(0,3) for noise in [0.1, 0.5, 1.0]],
     # simple environment, small number of iterations sufficient to converge
     'expert': 'ppo_cts_200k',
@@ -499,8 +508,8 @@ EXPERIMENTS['reacher-multigoals'] = {
 
 # Few-shot continuous control
 EXPERIMENTS['reacher-metalearning'] = {
-    'train_environments': ['pirl/Reacher-seed{}-0.1-v0'.format(seed) for seed in range(0,5)],
-    'test_environments': ['pirl/Reacher-seed{}-0.1-v0'.format(seed) for seed in range(5, 10)],
+    'train_environments': ['pirl/ReacherGoal-seed{}-0.1-v0'.format(seed) for seed in range(0,5)],
+    'test_environments': ['pirl/ReacherGoal-seed{}-0.1-v0'.format(seed) for seed in range(5, 10)],
     'expert': 'ppo_cts',
     'eval': ['ppo_cts'],
     'irl': ['airl_so'] + ['airlp_so_lr1e-{}'.format(i) for i in range(1,4)],
@@ -508,8 +517,8 @@ EXPERIMENTS['reacher-metalearning'] = {
     'test_trajectories': [1, 5, 10, 100],
 }
 EXPERIMENTS['dummy-reacher-metalearning'] = {
-    'train_environments': ['pirl/Reacher-seed{}-0.1-v0'.format(seed) for seed in range(0,2)],
-    'test_environments': ['pirl/Reacher-seed{}-0.1-v0'.format(seed) for seed in range(5,6)],
+    'train_environments': ['pirl/ReacherGoal-seed{}-0.1-v0'.format(seed) for seed in range(0,2)],
+    'test_environments': ['pirl/ReacherGoal-seed{}-0.1-v0'.format(seed) for seed in range(5,6)],
     'expert': 'ppo_cts_shortest',
     'eval': ['ppo_cts_shortest'],
     'irl': ['airl_so_dummy', 'airlp_so_shortest'],

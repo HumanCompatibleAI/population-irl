@@ -121,14 +121,24 @@ for num_peaks in [2, 3, 4]:
 for seed in range(10):
     for start_variance in [0.1, 0.5, 1.0]:
         register(
-            id='pirl/Reacher-seed{}-{}-v0'.format(seed, start_variance),
-            entry_point='pirl.envs.reacher:ReacherPopulationEnv',
+            id='pirl/ReacherGoal-seed{}-{}-v0'.format(seed, start_variance),
+            entry_point='pirl.envs.reacher_goal:ReacherGoalEnv',
             max_episode_steps=50,
             kwargs={
                 'seed': seed,
                 'start_variance': start_variance * np.pi,
                 'goal_state_pos': 'fixed',
                 'goal_state_access': False,
+            }
+        )
+
+        register(
+            id='pirl/ReacherWall-seed{}-{}-v0'.format(seed, start_variance),
+            entry_point='pirl.envs.reacher_wall:ReacherWallEnv',
+            max_episode_steps=50,
+            kwargs={
+                'seed': seed,
+                'start_variance': start_variance * np.pi,
             }
         )
 

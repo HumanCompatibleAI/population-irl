@@ -3,9 +3,9 @@ from gym import utils
 from gym.envs.mujoco import mujoco_env
 from gym.utils import seeding
 
-class ReacherPopulationEnv(mujoco_env.MujocoEnv, utils.EzPickle):
+class ReacherGoalEnv(mujoco_env.MujocoEnv, utils.EzPickle):
     def __init__(self, seed=0, start_variance=0.1,
-                 goal_state_pos='fixed', goal_state_access=True):
+                 goal_state_pos='variable', goal_state_access=True):
         '''
         Multi-task (population) version of Gym Reacher environment.
 
