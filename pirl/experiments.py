@@ -553,6 +553,8 @@ def _value_helper(irl=None, n=None, m=None, rl=None,
         p = rl_algo.train(envs, discount=discount,
                           seed=train_seed, log_dir=log_dir)
 
+    joblib.dump(p, osp.join(log_dir, 'policy.pkl'))
+
     eval_seed = create_seed(seed + 'eval_eval')
     with make_envs(env_name, rl_algo.vectorized, parallel,
                    eval_seed, log_prefix=osp.join(mon_dir, 'eval')) as envs:
