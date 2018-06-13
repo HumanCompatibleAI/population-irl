@@ -7,26 +7,26 @@ from gym.utils import seeding
 from gym.envs.mujoco import mujoco_env
 
 class ReacherWallEnv(mujoco_env.MujocoEnv, utils.EzPickle):
-    def __init__(self, seed=0, start_variance=0.1,
+    def __init__(self, start_variance=0.1, wall_seed=0,
                  wall_penalty=5, wall_state_access=False):
         self._start_variance = start_variance
         self._wall_state_access = wall_state_access
         self._wall_penalty = wall_penalty
 
-        wall_rng = np.random.RandomState(seeding.create_seed(seed))
-        self._wall_angle = np.pi * (2 * wall_rng.rand() - 1)
-        x = np.cos(self._wall_angle)
-        y = np.sin(self._wall_angle)
+        if wall_seed is not None:
+            wall_rng = np.random.RandomState(seeding.create_seed(wall_seed))
+            self._wall_angle = np.pi * (2 * wall_rng.rand() - 1)
+            x = np.cos(self._wall_angle)
+            y = np.sin(self._wall_angle)
+            params = {'XS': x * 0.08, 'YS': y * 0.08,
+                      'XE': x * 0.21, 'YE': y * 0.21}
+        else:
+            self._wall_angle = 0
+            params = {'XS': -1, 'YS': -1, 'XE': -0.99, 'YE': -0.99}
 
         model_path = os.path.join(os.path.dirname(__file__), 'reacher_wall.xml')
         with open(model_path, 'r') as model:
             model_xml = model.read()
-            params = {
-                'XS': x * 0.08,
-                'YS': y * 0.08,
-                'XE': x * 0.21,
-                'YE': y * 0.21,
-            }
             for k, v in params.items():
                 model_xml = model_xml.replace(k, str(v))
 

@@ -118,14 +118,14 @@ for num_peaks in [2, 3, 4]:
                 )
 
 ## Reacher
-for seed in range(10):
-    for start_variance in [0.1, 0.5, 1.0]:
+for start_variance in [0.1, 0.5, 1.0]:
+    for seed in range(10):
         register(
             id='pirl/ReacherGoal-seed{}-{}-v0'.format(seed, start_variance),
             entry_point='pirl.envs.reacher_goal:ReacherGoalEnv',
             max_episode_steps=50,
             kwargs={
-                'seed': seed,
+                'wall_seed': seed,
                 'start_variance': start_variance * np.pi,
                 'goal_state_pos': 'fixed',
                 'goal_state_access': False,
@@ -135,12 +135,22 @@ for seed in range(10):
         register(
             id='pirl/ReacherWall-seed{}-{}-v0'.format(seed, start_variance),
             entry_point='pirl.envs.reacher_wall:ReacherWallEnv',
-            max_episode_steps=50,
+            max_episode_steps=100,
             kwargs={
-                'seed': seed,
+                'wall_seed': seed,
                 'start_variance': start_variance * np.pi,
             }
         )
+
+    register(
+        id='pirl/ReacherWall-nowall-{}-v0'.format(start_variance),
+        entry_point='pirl.envs.reacher_wall:ReacherWallEnv',
+        max_episode_steps=100,
+        kwargs={
+            'wall_seed': None,
+            'start_variance': start_variance * np.pi,
+        }
+    )
 
 ## Billiards
 billiard_params = [
