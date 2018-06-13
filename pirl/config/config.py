@@ -507,6 +507,13 @@ EXPERIMENTS['reacher-wall'] = {
     'eval': ['ppo_cts_200k'],
     'test_trajectories': [1, 2, 5, 100],
 }
+EXPERIMENTS['reacher-wall-verification'] = {
+    'environments': ['Reacher-v2', 'pirl/ReacherWall-nowall-0.1-v0'],
+    'expert': 'ppo_cts_200k',
+    'irl': [],
+    'eval': [],
+    'test_trajectories': [1, 2, 5, 100],
+}
 
 # Few-shot continuous control
 EXPERIMENTS['reacher-metalearning'] = {
