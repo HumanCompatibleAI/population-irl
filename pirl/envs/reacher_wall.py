@@ -66,17 +66,24 @@ class ReacherWallEnv(mujoco_env.MujocoEnv, utils.EzPickle):
             if within_armspan and outside_wall:
                 break
 
-        # Randomly choose arm position, excluding the sector 0.05 radians
-        # away from the wall. Also pick arm velocity.
+        # Randomly choose arm position, excluding sector 0.05 radians
+        # around the wall.
         while True:
             sv = self._start_variance
             arm_pos_rnd = self.np_random.uniform(low=-sv, high=sv, size=2)
             arm_pos = self.init_qpos[:-2] + arm_pos_rnd
-            arm_outside = np.abs(arm_pos[0] - self._wall_angle) > 0.05
-            finger_xpos = np.sum([np.cos(arm_pos), np.sin(arm_pos)], axis=1)
+            arm_delta = arm_pos[0] - self._wall_angle
+
+            arm_theta = np.cumsum(arm_pos)
+            finger_xpos = np.sum([np.cos(arm_theta), np.sin(arm_theta)], axis=1)
             finger_angle = np.arctan2(finger_xpos[1], finger_xpos[0])
-            finger_outside = np.abs(finger_angle - self._wall_angle) > 0.05
-            if arm_outside and finger_outside:
+            finger_delta = finger_angle - self._wall_angle
+
+            arm_outside = np.abs(arm_delta) > 0.05
+            finger_outside = np.abs(finger_delta) > 0.05
+            intersects = np.sign([arm_delta, finger_delta]).prod() == -1
+
+            if arm_outside and finger_outside and not intersects:
                 break
         arm_vel_rnd = self.np_random.uniform(low=-.005, high=.005, size=2)
         arm_vel = self.init_qvel[:-2] + arm_vel_rnd
