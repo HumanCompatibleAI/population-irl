@@ -152,6 +152,16 @@ for start_variance in [0.1, 0.5, 1.0]:
         }
     )
 
+    register(
+        id='pirl/ReacherWall-nowall-50-{}-v0'.format(start_variance),
+        entry_point='pirl.envs.reacher_wall:ReacherWallEnv',
+        max_episode_steps=50,
+        kwargs={
+            'wall_seed': None,
+            'start_variance': start_variance * np.pi,
+        }
+    )
+
 ## Billiards
 billiard_params = [
     (0, 1),

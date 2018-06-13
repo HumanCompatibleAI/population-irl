@@ -502,14 +502,16 @@ EXPERIMENTS['reacher-wall'] = {
                      for noise in [0.1, 0.5, 1.0]
                     ],
     # simple environment, small number of iterations sufficient to converge
-    'expert': 'ppo_cts_200k',
+    'expert': 'ppo_cts',
     'irl': ['airl_so_short', 'airl_sa_short', 'airl_random_short'],
-    'eval': ['ppo_cts_200k'],
+    'eval': ['ppo_cts'],
     'test_trajectories': [1, 2, 5, 100],
 }
 EXPERIMENTS['reacher-wall-verification'] = {
-    'environments': ['Reacher-v2', 'pirl/ReacherWall-nowall-0.1-v0'],
-    'expert': 'ppo_cts_200k',
+    'environments': ['Reacher-v2',
+                     'pirl/ReacherWall-nowall-0.1-v0',
+                     'pirl/ReacherWall-nowall-50-0.1-v0'],
+    'expert': 'ppo_cts',
     'irl': [],
     'eval': [],
     'test_trajectories': [1, 2, 5, 100],
