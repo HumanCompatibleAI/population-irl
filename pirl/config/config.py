@@ -497,8 +497,8 @@ EXPERIMENTS['reacher-multigoals'] = {
     'test_trajectories': [1, 2, 5, 100],
 }
 EXPERIMENTS['reacher-wall'] = {
-    'environments': ['pirl/ReacherWall-seed{}-{}-v0'.format(seed, noise)
-                     for seed in (list(range(0,3)) + ['nowall'])
+    'environments': ['pirl/ReacherWall-{}-{}-v0'.format(seed, noise)
+                     for seed in ['seed{}'.format(seed) for seed in range(0,3)] + ['nowall']
                      for noise in [0.1, 0.5, 1.0]
                     ],
     # simple environment, small number of iterations sufficient to converge
