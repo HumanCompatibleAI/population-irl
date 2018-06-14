@@ -41,23 +41,34 @@ def nested_dicts_to_df(ds, idxs, transform):
 def extract_value(data):
     def unpack_mean_sd_tuple(d):
         return {k: {'mean': v[0], 'se': v[1]} for k, v in d.items()}
+
+    idx = ['seed', 'eval', 'env', 'type']
+    ground_truth = nested_dicts_to_df(data['ground_truth'], idx, unpack_mean_sd_tuple)
+    ground_truth = ground_truth.stack().unstack('eval')
+    ground_truth = ground_truth.reorder_levels(['env', 'seed', 'type'])
+    ground_truth.columns.name = None
+
     idxs = ['seed', 'eval', 'irl', 'env', 'n', 'm', 'type']
     values = nested_dicts_to_df(data['values'], idxs, unpack_mean_sd_tuple)
     values = values.stack().unstack('irl')
     values.columns.name = 'irl'
-    sorted_idx = ['env', 'n', 'm', 'eval', 'seed', 'type']
-    values = values.reorder_levels(sorted_idx)
 
-    idx =  ['seed', 'eval', 'env', 'type']
-    ground_truth = nested_dicts_to_df(data['ground_truth'], idx, unpack_mean_sd_tuple)
-    ground_truth = ground_truth.stack().unstack('eval')
-    ground_truth = ground_truth.reorder_levels(['env', 'seed', 'type'])
+    sorted_idx = ['env', 'n', 'm', 'eval', 'seed', 'type']
+    if not values.empty:
+        values = values.reorder_levels(sorted_idx)
+        idx = values.index
+    else:
+        idx = [(env, 0, 0, 'gt', seed, kind)
+               for env, seed, kind in tuple(ground_truth.index)]
+        idx = pd.MultiIndex.from_tuples(idx, names=sorted_idx)
 
     def get_gt(k):
         env, _, _, _, seed, kind = k
         return ground_truth.loc[(env, seed, kind), :]
-    values_gt = pd.DataFrame(list(map(get_gt, values.index)), index=values.index)
-    return pd.concat([values, values_gt], axis=1)
+    values_gt = pd.DataFrame(list(map(get_gt, idx)), index=idx)
+    values = pd.concat([values, values_gt], axis=1)
+
+    return values
 
 def load_value(experiment_dir, algo_pattern='(.*)', env_pattern='(.*)', algos=['.*'], dps=2):
     fname = osp.join(experiment_dir, 'results.pkl')
