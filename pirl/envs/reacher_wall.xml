@@ -2,7 +2,7 @@
 	<compiler angle="radian" inertiafromgeom="true"/>
 	<default>
 		<joint armature="1" damping="1" limited="true"/>
-		<geom contype="0" condim="1" friction="1 0.1 0.1" rgba="0.7 0.7 0 1"/>
+		<geom contype="0" friction="1 0.1 0.1" rgba="0.7 0.7 0 1"/>
 	</default>
 	<option gravity="0 0 -9.81" integrator="RK4" timestep="0.01"/>
 	<worldbody>

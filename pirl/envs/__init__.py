@@ -132,35 +132,28 @@ for start_variance in [0.1, 0.5, 1.0]:
             }
         )
 
+        for steps in [50, 100]:
+            register(
+                id='pirl/ReacherWall-seed{}-{}-{}-v0'.format(seed, steps, start_variance),
+                entry_point='pirl.envs.reacher_wall:ReacherWallEnv',
+                max_episode_steps=steps,
+                kwargs={
+                    'wall_penalty': 0.4*steps,
+                    'wall_seed': seed,
+                    'start_variance': start_variance * np.pi,
+                }
+            )
+
+    for steps in [50, 100]:
         register(
-            id='pirl/ReacherWall-seed{}-{}-v0'.format(seed, start_variance),
+            id='pirl/ReacherWall-nowall-{}-{}-v0'.format(steps, start_variance),
             entry_point='pirl.envs.reacher_wall:ReacherWallEnv',
-            max_episode_steps=100,
+            max_episode_steps=steps,
             kwargs={
-                'wall_seed': seed,
+                'wall_seed': None,
                 'start_variance': start_variance * np.pi,
             }
         )
-
-    register(
-        id='pirl/ReacherWall-nowall-{}-v0'.format(start_variance),
-        entry_point='pirl.envs.reacher_wall:ReacherWallEnv',
-        max_episode_steps=100,
-        kwargs={
-            'wall_seed': None,
-            'start_variance': start_variance * np.pi,
-        }
-    )
-
-    register(
-        id='pirl/ReacherWall-nowall-50-{}-v0'.format(start_variance),
-        entry_point='pirl.envs.reacher_wall:ReacherWallEnv',
-        max_episode_steps=50,
-        kwargs={
-            'wall_seed': None,
-            'start_variance': start_variance * np.pi,
-        }
-    )
 
 ## Billiards
 billiard_params = [

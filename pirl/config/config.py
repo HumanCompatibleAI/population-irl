@@ -497,7 +497,7 @@ EXPERIMENTS['reacher-multigoals'] = {
     'test_trajectories': [1, 2, 5, 100],
 }
 EXPERIMENTS['reacher-wall'] = {
-    'environments': ['pirl/ReacherWall-{}-{}-v0'.format(seed, noise)
+    'environments': ['pirl/ReacherWall-{}-100-{}-v0'.format(seed, noise)
                      for seed in ['seed{}'.format(seed) for seed in range(0,3)] + ['nowall']
                      for noise in [0.1, 0.5, 1.0]
                     ],
@@ -508,9 +508,9 @@ EXPERIMENTS['reacher-wall'] = {
     'test_trajectories': [1, 2, 5, 100],
 }
 EXPERIMENTS['reacher-wall-verification'] = {
-    'environments': ['Reacher-v2',
-                     'pirl/ReacherWall-nowall-0.1-v0',
-                     'pirl/ReacherWall-nowall-50-0.1-v0'],
+    'environments': ['Reacher-v2'] +
+                    ['pirl/ReacherWall-{}-50-{}-v0'.format(seed, sv)
+                     for seed in ['nowall', 'seed1'] for sv in [0.1, 0.5, 1.0]],
     'expert': 'ppo_cts',
     'irl': [],
     'eval': [],

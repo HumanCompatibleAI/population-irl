@@ -45,11 +45,12 @@ class ReacherWallEnv(mujoco_env.MujocoEnv, utils.EzPickle):
         reward_ctrl = - np.square(a).sum()
         reward = reward_dist + reward_ctrl
 
+        done = False
         if self.sim.data.ncon > 0:
             reward -= self._wall_penalty
+            done = True
 
         ob = self._get_obs()
-        done = False
         info = dict(reward_dist=reward_dist, reward_ctrl=reward_ctrl)
         return ob, reward, done, info
 
