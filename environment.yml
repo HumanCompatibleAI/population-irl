@@ -190,7 +190,7 @@ dependencies:
     - gast==0.2.0
     - glfw==1.6.0
     - grpcio==1.12.0
-    - git+git://github.com/AdamGleave/gym.git@double-wrap#egg=gym
+    - git+git://github.com/openai/gym.git@5404b39
     - git+git://github.com/AdamGleave/HermesCache.git@master#egg=HermesCache
     - imageio==2.3.0
     - joblib==0.11
@@ -199,13 +199,12 @@ dependencies:
     - portalocker==1.2.0
     - progressbar2==3.36.0
     - psutil==5.4.5
-    - pyarrow==0.9.0
     - pygame==1.9.3
     - pyglet==1.3.1
     - pyopengl==3.1.0
     - pyprind==2.11.2
     - python-utils==2.3.0
-    - ray==0.4.0
+    - https://s3-us-west-2.amazonaws.com/pirl-dev/ray-0.4.1-cp36-cp36m-linux_x86_64.whl
     - git+git://github.com/AdamGleave/rllab.git@master#egg=rllab
     - https://storage.googleapis.com/tensorflow/linux/gpu/tensorflow_gpu-1.8.0-cp36-cp36m-linux_x86_64.whl
     - termcolor==1.1.0
