@@ -528,6 +528,11 @@ def run_irl(cfg, out_dir, trajectories, seed):
 def _value_helper(irl=None, n=None, m=None, rl=None,
                   parallel=None, discount=None, seed=None,
                   env_name=None, reward=None, log_dir=None):
+    if reward is None:
+        # reward will be None if the algorithm is a non-IRL imitation learner.
+        # In this case, do not attempt to reoptimize.
+        return None
+
     # Setup
     utils.set_cuda_visible_devices()
     logger.debug('[EVAL] %s [meta=%d, finetune=%d] ' 

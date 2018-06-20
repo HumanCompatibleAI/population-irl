@@ -185,6 +185,18 @@ for k, kwargs in AIRL_ALGORITHMS.items():
             uses_gpu=True,
         )
 
+
+gail_train = functools.partial(irl.gail.irl, tf_cfg=TENSORFLOW)
+gail_sample = functools.partial(irl.gail.sample, tf_cfg=TENSORFLOW)
+SINGLE_IRL_ALGORITHMS['gail'] = IRLAlgorithm(
+    train=gail_train,
+    reward_wrapper=None, # TODO: make experiments.py handle no reward
+    sample=gail_sample,
+    value=functools.partial(agents.sample.value, gail_sample),
+    vectorized=False,
+    uses_gpu=True,
+)
+
 ## Population IRL algorithms
 
 POPULATION_IRL_ALGORITHMS = dict()
@@ -290,7 +302,7 @@ EXPERIMENTS['dummy-continuous-test'] = {
     'environments': ['Reacher-v2'],
     'expert': 'ppo_cts_shortest',
     'eval': ['ppo_cts_shortest'],
-    'irl': ['airl_so_dummy', 'airl_random_dummy'],
+    'irl': ['gail', 'airl_so_dummy', 'airl_random_dummy'],
     'test_trajectories': [10, 20],
     'seeds': 2,
 }

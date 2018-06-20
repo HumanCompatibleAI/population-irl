@@ -75,7 +75,9 @@ if __name__ == '__main__':
         ray.init(redis_address=args.ray_server)
 
     # Setup logging
-    ray.worker.global_worker.run_function_on_all_workers(node_setup)
+    node_setup(None)
+    if ray.worker.global_worker.mode != ray.worker.PYTHON_MODE:
+        ray.worker.global_worker.run_function_on_all_workers(node_setup)
     logger.info('CLI args: %s', args)
 
     # Experiment loop
