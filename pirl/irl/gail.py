@@ -63,7 +63,7 @@ def irl(env, trajectories, discount, seed, log_dir, *,
 
         policy_fn = _policy_factory(policy_cfg)
 
-        gan_kwargs = {'hidden_size': 32}
+        gan_kwargs = {'hidden_size': 100}
         if gan_cfg is not None:
             gan_kwargs.update(gan_cfg)
         reward_giver = TransitionClassifier(env, **gan_kwargs)

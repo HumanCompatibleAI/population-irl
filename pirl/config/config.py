@@ -189,7 +189,7 @@ for k, kwargs in AIRL_ALGORITHMS.items():
 gail_train = functools.partial(irl.gail.irl, tf_cfg=TENSORFLOW)
 gail_sample = functools.partial(irl.gail.sample, tf_cfg=TENSORFLOW)
 #TODO: gail default is 5e6, so check 1e6 doesn't hurt performance
-for k, max_it in {'': 1e6, '_short': 1e5, '_shortest': 1e4}.items():
+for k, max_it in {'': 5e6, '_short': 1e6, '_shortest': 1e4}.items():
     train = functools.partial(gail_train, train_cfg={'max_timesteps': max_it})
     SINGLE_IRL_ALGORITHMS['gail' + k] = IRLAlgorithm(
         train=train,
@@ -400,7 +400,10 @@ EXPERIMENTS['continuous-baselines-classic'] = {
     ],
     'expert': 'ppo_cts_short',
     'eval': ['ppo_cts_short'],
-    'irl': ['airl_so_short', 'airl_sa_short', 'airl_random_short'],
+    'irl': ['gail_short',
+            'airl_so_short',
+            'airl_sa_short',
+            'airl_random_short'],
     'test_trajectories': [1000],
 }
 EXPERIMENTS['debug-pendulum'] = {
@@ -419,7 +422,7 @@ EXPERIMENTS['continuous-baselines-easy'] = {
     ],
     'expert': 'ppo_cts',
     'eval': ['ppo_cts'],
-    'irl': ['airl_so', 'airl_sa', 'airl_random'],
+    'irl': ['gail', 'airl_so', 'airl_sa', 'airl_random'],
     'test_trajectories': [1000],
 }
 EXPERIMENTS['continuous-baselines-medium'] = {
@@ -430,7 +433,7 @@ EXPERIMENTS['continuous-baselines-medium'] = {
     ],
     'expert': 'ppo_cts',
     'eval': ['ppo_cts'],
-    'irl': ['airl_so', 'airl_sa', 'airl_random'],
+    'irl': ['gail', 'airl_so', 'airl_sa', 'airl_random'],
     'test_trajectories': [1000],
 }
 # Designed to closely match tests from adversarial-irl repository
