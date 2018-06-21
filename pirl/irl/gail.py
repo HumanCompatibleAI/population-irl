@@ -14,6 +14,7 @@ sys.path = old_path
 import numpy as np
 import tensorflow as tf
 
+from baselines.common import tf_util
 from baselines.gail import behavior_clone, mlp_policy, trpo_mpi
 from baselines.gail.adversary import TransitionClassifier
 from baselines.gail.dataset.mujoco_dset import Dset
@@ -40,6 +41,10 @@ def _policy_factory(policy_cfg):
     if policy_cfg is not None:
         policy_kwargs.update(policy_cfg)
     def policy_fn(name, ob_space, ac_space, reuse=False):
+        # WORKAROUND: erase placeholder cache
+        # This is needed since we create policies in a fresh graph each time,
+        # so caching would result in tensors from different graphs!
+        tf_util._PLACEHOLDER_CACHE = {}
         return mlp_policy.MlpPolicy(name=name, reuse=reuse,
                                     ob_space=ob_space, ac_space=ac_space,
                                     **policy_kwargs)
@@ -105,6 +110,8 @@ def sample(env, policy_saved, num_episodes, seed, *, tf_cfg, policy_cfg=None):
 
     infer_graph = tf.Graph()
     with infer_graph.as_default():
+        tf.set_random_seed(seed)
+
         policy_fn = _policy_factory(policy_cfg)
         policy = policy_fn('pi', env.observation_space, env.action_space,
                            reuse=False)

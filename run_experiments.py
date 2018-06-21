@@ -67,7 +67,7 @@ if __name__ == '__main__':
         num_gpu = args.num_gpu
         if num_gpu is None:
             num_gpu = ray.services._autodetect_num_gpus() * GPU_MULTIPLIER
-        ray.init(num_cpus=args.num_cpu, num_gpus=args.num_gpu,
+        ray.init(num_cpus=args.num_cpu, num_gpus=num_gpu,
                  redirect_worker_output=True)
     elif args.ray_server == "DEBUG":  # run in "Python" mode (single process)
         ray.init(driver_mode=ray.worker.PYTHON_MODE)

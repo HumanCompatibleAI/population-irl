@@ -188,14 +188,17 @@ for k, kwargs in AIRL_ALGORITHMS.items():
 
 gail_train = functools.partial(irl.gail.irl, tf_cfg=TENSORFLOW)
 gail_sample = functools.partial(irl.gail.sample, tf_cfg=TENSORFLOW)
-SINGLE_IRL_ALGORITHMS['gail'] = IRLAlgorithm(
-    train=gail_train,
-    reward_wrapper=None, # TODO: make experiments.py handle no reward
-    sample=gail_sample,
-    value=functools.partial(agents.sample.value, gail_sample),
-    vectorized=False,
-    uses_gpu=True,
-)
+#TODO: gail default is 5e6, so check 1e6 doesn't hurt performance
+for k, max_it in {'': 1e6, '_short': 1e5, '_shortest': 1e4}.items():
+    train = functools.partial(gail_train, train_cfg={'max_timesteps': max_it})
+    SINGLE_IRL_ALGORITHMS['gail' + k] = IRLAlgorithm(
+        train=train,
+        reward_wrapper=None,
+        sample=gail_sample,
+        value=functools.partial(agents.sample.value, gail_sample),
+        vectorized=False,
+        uses_gpu=True,
+    )
 
 ## Population IRL algorithms
 
@@ -302,7 +305,7 @@ EXPERIMENTS['dummy-continuous-test'] = {
     'environments': ['Reacher-v2'],
     'expert': 'ppo_cts_shortest',
     'eval': ['ppo_cts_shortest'],
-    'irl': ['gail', 'airl_so_dummy', 'airl_random_dummy'],
+    'irl': ['gail_shortest', 'airl_so_dummy', 'airl_random_dummy'],
     'test_trajectories': [10, 20],
     'seeds': 2,
 }
