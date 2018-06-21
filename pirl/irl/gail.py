@@ -1,16 +1,26 @@
-'''Interface for GAIL from OpenAI Baselines.'''
+'''Interface for GAIL from OpenAI Baselines.
+   Based on run_mijoco.py. MPI breaks inside of Ray, so I monkey patch to
+   force a dummy (sequential) version of MPI.
+'''
 
 import os.path as osp
+# Force our dummy (sequential) version of MPI to be loaded
+import sys
+old_path = sys.path
+sys.path = [osp.join(osp.dirname(__file__), 'dummy_mpi')] + old_path
+import mpi4py  # OK this is unused, imported only for side-effects
+sys.path = old_path
 
 import numpy as np
 import tensorflow as tf
 
-from baselines.gail import mlp_policy
-from baselines.gail.dataset.mujoco_dset import Dset
-from baselines.gail import behavior_clone, trpo_mpi
+from baselines.gail import behavior_clone, mlp_policy, trpo_mpi
 from baselines.gail.adversary import TransitionClassifier
+from baselines.gail.dataset.mujoco_dset import Dset
 
 from pirl.agents.sample import SampleMonitor
+
+## IRL
 
 def _make_dset(trajectories, randomize=True):
     '''Return a Dset object containing observations and actions extracted
@@ -20,6 +30,7 @@ def _make_dset(trajectories, randomize=True):
     obs = np.concatenate([x[0] for x in trajectories])
     acs = np.concatenate([x[1] for x in trajectories])
     return Dset(obs, acs, randomize)
+
 
 def _policy_factory(policy_cfg):
     policy_kwargs = {
@@ -34,9 +45,9 @@ def _policy_factory(policy_cfg):
                                     **policy_kwargs)
     return policy_fn
 
+
 def irl(env, trajectories, discount, seed, log_dir, *,
         tf_cfg, policy_cfg=None, gan_cfg=None, train_cfg=None):
-    #TODO: discount seems to be unused?
     dataset = _make_dset(trajectories)
 
     train_graph = tf.Graph()
@@ -74,7 +85,6 @@ def irl(env, trajectories, discount, seed, log_dir, *,
             # Pretrain with behavior cloning
             pretrained_weight = behavior_clone.learn(env, policy_fn, dataset,
                                          max_iters=bc_max_iter)
-        # TODO: use MPI?
         ckpt_dir = osp.join(log_dir, 'checkpoints')
 
         with tf.Session(config=tf_cfg) as sess:
@@ -88,6 +98,7 @@ def irl(env, trajectories, discount, seed, log_dir, *,
             policy_serialised = sess.run(policy_vars)
 
     return None, policy_serialised
+
 
 def sample(env, policy_saved, num_episodes, seed, *, tf_cfg, policy_cfg=None):
     env = SampleMonitor(env)
