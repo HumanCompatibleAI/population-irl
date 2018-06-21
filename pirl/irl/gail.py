@@ -34,17 +34,19 @@ def _make_dset(trajectories, randomize=True):
 
 
 def _policy_factory(policy_cfg):
+    '''Return a function to create policies.
+       WARNING: This function must be called ONCE per graph.'''
     policy_kwargs = {
         'hid_size': 100,
         'num_hid_layers': 2,
     }
     if policy_cfg is not None:
         policy_kwargs.update(policy_cfg)
+    # WORKAROUND: erase placeholder cache
+    # This is needed since we create policies in a fresh graph each time,
+    # so caching would result in tensors from different graphs!
+    tf_util._PLACEHOLDER_CACHE = {}
     def policy_fn(name, ob_space, ac_space, reuse=False):
-        # WORKAROUND: erase placeholder cache
-        # This is needed since we create policies in a fresh graph each time,
-        # so caching would result in tensors from different graphs!
-        tf_util._PLACEHOLDER_CACHE = {}
         return mlp_policy.MlpPolicy(name=name, reuse=reuse,
                                     ob_space=ob_space, ac_space=ac_space,
                                     **policy_kwargs)
