@@ -40,7 +40,13 @@ def nested_dicts_to_df(ds, idxs, transform):
 
 def extract_value(data):
     def unpack_mean_sd_tuple(d):
-        return {k: {'mean': v[0], 'se': v[1]} for k, v in d.items()}
+        res = {}
+        for k, v in d.items():
+            if v is None:
+                res[k] = {'mean': None, 'se': None}
+            else:
+                res[k] = {'mean': v[0], 'se': v[1]}
+        return res
 
     idx = ['seed', 'eval', 'env', 'type']
     ground_truth = nested_dicts_to_df(data['ground_truth'], idx, unpack_mean_sd_tuple)
