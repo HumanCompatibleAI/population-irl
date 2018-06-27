@@ -208,7 +208,7 @@ def irl(venv, trajectories, discount, seed, log_dir, *, tf_cfg, model_cfg=None,
 
 
 def metalearn(venvs, trajectories, discount, seed, log_dir, *, tf_cfg, outer_itr=1000,
-              lr=1e-2, model_cfg={}, policy_cfg=None, training_cfg={}):
+              lr=1e-2, model_cfg=None, policy_cfg=None, training_cfg={}):
     #TODO: seeds
     envs = {k: TfEnv(VecGymEnv(v)) for k, v in venvs.items()}
     env_spec = list(envs.values())[0].spec
@@ -216,8 +216,6 @@ def metalearn(venvs, trajectories, discount, seed, log_dir, *, tf_cfg, outer_itr
     tasks = list(envs.keys())
 
     experts = {k: _convert_trajectories(v) for k, v in trajectories.items()}
-    model_kwargs = {'state_only': True, 'max_itrs': 10}
-    model_kwargs.update(model_cfg)
 
     train_graph = tf.Graph()
     with train_graph.as_default():

@@ -225,6 +225,8 @@ AIRLP_ALGORITHMS = {
     # - common
     # - metalearn only
     # - finetune only
+    'random': (dict(), dict(policy_cfg={'policy': irl.airl.GaussianPolicy}), dict()),
+    'random_short': (dict(outer_itr=100), dict(policy_cfg={'policy': irl.airl.GaussianPolicy}), dict()),
     'so': (dict(), dict(), dict()),
     'so_short': (dict(outer_itr=100), dict(), dict()),
     'so_10fine': (dict(), dict(), dict(training_cfg={'n_itr': 10})),
@@ -535,6 +537,15 @@ EXPERIMENTS['reacher-wall-verification'] = {
 }
 
 # Few-shot continuous control
+EXPERIMENTS['mountain-car-numpeaks-metalearn'] = {
+    'environments': ['pirl/MountainCarContinuous-{}-left-0-0.05-v0'.format(n)
+                     for n in [2, 3, 4]],
+    'expert': 'ppo_cts_short',
+    'eval': ['ppo_cts_short'],
+    'irl': ['airlp_random_short'],
+    'train_trajectories': [100],
+    'test_trajectories': [1, 100],
+}
 EXPERIMENTS['reacher-metalearning'] = {
     'train_environments': ['pirl/ReacherGoal-seed{}-0.1-v0'.format(seed) for seed in range(0,5)],
     'test_environments': ['pirl/ReacherGoal-seed{}-0.1-v0'.format(seed) for seed in range(5, 10)],
