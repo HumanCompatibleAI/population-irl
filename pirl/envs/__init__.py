@@ -125,7 +125,7 @@ for start_variance in [0.1, 0.5, 1.0]:
             entry_point='pirl.envs.reacher_goal:ReacherGoalEnv',
             max_episode_steps=50,
             kwargs={
-                'wall_seed': seed,
+                'seed': seed,
                 'start_variance': start_variance * np.pi,
                 'goal_state_pos': 'fixed',
                 'goal_state_access': False,

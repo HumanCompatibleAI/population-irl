@@ -1,3 +1,4 @@
+import functools
 import pickle
 import random
 
@@ -208,8 +209,8 @@ def irl(venv, trajectories, discount, seed, log_dir, *, tf_cfg, model_cfg=None,
 
 
 def metalearn(venvs, trajectories, discount, seed, log_dir, *, tf_cfg, outer_itr=1000,
-              lr=1e-2, model_cfg=None, policy_cfg=None, training_cfg={}):
-    #TODO: seeds
+              lr=1e-2, model_cfg=None, policy_cfg=None, training_cfg={},
+              policy_per_task=False):
     envs = {k: TfEnv(VecGymEnv(v)) for k, v in venvs.items()}
     env_spec = list(envs.values())[0].spec
     num_envs = list(venvs.values())[0].num_envs
@@ -227,14 +228,19 @@ def metalearn(venvs, trajectories, discount, seed, log_dir, *, tf_cfg, outer_itr
                          'max_itrs': 10}
         model_kwargs = dict(model_cfg)
         model_cls = model_kwargs.pop('model')
-        irl_model = model_cls(env_spec=envs.spec, expert_trajs=experts,
-                              **model_kwargs)
+        irl_model = model_cls(env_spec=env_spec, **model_kwargs)
 
         if policy_cfg is None:
             policy_cfg = {'policy': GaussianMLPPolicy, 'hidden_sizes': (32, 32)}
+        else:
+            policy_cfg = dict(policy_cfg)
         policy_fn = policy_cfg.pop('policy')
-        #TODO: do we want different policies?
-        policy = policy_fn(name='policy', env_spec=env_spec, **policy_cfg)
+        policy_fn = functools.partial(policy_fn, env_spec=env_spec, **policy_cfg)
+        if policy_per_task:
+            policies = {k: policy_fn(name='policy_' + k) for k in envs.keys()}
+        else:
+            policy = policy_fn(name='policy')
+            policies = {k: policy for k in envs.keys()}
 
         training_kwargs = {
             'n_itr': 10,
@@ -251,7 +257,7 @@ def metalearn(venvs, trajectories, discount, seed, log_dir, *, tf_cfg, outer_itr
         #TODO: actually this will likely do bad things due to storing paths etc
         algos = {k: IRLTRPO(
                 env=env,
-                policy=policy,
+                policy=policies[k],
                 irl_model=irl_model,
                 discount=discount,
                 sampler_args=dict(n_envs=num_envs),
@@ -264,8 +270,8 @@ def metalearn(venvs, trajectories, discount, seed, log_dir, *, tf_cfg, outer_itr
                 sess.run(tf.global_variables_initializer())
                 meta_reward_params = irl_model.get_params()
                 for i in range(outer_itr):
-                    with rl_logger.prefix('outer itr {} | '.format(i)):
-                        task = random.choice(tasks)
+                    task = random.choice(tasks)
+                    with rl_logger.prefix('outer itr {} | task'.format(i, task)):
                         irl_model.set_demos(experts[task])
                         algos[task].init_irl_params = meta_reward_params
                         algos[task].train()

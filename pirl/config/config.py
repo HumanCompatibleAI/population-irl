@@ -155,28 +155,25 @@ AIRL_ALGORITHMS = {
         }
     },
 }
+
+AIRL_ITERATIONS = {None: None, 'short': 100, 'shorter': 50, 'dummy': 2}
 airl_reward = functools.partial(irl.airl.airl_reward_wrapper, tf_cfg=TENSORFLOW)
 airl_sample = functools.partial(irl.airl.sample, tf_cfg=TENSORFLOW)
 airl_value = functools.partial(agents.sample.value, airl_sample)
 for k, kwargs in AIRL_ALGORITHMS.items():
-    train = functools.partial(irl.airl.irl, tf_cfg=TENSORFLOW, **kwargs)
-    SINGLE_IRL_ALGORITHMS['airl_{}'.format(k)] = IRLAlgorithm(
-        train=train,
-        reward_wrapper=airl_reward,
-        sample=airl_sample,
-        value=airl_value,
-        vectorized=True,
-        uses_gpu=True,
-    )
+    for k2, v2 in AIRL_ITERATIONS.items():
+        name = 'airl_{}'.format(k)
+        if k2 is not None:
+            name = '{}_{}'.format(name, k2)
 
-    iterations = {'short': 100, 'shorter': 50, 'dummy': 2}
-    for k2, v in iterations.items():
         kwds = dict(kwargs)
-        training_cfg = dict(kwds.get('training_cfg', dict()))
-        training_cfg['n_itr'] = v
-        kwds['training_cfg'] = training_cfg
+        if v2 is not None:
+            training_cfg = dict(kwds.get('training_cfg', dict()))
+            training_cfg['n_itr'] = v2
+            kwds['training_cfg'] = training_cfg
+
         train = functools.partial(irl.airl.irl, tf_cfg=TENSORFLOW, **kwds)
-        SINGLE_IRL_ALGORITHMS['airl_{}_{}'.format(k, k2)] = IRLAlgorithm(
+        SINGLE_IRL_ALGORITHMS[name] = IRLAlgorithm(
             train=train,
             reward_wrapper=airl_reward,
             sample=airl_sample,
@@ -184,7 +181,6 @@ for k, kwargs in AIRL_ALGORITHMS.items():
             vectorized=True,
             uses_gpu=True,
         )
-
 
 gail_train = functools.partial(irl.gail.irl, tf_cfg=TENSORFLOW)
 gail_sample = functools.partial(irl.gail.sample, tf_cfg=TENSORFLOW)
@@ -225,29 +221,44 @@ AIRLP_ALGORITHMS = {
     # - common
     # - metalearn only
     # - finetune only
-    'random': (dict(), dict(policy_cfg={'policy': irl.airl.GaussianPolicy}), dict()),
-    'random_short': (dict(outer_itr=100), dict(policy_cfg={'policy': irl.airl.GaussianPolicy}), dict()),
-    'so': (dict(), dict(), dict()),
-    'so_short': (dict(outer_itr=100), dict(), dict()),
-    'so_10fine': (dict(), dict(), dict(training_cfg={'n_itr': 10})),
-    'so_short_10fine': (dict(outer_itr=100), dict(), dict(training_cfg={'n_itr': 10})),
-    'so_shortest': (dict(training_cfg={'n_itr': 2}, outer_itr=2), dict(), dict()),
+    'random': (dict(policy_per_task=False),
+               dict(policy_cfg={'policy': irl.airl.GaussianPolicy}),
+               dict()),
+    'so_joint': (dict(policy_per_task=False), dict(), dict()),
+    'so_separate': (dict(policy_per_task=True), dict(), dict()),
 }
-for lr in range(1, 4):
-    AIRLP_ALGORITHMS['so_lr1e-{}'.format(lr)] = (dict(lr=10 ** (-lr)), dict(), dict())
+
 for k, (common, meta, fine) in AIRLP_ALGORITHMS.items():
-    meta = dict(meta, **common)
-    fine = dict(fine, **common)
-    metalearn_fn = functools.partial(irl.airl.metalearn, tf_cfg=TENSORFLOW, **meta)
-    finetune_fn = functools.partial(irl.airl.finetune, tf_cfg=TENSORFLOW, **fine)
-    entry = MetaIRLAlgorithm(metalearn=metalearn_fn,
-                             finetune=finetune_fn,
-                             reward_wrapper=airl_reward,
-                             sample=airl_sample,
-                             value=airl_value,
-                             vectorized=True,
-                             uses_gpu=True)
-    POPULATION_IRL_ALGORITHMS['airlp_{}'.format(k)] = entry
+    for k2, it in AIRL_ITERATIONS.items():
+        for lr in [None] + list(range(1,4)):
+            meta = dict(meta, **common)
+            fine = dict(fine, **common)
+
+            meta['outer_itr'] = it
+            if lr is not None:
+                meta['lr'] = 10 ** (-lr)
+
+            training_cfg = dict(fine.get('training_cfg', dict()))
+            training_cfg['n_itr'] = it
+            fine['training_cfg'] = training_cfg
+
+            metalearn_fn = functools.partial(irl.airl.metalearn,
+                                             tf_cfg=TENSORFLOW, **meta)
+            finetune_fn = functools.partial(irl.airl.finetune,
+                                            tf_cfg=TENSORFLOW, **fine)
+            entry = MetaIRLAlgorithm(metalearn=metalearn_fn,
+                                     finetune=finetune_fn,
+                                     reward_wrapper=airl_reward,
+                                     sample=airl_sample,
+                                     value=airl_value,
+                                     vectorized=True,
+                                     uses_gpu=True)
+            algo_name = 'airlp_{}'.format(k)
+            if k2 is not None:
+                algo_name += '_' + k2
+            if lr is not None:
+                algo_name += '_lr1e-{}'.format(lr)
+            POPULATION_IRL_ALGORITHMS[algo_name] = entry
 
 def traditional_to_concat(singleirl):
     def metalearner(envs, trajectories, discount, seed, log_dir):
@@ -318,10 +329,13 @@ EXPERIMENTS['few-dummy-continuous-test'] = {
                           for i in range(1, 3)],
     'expert': 'ppo_cts_shortest',
     'eval': ['ppo_cts_shortest'],
-    'irl': ['airl_so_dummy', 'airlp_so_shortest'],
+    'irl': ['airl_so_dummy',
+            'airlp_so_joint_dummy',
+            'airlp_so_separate_dummy',
+            'airlp_random_dummy'],
     'train_trajectories': [10, 20],
     'test_trajectories': [10, 20],
-    'seeds': 2,
+    'seeds': 1,
 }
 EXPERIMENTS['dummy-continuous-test-medium'] = {
     'environments': ['Reacher-v2'],
@@ -551,18 +565,9 @@ EXPERIMENTS['reacher-metalearning'] = {
     'test_environments': ['pirl/ReacherGoal-seed{}-0.1-v0'.format(seed) for seed in range(5, 10)],
     'expert': 'ppo_cts',
     'eval': ['ppo_cts'],
-    'irl': ['airl_so'] + ['airlp_so_lr1e-{}'.format(i) for i in range(1,4)],
+    'irl': ['airl_so'] + ['airlp_so_joint_lr1e-{}'.format(i) for i in range(1,4)],
     'train_trajectories': [1000],
     'test_trajectories': [1, 5, 10, 100],
-}
-EXPERIMENTS['dummy-reacher-metalearning'] = {
-    'train_environments': ['pirl/ReacherGoal-seed{}-0.1-v0'.format(seed) for seed in range(0,2)],
-    'test_environments': ['pirl/ReacherGoal-seed{}-0.1-v0'.format(seed) for seed in range(5,6)],
-    'expert': 'ppo_cts_shortest',
-    'eval': ['ppo_cts_shortest'],
-    'irl': ['airl_so_dummy', 'airlp_so_shortest'],
-    'train_trajectories': [1000],
-    'test_trajectories': [5],
 }
 EXPERIMENTS['mountain-car-meta'] = {
     'environments': ['pirl/MountainCarContinuous-2-{}-0-0.05-v0'.format(side)
@@ -571,7 +576,7 @@ EXPERIMENTS['mountain-car-meta'] = {
     'expert': 'ppo_cts_short',
     'eval': ['ppo_cts_short'],
     'irl': ['airl_so_short', 'airl_sa_short', 'airl_random_short',
-            'airlp_so_short', 'airlp_so_short_10fine'],
+            'airlp_so_joint_short'],
     'train_trajectories': [100],
     'test_trajectories': [1, 2, 5, 10, 50, 100],
 }
