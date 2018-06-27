@@ -177,7 +177,7 @@ dependencies:
     - git+git://github.com/AdamGleave/inverse_rl.git@master#egg=adversarial-irl
     - astor==0.6.2
     - atari-py==0.1.1
-    - git+git://github.com/AdamGleave/baselines.git@hotfixes#egg=hotfixes
+    - git+git://github.com/AdamGleave/baselines.git@hotfixes#egg=baselines
     - cached-property==1.4.0
     - click==6.7
     - cloudpickle==0.5.2
