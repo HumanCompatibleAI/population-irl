@@ -189,10 +189,8 @@ def irl(venv, trajectories, discount, seed, log_dir, *, tf_cfg, model_cfg=None,
         with rllab_logdir(algo=algo, dirname=log_dir):
             with tf.Session(config=tf_cfg):
                 if warmstart is not None:
-                    warm_reward, warm_policy = warmstart
-                    _kwargs, reward_params = warm_reward
+                    _kwargs, reward_params = warmstart
                     irl_model.set_params(reward_params)
-                    #TODO: restore policy parameters
                 algo.train()
 
                 reward_params = irl_model.get_params()
@@ -286,16 +284,9 @@ def metalearn(venvs, trajectories, discount, seed, log_dir, *, tf_cfg, outer_itr
                             meta_reward_params[i] = (1 - lr) * meta + lr * task
                         irl_model.set_params(meta_reward_params)
 
-                # Side-effect: forces policy to cache all parameters.
-                # This ensures they are saved/restored during pickling.
-                policy.get_params()
-                # Must pickle policy rather than returning it directly,
-                # since parameters in policy will not survive across tf sessions.
-                policy_pkl = pickle.dumps(policy)
-
     reward = model_kwargs, meta_reward_params
 
-    return reward, policy_pkl
+    return reward
 
 
 def finetune(metainit, *args, **kwargs):

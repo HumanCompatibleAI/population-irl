@@ -221,11 +221,11 @@ AIRLP_ALGORITHMS = {
     # - common
     # - metalearn only
     # - finetune only
-    'random': (dict(policy_per_task=False),
-               dict(policy_cfg={'policy': irl.airl.GaussianPolicy}),
+    'random': (dict(),
+               dict(policy_per_task=False, policy_cfg={'policy': irl.airl.GaussianPolicy}),
                dict()),
-    'so_joint': (dict(policy_per_task=False), dict(), dict()),
-    'so_separate': (dict(policy_per_task=True), dict(), dict()),
+    'so_joint': (dict(), dict(policy_per_task=False), dict()),
+    'so_separate': (dict(), dict(policy_per_task=True), dict()),
 }
 
 for k, (common, meta, fine) in AIRLP_ALGORITHMS.items():
@@ -237,6 +237,10 @@ for k, (common, meta, fine) in AIRLP_ALGORITHMS.items():
             meta['outer_itr'] = it
             if lr is not None:
                 meta['lr'] = 10 ** (-lr)
+            if k2 == 'dummy':
+                training_cfg = dict(fine.get('training_cfg', dict()))
+                training_cfg['n_itr'] = 2
+                meta['training_cfg'] = training_cfg
 
             training_cfg = dict(fine.get('training_cfg', dict()))
             training_cfg['n_itr'] = it
