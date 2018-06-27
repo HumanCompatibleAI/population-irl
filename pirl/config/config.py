@@ -242,9 +242,8 @@ for k, (common, meta, fine) in AIRLP_ALGORITHMS.items():
                 training_cfg['n_itr'] = 2
                 meta['training_cfg'] = training_cfg
 
-            training_cfg = dict(fine.get('training_cfg', dict()))
-            training_cfg['n_itr'] = it
-            fine['training_cfg'] = training_cfg
+            fine['pol_itr'] = it
+            fine['irl_itr'] = it
 
             metalearn_fn = functools.partial(irl.airl.metalearn,
                                              tf_cfg=TENSORFLOW, **meta)

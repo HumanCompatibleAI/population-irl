@@ -140,7 +140,7 @@ def _convert_trajectories(trajs):
 
 
 def irl(venv, trajectories, discount, seed, log_dir, *, tf_cfg, model_cfg=None,
-        policy_cfg=None, training_cfg={}, warmstart=None):
+        policy_cfg=None, training_cfg={}):
     envs = VecGymEnv(venv)
     envs = TfEnv(envs)
     experts = _convert_trajectories(trajectories)
@@ -188,9 +188,6 @@ def irl(venv, trajectories, discount, seed, log_dir, *, tf_cfg, model_cfg=None,
 
         with rllab_logdir(algo=algo, dirname=log_dir):
             with tf.Session(config=tf_cfg):
-                if warmstart is not None:
-                    _kwargs, reward_params = warmstart
-                    irl_model.set_params(reward_params)
                 algo.train()
 
                 reward_params = irl_model.get_params()
@@ -289,15 +286,80 @@ def metalearn(venvs, trajectories, discount, seed, log_dir, *, tf_cfg, outer_itr
     return reward
 
 
-def finetune(metainit, *args, **kwargs):
-    metalearn_only = ['outer_itr', 'lr']
-    for k in metalearn_only:
-        if k in kwargs:
-            del kwargs[k]
-    training_cfg = kwargs.get('training_cfg', {})
-    training_cfg.setdefault('n_itr', 100)
-    kwargs['training_cfg'] = training_cfg
-    return irl(*args, **kwargs, warmstart=metainit)
+def finetune(metainit, venv, trajectories, discount, seed, log_dir, *,
+             tf_cfg, pol_itr=900, irl_itr=100,
+             model_cfg=None, policy_cfg=None, training_cfg={}):
+    envs = VecGymEnv(venv)
+    envs = TfEnv(envs)
+    experts = _convert_trajectories(trajectories)
+
+    train_graph = tf.Graph()
+    with train_graph.as_default():
+        tf.set_random_seed(seed)
+
+        if model_cfg is None:
+            model_cfg = {'model': AIRLStateOnly,
+                         'state_only': True,
+                         'max_itrs': 10}
+        model_kwargs = dict(model_cfg)
+        model_cls = model_kwargs.pop('model')
+        irl_model = model_cls(env_spec=envs.spec, expert_trajs=experts,
+                              **model_kwargs)
+
+        if policy_cfg is None:
+            policy_cfg = {'policy': GaussianMLPPolicy, 'hidden_sizes': (32, 32)}
+        else:
+            policy_cfg = dict(policy_cfg)
+        policy_fn = policy_cfg.pop('policy')
+        policy = policy_fn(name='policy', env_spec=envs.spec, **policy_cfg)
+
+        training_kwargs = {
+            'batch_size': 10000,
+            'max_path_length': 500,
+            'irl_model_wt': 1.0,
+            'entropy_weight': 0.1,
+            # paths substantially increase storage requirements
+            'store_paths': False,
+        }
+        training_kwargs.update(training_cfg)
+        algo = IRLTRPO(
+            env=envs,
+            policy=policy,
+            irl_model=irl_model,
+            discount=discount,
+            sampler_args=dict(n_envs=venv.num_envs),
+            zero_environment_reward=True,
+            baseline=LinearFeatureBaseline(env_spec=envs.spec),
+            train_irl=False,
+            n_itr=pol_itr,
+            **training_kwargs
+        )
+
+        with rllab_logdir(algo=algo, dirname=log_dir):
+            with tf.Session(config=tf_cfg):
+                _kwargs, reward_params = metainit
+                irl_model.set_params(reward_params)
+
+                # First round: just optimize the policy, do not update IRL model
+                with rl_logger.prefix('finetune policy |'):
+                    algo.train()
+                # Second round: we have a good policy (generator), update IRL
+                with rl_logger.prefix('finetune all |'):
+                    algo.train_irl = True
+                    algo.n_itr = irl_itr
+                    algo.train()
+
+                reward_params = irl_model.get_params()
+
+                # Side-effect: forces policy to cache all parameters.
+                # This ensures they are saved/restored during pickling.
+                policy.get_params()
+                # Must pickle policy rather than returning it directly,
+                # since parameters in policy will not survive across tf sessions.
+                policy_pkl = pickle.dumps(policy)
+
+    reward = model_cfg, reward_params
+    return reward, policy_pkl
 
 
 def sample(venv, policy_pkl, num_episodes, seed, tf_cfg):

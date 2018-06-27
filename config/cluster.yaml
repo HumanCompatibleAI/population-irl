@@ -61,5 +61,5 @@ worker_start_ray_commands:
     - python $HOME/population-irl/scripts/aws_termination.py >> /tmp/aws_termination.log 2>&1 & disown
     # Pretend we have more GPUs to workaround Ray issue #402.
     # IMPORTANT: Increase this amount if you have a better GPU!
-    # Only 4 CPUs, but allow oversubscription. 
-    - ulimit -n 65536; ray start --num-cpus=8 --num-gpus=8 --redis-address=$RAY_HEAD_IP:6379 --object-manager-port=8076
+    # Only 4 CPUs, but allow for some oversubscription. 
+    - ulimit -n 65536; ray start --num-cpus=6 --num-gpus=6 --redis-address=$RAY_HEAD_IP:6379 --object-manager-port=8076
