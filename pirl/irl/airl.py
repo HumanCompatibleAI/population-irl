@@ -5,6 +5,7 @@ import random
 from baselines.common.vec_env import VecEnvWrapper
 import gym
 import numpy as np
+import os.path as osp
 import tensorflow as tf
 
 from rllab.envs.base import Env, EnvSpec
@@ -335,28 +336,32 @@ def finetune(metainit, venv, trajectories, discount, seed, log_dir, *,
             **training_kwargs
         )
 
-        with rllab_logdir(algo=algo, dirname=log_dir):
-            with tf.Session(config=tf_cfg):
-                _kwargs, reward_params = metainit
-                irl_model.set_params(reward_params)
+        with tf.Session(config=tf_cfg):
+            _kwargs, reward_params = metainit
 
-                # First round: just optimize the policy, do not update IRL model
+            # First round: just optimize the policy, do not update IRL model
+            with rllab_logdir(algo=algo, dirname=osp.join(log_dir, 'pol')):
                 with rl_logger.prefix('finetune policy |'):
+                    algo.init_irl_params = reward_params
                     algo.train()
-                # Second round: we have a good policy (generator), update IRL
+                    pol_params = policy.get_param_values()
+
+            # Second round: we have a good policy (generator), update IRL
+            with rllab_logdir(algo=algo, dirname=osp.join(log_dir, 'all')):
                 with rl_logger.prefix('finetune all |'):
                     algo.train_irl = True
+                    algo.init_pol_params = pol_params
                     algo.n_itr = irl_itr
                     algo.train()
 
-                reward_params = irl_model.get_params()
+            reward_params = irl_model.get_params()
 
-                # Side-effect: forces policy to cache all parameters.
-                # This ensures they are saved/restored during pickling.
-                policy.get_params()
-                # Must pickle policy rather than returning it directly,
-                # since parameters in policy will not survive across tf sessions.
-                policy_pkl = pickle.dumps(policy)
+            # Side-effect: forces policy to cache all parameters.
+            # This ensures they are saved/restored during pickling.
+            policy.get_params()
+            # Must pickle policy rather than returning it directly,
+            # since parameters in policy will not survive across tf sessions.
+            policy_pkl = pickle.dumps(policy)
 
     reward = model_cfg, reward_params
     return reward, policy_pkl
