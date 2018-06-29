@@ -74,8 +74,7 @@ def q_iteration_policy(T, R, H, discount=None):
 
 
 def policy_env_wrapper(f):
-    # TODO: remove None defaults (workaround Ray issue #998)
-    def helper(mdp, discount=None, seed=None, log_dir=None, reward=None):
+    def helper(mdp, discount, seed, log_dir, reward):
         # log_dir is not used but is needed to match function signature.
         T = getattr_unwrapped(mdp, 'transition')
         if reward is None:

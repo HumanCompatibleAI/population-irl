@@ -129,11 +129,9 @@ def ray_remote_variable_resources(**kwargs):
 
 ## Trajectory generation
 
-#TODO: remove None defaults (workaround Ray issue #998)
 @ray_remote_variable_resources()
 @cache(tags=('expert', ))
-def _train_policy(rl=None, discount=None, parallel=None, seed=None,
-                  env_name=None, log_dir=None):
+def _train_policy(rl, discount, parallel, seed, env_name, log_dir):
     # Setup
     utils.set_cuda_visible_devices()
     logger.debug('[TRAIN] %s [discount=%f, seed=%s, parallel=%d] on %s',
@@ -155,12 +153,10 @@ def _train_policy(rl=None, discount=None, parallel=None, seed=None,
 
     return policy
 
-#TODO: remove None defaults (workaround Ray issue #998)
 @ray_remote_variable_resources()
 @cache(tags=('expert', ))
-def synthetic_data(rl=None, discount=None, parallel=None, seed=None,
-                   env_name=None, num_trajectories=None,
-                   log_dir=None, policy=None):
+def synthetic_data(rl, discount, parallel, seed, env_name, num_trajectories,
+                   log_dir, policy):
     '''Precondition: policy produced by RL algorithm rl.'''
     # Setup
     utils.set_cuda_visible_devices()
@@ -180,11 +176,9 @@ def synthetic_data(rl=None, discount=None, parallel=None, seed=None,
         samples = rl_algo.sample(envs, policy, num_trajectories, data_seed)
     return [(obs, acts) for (obs, acts, rews) in samples]
 
-#TODO: remove None defaults (workaround Ray issue #998)
 @ray_remote_variable_resources()
 @cache(tags=('expert', ))
-def _compute_value(rl=None, discount=None, parallel=None, seed=None,
-                   env_name=None, log_dir=None, policy=None):
+def _compute_value(rl, discount, parallel, seed, env_name, log_dir, policy):
     utils.set_cuda_visible_devices()
     # Note discount is not used, but is needed as a caching key.
     logger.debug('[VALUE] %s [discount=%f, seed=%s, parallel=%d] on %s',
@@ -525,9 +519,8 @@ def run_irl(cfg, out_dir, trajectories, seed):
 #No good way to express this in current framework.
 @ray_remote_variable_resources()
 @cache(tags=('eval', ))
-def _value_helper(irl=None, n=None, m=None, rl=None,
-                  parallel=None, discount=None, seed=None,
-                  env_name=None, reward=None, log_dir=None):
+def _value_helper(irl, n, m, rl, parallel, discount, seed, env_name, 
+                  reward, log_dir):
     if reward is None:
         # reward will be None if the algorithm is a non-IRL imitation learner.
         # In this case, do not attempt to reoptimize.
@@ -568,8 +561,7 @@ def _value_helper(irl=None, n=None, m=None, rl=None,
     return v
 
 @ray.remote
-def _value(irl=None, rl=None, parallel=None,
-           out_dir=None, reward=None, discount=None, seed=None):
+def _value(irl, rl, parallel, out_dir, reward, discount, seed):
     def mapper(rew, keys):
         env_name, n, m = keys
         log_dir = osp.join(out_dir, 'eval', sanitize_env_name(env_name),

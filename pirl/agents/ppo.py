@@ -393,9 +393,7 @@ def train_continuous(venv, discount, seed, log_dir, tf_config,
     return joblib.load(best_checkpoint)
 
 
-#TODO: remove None defaults (workaround Ray issue #998)
-def sample(envs=None, policy=None, num_episodes=None,
-           seed=None, tf_config=None, const_norm=False):
+def sample(envs, policy, num_episodes, seed, tf_config, const_norm=False):
     smodel, snorm_env = policy
     envs_monitor = SampleVecMonitor(envs)
 
