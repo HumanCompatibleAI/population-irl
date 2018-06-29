@@ -231,12 +231,8 @@ def metalearn(venvs, trajectories, discount, seed, log_dir, *, tf_cfg, outer_itr
         else:
             policy_cfg = dict(policy_cfg)
         policy_fn = policy_cfg.pop('policy')
-        policy_fn = functools.partial(policy_fn, env_spec=env_spec, **policy_cfg)
-        if policy_per_task:
-            policies = {k: policy_fn(name='policy_' + k) for k in envs.keys()}
-        else:
-            policy = policy_fn(name='policy')
-            policies = {k: policy for k in envs.keys()}
+        policy = policy_fn(name='policy', env_spec=env_spec, **policy_cfg)
+        pol_params = {}
 
         training_kwargs = {
             'n_itr': 10,
@@ -248,30 +244,33 @@ def metalearn(venvs, trajectories, discount, seed, log_dir, *, tf_cfg, outer_itr
             'store_paths': False,
         }
         training_kwargs.update(training_cfg)
+        algos = {k: IRLTRPO(env=env,
+                            policy=policy,
+                            irl_model=irl_model,
+                            discount=discount,
+                            sampler_args=dict(n_envs=num_envs),
+                            zero_environment_reward=True,
+                            baseline=LinearFeatureBaseline(env_spec=env_spec),
+                            **training_kwargs)
+                for k, env in envs.items()}
 
-        #TODO: avoid duplication of everything? (all that's changing is environment)
-        #TODO: actually this will likely do bad things due to storing paths etc
-        algos = {k: IRLTRPO(
-                env=env,
-                policy=policies[k],
-                irl_model=irl_model,
-                discount=discount,
-                sampler_args=dict(n_envs=num_envs),
-                zero_environment_reward=True,
-                baseline=LinearFeatureBaseline(env_spec=env_spec),
-                **training_kwargs
-            ) for k, env in envs.items()}
         with rllab_logdir(dirname=log_dir):
             with tf.Session(config=tf_cfg) as sess:
                 sess.run(tf.global_variables_initializer())
                 meta_reward_params = irl_model.get_params()
                 for i in range(outer_itr):
                     task = random.choice(tasks)
+                    pol_task = task if policy_per_task else None
                     with rl_logger.prefix('outer itr {} | task'.format(i, task)):
                         irl_model.set_demos(experts[task])
+                        # TODO: rather than specifying these as initializers,
+                        # might be more efficient to have AIRL not overwrite
+                        # these variables each call to train()?
                         algos[task].init_irl_params = meta_reward_params
+                        algos[task].init_pol_params = pol_params.get(pol_task)
                         algos[task].train()
 
+                        # Meta-update reward
                         # {meta,task}_reward_params are lists of NumPy arrays
                         task_reward_params = irl_model.get_params()
                         assert len(task_reward_params) == len(meta_reward_params)
@@ -280,7 +279,9 @@ def metalearn(venvs, trajectories, discount, seed, log_dir, *, tf_cfg, outer_itr
                             # Reptile update: meta <- meta + lr * (task - meta)
                             #TODO: use Adam optimizer?
                             meta_reward_params[i] = (1 - lr) * meta + lr * task
-                        irl_model.set_params(meta_reward_params)
+
+                        # Store policy update (joint if not policy_per_task)
+                        pol_params[pol_task] = policy.get_param_values()
 
     reward = model_kwargs, meta_reward_params
 
@@ -323,6 +324,7 @@ def finetune(metainit, venv, trajectories, discount, seed, log_dir, *,
             'store_paths': False,
         }
         training_kwargs.update(training_cfg)
+        _kwargs, reward_params = metainit
         algo = IRLTRPO(
             env=envs,
             policy=policy,
@@ -331,18 +333,16 @@ def finetune(metainit, venv, trajectories, discount, seed, log_dir, *,
             sampler_args=dict(n_envs=venv.num_envs),
             zero_environment_reward=True,
             baseline=LinearFeatureBaseline(env_spec=envs.spec),
+            init_irl_params=reward_params,
             train_irl=False,
             n_itr=pol_itr,
             **training_kwargs
         )
 
         with tf.Session(config=tf_cfg):
-            _kwargs, reward_params = metainit
-
             # First round: just optimize the policy, do not update IRL model
             with rllab_logdir(algo=algo, dirname=osp.join(log_dir, 'pol')):
                 with rl_logger.prefix('finetune policy |'):
-                    algo.init_irl_params = reward_params
                     algo.train()
                     pol_params = policy.get_param_values()
 
