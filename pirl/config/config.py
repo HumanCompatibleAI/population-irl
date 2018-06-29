@@ -156,7 +156,7 @@ AIRL_ALGORITHMS = {
     },
 }
 
-AIRL_ITERATIONS = {None: None, 'short': 100, 'shorter': 50, 'dummy': 2}
+AIRL_ITERATIONS = {None: 1000, 'short': 100, 'shorter': 50, 'dummy': 2}
 airl_reward = functools.partial(irl.airl.airl_reward_wrapper, tf_cfg=TENSORFLOW)
 airl_sample = functools.partial(irl.airl.sample, tf_cfg=TENSORFLOW)
 airl_value = functools.partial(agents.sample.value, airl_sample)
@@ -242,8 +242,8 @@ for k, (common, meta, fine) in AIRLP_ALGORITHMS.items():
                 training_cfg['n_itr'] = 2
                 meta['training_cfg'] = training_cfg
 
-            fine['pol_itr'] = it
-            fine['irl_itr'] = it
+            fine['pol_itr'] = it // 4
+            fine['irl_itr'] = it // 4
 
             metalearn_fn = functools.partial(irl.airl.metalearn,
                                              tf_cfg=TENSORFLOW, **meta)

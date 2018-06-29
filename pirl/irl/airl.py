@@ -289,7 +289,7 @@ def metalearn(venvs, trajectories, discount, seed, log_dir, *, tf_cfg, outer_itr
 
 
 def finetune(metainit, venv, trajectories, discount, seed, log_dir, *,
-             tf_cfg, pol_itr=900, irl_itr=100,
+             tf_cfg, pol_itr=100, irl_itr=100,
              model_cfg=None, policy_cfg=None, training_cfg={}):
     envs = VecGymEnv(venv)
     envs = TfEnv(envs)
