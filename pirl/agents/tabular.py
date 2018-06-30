@@ -74,7 +74,7 @@ def q_iteration_policy(T, R, H, discount=None):
 
 
 def policy_env_wrapper(f):
-    def helper(mdp, discount, seed, log_dir, reward):
+    def helper(mdp, discount, seed, log_dir, reward=None):
         # log_dir is not used but is needed to match function signature.
         T = getattr_unwrapped(mdp, 'transition')
         if reward is None:
