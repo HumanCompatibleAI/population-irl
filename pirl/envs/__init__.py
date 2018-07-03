@@ -84,7 +84,7 @@ for kind, cells in cfg.items():
 for num_peaks in [2, 3, 4]:
     for vel_penalty in [0, 0.1, 0.5, 1]:
         for initial_noise in [0.05, 0.1, 0.25]:
-            GOAL_POS = {'left': [0.01], 'right': [num_peaks - 0.01], 'random': None}
+            GOAL_POS = {'left': [0.01], 'right': [num_peaks - 1.01], 'random': None}
             for side, pos in GOAL_POS.items():
                 register(
                     id='pirl/MountainCarContinuous-{}-{}-{}-{}-v0'.format(

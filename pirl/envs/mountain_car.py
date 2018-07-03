@@ -59,6 +59,8 @@ class ContinuousMountainCarPopulationEnv(gym.Env):
         self.static_goal_position = None
         if goal_position is not None:
             assert len(goal_position) == len(goal_reward)
+            for pos in goal_position:
+                assert self.min_position < pos < self.max_position
             self.static_goal_position = np.array(goal_position)
         self.vel_penalty = vel_penalty
         self.initial_noise = initial_noise
