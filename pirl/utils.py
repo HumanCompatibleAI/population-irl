@@ -343,5 +343,5 @@ def set_cuda_visible_devices():
         return
     ids = ray.get_gpu_ids()
     real_num_gpus = ray.services._autodetect_num_gpus()
-    gpus = ','.join([str(x % real_num_gpus) for x in ids])
+    gpus = ','.join([str(ids[i % real_num_gpus]) for i in range(len(ids))])
     os.environ['CUDA_VISIBLE_DEVICES'] = gpus
