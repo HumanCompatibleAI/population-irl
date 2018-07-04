@@ -28,6 +28,8 @@ To check everything works, you can run:
 	python run_experiments.py dummy-test few-dummy-test dummy-continuous-test
 	pytest
 
+If you need to restrict to run on a subset of GPUs, use CUDA_VISIBLE_DEVICES. Since Ray does not support fractional resources, we pretend to have more GPUs than we actually do by a factor of run_experiments.GPU_MULTIPLIER. You'll need to repeat the GPU ID in CUDA_VISIBLE_DEVICES by this multipler for things to work.
+
 ## Jupyter notebooks
 
 There are some Jupyter notebooks in analysis/ that are used for ad-hoc tests/figure generation. Note since these are in a subdirectory, you'll need to set an appropriate PYTHONPATH (which should be an absolute, not relative, path).
