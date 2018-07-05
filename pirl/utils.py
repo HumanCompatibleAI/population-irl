@@ -64,18 +64,24 @@ def get_hermes():
     '''Creates a hermes.Hermes instance if one does not already exist;
        otherwise, returns the existing instance.''' 
     if get_hermes.cache is None:
-        kwargs = {'ttl': None}
-        # Use socket.gethostname() not localhost.
-        # If running on the master, the function might get cloudpickle'd
-        # and sent to a remote machine, in which case we want
-        # the address to point back to us.
-        host = os.environ.get('RAY_HEAD_IP', socket.gethostname())
-        port = 6380
-        db = 0
-        get_hermes.cache = hermes.Hermes(hermes.backend.redis.Backend,
-                                         host=host, port=port, db=0, **kwargs)
-        logger.info('HermesCache: connected to %s:%d [db=%d]',
-                    host, port, db)
+        cache_backend = os.environ.get('CACHE_BACKEND', 'redis')
+        if cache_backend == 'redis':
+            # Use socket.gethostname() not localhost.
+            # If running on the master, the function might get cloudpickle'd
+            # and sent to a remote machine, in which case we want
+            # the address to point back to us.
+            host = os.environ.get('RAY_HEAD_IP', socket.gethostname())
+            port = 6380
+            db = 0
+            get_hermes.cache = hermes.Hermes(hermes.backend.redis.Backend,
+                                             host=host, port=port, db=0)
+            logger.info('HermesCache: connected to %s:%d [db=%d]',
+                        host, port, db)
+        elif cache_backend == 'dict':
+            get_hermes.cache = hermes.Hermes(hermes.backend.dict.Backend)
+            logger.info('HermesCache: using dict backend (not persistent)')
+        else:
+            raise ValueError('Unknown backend "{}"'.format(cache_backend))
     return get_hermes.cache
 get_hermes.cache = None
 
