@@ -317,6 +317,7 @@ def _run_population_irl_finetune(irl, parallel, discount, seed,
                    log_prefix=finetune_mon_prefix) as envs:
         r, p = irl_algo.finetune(metainit, envs, trajs, discount=discount,
                                  seed=finetune_seed, log_dir=log_dir)
+        joblib.dump(p, osp.join(log_dir, 'policy.pkl'))
 
     # Compute value of finetuned policy
     with make_envs(env, irl_algo.vectorized, parallel,

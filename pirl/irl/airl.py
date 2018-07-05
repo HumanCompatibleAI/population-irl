@@ -26,6 +26,7 @@ from airl.models.imitation_learning import AIRLStateAction
 from airl.utils.log_utils import rllab_logdir
 
 from pirl.agents.sample import SampleVecMonitor
+from pirl.utils import sanitize_env_name
 
 class VecInfo(VecEnvWrapper):
     def reset(self):
@@ -254,14 +255,16 @@ def metalearn(venvs, trajectories, discount, seed, log_dir, *, tf_cfg, outer_itr
                             **training_kwargs)
                 for k, env in envs.items()}
 
-        with rllab_logdir(dirname=log_dir):
-            with tf.Session(config=tf_cfg) as sess:
-                sess.run(tf.global_variables_initializer())
-                meta_reward_params = irl_model.get_params()
-                for i in range(outer_itr):
-                    task = random.choice(tasks)
-                    pol_task = task if policy_per_task else None
-                    with rl_logger.prefix('outer itr {} | task'.format(i, task)):
+        with tf.Session(config=tf_cfg) as sess:
+            sess.run(tf.global_variables_initializer())
+            meta_reward_params = irl_model.get_params()
+            for i in range(outer_itr):
+                task = random.choice(tasks)
+                pol_task = task if policy_per_task else None
+                itr_logdir = osp.join(log_dir,
+                                      '{}_{}'.format(i, sanitize_env_name(task)))
+                with rllab_logdir(algo=algos[task], dirname=itr_logdir):
+                    with rl_logger.prefix('outer itr {} | task {}'.format(i, task)):
                         irl_model.set_demos(experts[task])
                         # TODO: rather than specifying these as initializers,
                         # might be more efficient to have AIRL not overwrite
