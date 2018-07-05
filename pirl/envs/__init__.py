@@ -101,8 +101,28 @@ for num_peaks in [2, 3, 4]:
                     },
                 )
 
-            GOAL_REWARDS = {'red': [100, -100], 'blue': [-100, 100]}
-            for good_goal, reward in GOAL_REWARDS.items():
+            TWO_FIXED_POS = {
+                'left-target': [100, -100],
+                'right-target': [-100, 100]
+            }
+            for side, reward in TWO_FIXED_POS.items():
+                register(
+                    id='pirl/MountainCarContinuous-{}-{}-{}-{}-v0'.format(
+                        num_peaks, side, vel_penalty, initial_noise),
+                    entry_point='pirl.envs.mountain_car:ContinuousMountainCarPopulationEnv',
+                    max_episode_steps=999,
+                    reward_threshold=90.0,
+                    kwargs={
+                        'num_peaks': num_peaks,
+                        'goal_reward': reward,
+                        'goal_position': [0.01, num_peaks - 1.01],
+                        'vel_penalty': vel_penalty,
+                        'initial_noise': initial_noise
+                    },
+                )
+
+            TWO_VARIABLE_POS = {'red': [100, -100], 'blue': [-100, 100]}
+            for good_goal, reward in TWO_VARIABLE_POS.items():
                 register(
                     id='pirl/MountainCarContinuous-{}-{}-{}-{}-v0'.format(
                         num_peaks, good_goal, vel_penalty, initial_noise),

@@ -564,11 +564,11 @@ EXPERIMENTS['mountain-car-numpeaks-metalearn'] = {
     'test_trajectories': [1, 100],
 }
 EXPERIMENTS['mountain-car-side-metalearn'] = {
-    'environments': ['pirl/MountainCarContinuous-2-{}-0-0.05-v0'.format(side)
+    'environments': ['pirl/MountainCarContinuous-2-{}-target-0-0.05-v0'.format(side)
                      for side in ['left', 'right']],
     'expert': 'ppo_cts_short',
     'eval': ['ppo_cts_short'],
-    'irl': ['airlp_random_short', 'airlp_so_separate'],
+    'irl': ['airlp_random_short', 'airlp_so_separate_short'],
     'train_trajectories': [100],
     'test_trajectories': [1, 100],
 }
@@ -577,7 +577,7 @@ EXPERIMENTS['mountain-car-color-metalearn'] = {
                      for col in ['red', 'blue']],
     'expert': 'ppo_cts_short',
     'eval': ['ppo_cts_short'],
-    'irl': ['airlp_random_short', 'airlp_so_separate'],
+    'irl': ['airlp_random_short', 'airlp_so_separate_short'],
     'train_trajectories': [100],
     'test_trajectories': [1, 100],
 }
@@ -589,17 +589,6 @@ EXPERIMENTS['reacher-metalearning'] = {
     'irl': ['airl_so'] + ['airlp_so_joint_lr1e-{}'.format(i) for i in range(1,4)],
     'train_trajectories': [1000],
     'test_trajectories': [1, 5, 10, 100],
-}
-EXPERIMENTS['mountain-car-meta'] = {
-    'environments': ['pirl/MountainCarContinuous-2-{}-0-0.05-v0'.format(side)
-                     for side in ['left', 'right']],
-    # simple environment, small number of iterations sufficient to converge
-    'expert': 'ppo_cts_short',
-    'eval': ['ppo_cts_short'],
-    'irl': ['airl_so_short', 'airl_sa_short', 'airl_random_short',
-            'airlp_so_joint_short'],
-    'train_trajectories': [100],
-    'test_trajectories': [1, 2, 5, 10, 50, 100],
 }
 
 # Test of RL parallelism
