@@ -156,7 +156,11 @@ AIRL_ALGORITHMS = {
     },
 }
 
-AIRL_ITERATIONS = {None: 1000, 'short': 100, 'shorter': 50, 'dummy': 2}
+AIRL_ITERATIONS = {None: 1000,
+                   'short': 100,
+                   'shorter': 50,
+                   'shortest': 25,
+                   'dummy': 2}
 airl_reward = functools.partial(irl.airl.airl_reward_wrapper, tf_cfg=TENSORFLOW)
 airl_sample = functools.partial(irl.airl.sample, tf_cfg=TENSORFLOW)
 airl_value = functools.partial(agents.sample.value, airl_sample)
@@ -226,6 +230,10 @@ AIRLP_ALGORITHMS = {
                dict()),
     'so_joint': (dict(), dict(policy_per_task=False), dict()),
     'so_separate': (dict(), dict(policy_per_task=True), dict()),
+    'so_separate_long_inner': (dict(),
+                               dict(training_cfg={'n_itr': 50},
+                                    policy_per_task=True),
+                               dict()),
 }
 
 for k, (common, meta, fine) in AIRLP_ALGORITHMS.items():
@@ -568,26 +576,38 @@ EXPERIMENTS['mountain-car-side-metalearn'] = {
                      for side in ['left', 'right']],
     'expert': 'ppo_cts_short',
     'eval': ['ppo_cts_short'],
-    'irl': ['airlp_random_short', 'airlp_so_separate_short'],
+    'irl': ['airl_random_short',
+            'airl_so_short',
+            'airlp_random_short',
+            'airlp_so_separate_short'],
     'train_trajectories': [100],
-    'test_trajectories': [1, 100],
+    'test_trajectories': [1, 2, 5, 100],
+    'seeds': 10,
 }
 EXPERIMENTS['mountain-car-color-metalearn'] = {
     'environments': ['pirl/MountainCarContinuous-2-{}-0-0.05-v0'.format(col)
                      for col in ['red', 'blue']],
     'expert': 'ppo_cts_short',
     'eval': ['ppo_cts_short'],
-    'irl': ['airlp_random_short', 'airlp_so_separate_short'],
+    'irl': ['airl_random_short',
+            'airl_sa_short',
+            'airl_so_short',
+            'airlp_random_short',
+            'airlp_so_separate_short'],
     'train_trajectories': [100],
-    'test_trajectories': [1, 100],
+    'test_trajectories': [1, 2, 5, 100],
+    'seeds': 10,
 }
 EXPERIMENTS['reacher-metalearning'] = {
-    'train_environments': ['pirl/ReacherGoal-seed{}-0.1-v0'.format(seed) for seed in range(0,5)],
+    'train_environments': ['pirl/ReacherGoal-seed{}-0.1-v0'.format(seed) for seed in range(0, 5)],
     'test_environments': ['pirl/ReacherGoal-seed{}-0.1-v0'.format(seed) for seed in range(5, 10)],
-    'expert': 'ppo_cts',
-    'eval': ['ppo_cts'],
-    'irl': ['airl_so'] + ['airlp_so_joint_lr1e-{}'.format(i) for i in range(1,4)],
-    'train_trajectories': [1000],
+    'expert': 'ppo_cts_200k',
+    'eval': ['ppo_cts_200k'],
+    'irl': ['airl_random_short',
+            'airl_so_short',
+            'airlp_random_short',
+            'airlp_so_separate_short'],
+    'train_trajectories': [100],
     'test_trajectories': [1, 5, 10, 100],
 }
 
