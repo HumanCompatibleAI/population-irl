@@ -321,8 +321,8 @@ def gridworld_cartoon(shape, **kwargs):
 
     return fig
 
-def value_bar_chart(values, alpha=0.05, relative=None,
-                    error=False, ax=None, **kwargs):
+def value_bar_chart(values, alpha=0.05, relative=None, error=False,
+                    ax=None, whisker_lw=0.5, **kwargs):
     '''Takes two DataFrames with columns corresponding to algorithms, and
        the index to the number of trajectories. It outputs a stacked bar graph.'''
     mean, se = _extract_means_ses(values)
@@ -348,7 +348,7 @@ def value_bar_chart(values, alpha=0.05, relative=None,
             top_err = np.maximum(0, np.minimum(max_err, err))
             err = np.array([bottom_err, top_err])
             err = err.transpose([2, 0, 1])  # err: N*2*M
-    mean.plot.bar(yerr=err, ax=ax, error_kw=dict(lw=0.5), **kwargs)
+    mean.plot.bar(yerr=err, ax=ax, error_kw=dict(lw=whisker_lw), **kwargs)
 
     ax.set_xlabel('Trajectories')
     ax.set_ylabel('Expected Value')
@@ -356,31 +356,29 @@ def value_bar_chart(values, alpha=0.05, relative=None,
         if error:
             ax.set_ylabel('Error')
         else:
-            color = 'C{}'.format(len(mean.columns))
             ax.axhline(rel.iloc[0], xmin=0, xmax=1,
                        linestyle=':', linewidth=0.5,
-                       color=color, label=relative)
+                       color='k', label=relative)
 
 
-def value_bar_chart_by_env(values, envs=None, relative=None, **kwargs):
-    legend_height = 0.1
-    legend_pad = 0.28
+def value_multi_bar_chart(values, level='env', vals=None, relative=None,
+                          legend_height=0.1, legend_pad=0.28, **kwargs):
     fig_top = 1 - (legend_height + legend_pad)
 
-    if envs is None:
-        envs = values.index.levels[0]
-    num_envs = len(envs)
-    width, height = mpl.rcParams['figure.figsize']
-    height = width / num_envs
-    figsize = (width, height)
-    fig, axs = plt.subplots(1, num_envs, figsize=figsize,
+    if vals is None:
+        i = values.index.names.index(level)
+        vals = values.index.levels[i]
+    num_vals = len(vals)
+    fig, axs = plt.subplots(1, num_vals,
+                            figsize=mpl.rcParams['figure.figsize'],
                             sharex=True, sharey=True,
-                            gridspec_kw={'top': fig_top})
+                            gridspec_kw={'top': fig_top}, squeeze=False)
+    axs = axs[0]
 
-    for env, ax in zip(envs, axs):
-        value_bar_chart(values.xs(env, level='env'), ax=ax,
+    for v, ax in zip(vals, axs):
+        value_bar_chart(values.xs(v, level=level), ax=ax,
                         legend=False, relative=relative, **kwargs)
-        ax.set_title(env)
+        ax.set_title(v)
 
     handles, labels = ax.get_legend_handles_labels()
     if labels[0] == relative:
