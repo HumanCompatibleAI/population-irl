@@ -322,7 +322,7 @@ def gridworld_cartoon(shape, **kwargs):
     return fig
 
 def value_bar_chart(values, alpha=0.05, relative=None, error=False,
-                    ax=None, whisker_lw=0.5, **kwargs):
+                    ax=None, whiskers=True, **kwargs):
     '''Takes two DataFrames with columns corresponding to algorithms, and
        the index to the number of trajectories. It outputs a stacked bar graph.'''
     mean, se = _extract_means_ses(values)
@@ -348,7 +348,8 @@ def value_bar_chart(values, alpha=0.05, relative=None, error=False,
             top_err = np.maximum(0, np.minimum(max_err, err))
             err = np.array([bottom_err, top_err])
             err = err.transpose([2, 0, 1])  # err: N*2*M
-    mean.plot.bar(yerr=err, ax=ax, error_kw=dict(lw=whisker_lw), **kwargs)
+    whisker_kwargs = {'yerr': err, 'error_kw': dict(lw=0.5)} if whiskers else {}
+    mean.plot.bar(ax=ax, **whisker_kwargs, **kwargs)
 
     ax.set_xlabel('Trajectories')
     ax.set_ylabel('Expected Value')
@@ -361,39 +362,60 @@ def value_bar_chart(values, alpha=0.05, relative=None, error=False,
                        color='k', label=relative)
 
 
-def value_multi_bar_chart(values, level='env', vals=None, relative=None,
-                          legend_height=0.1, legend_pad=0.28, **kwargs):
-    fig_top = 1 - (legend_height + legend_pad)
-
+def value_multi_bar_chart(values, levels=('env',), vals=None, relative=None,
+                          legend_height=0.1, vertical_pad=0.5, **kwargs):
     if vals is None:
-        i = values.index.names.index(level)
-        vals = values.index.levels[i]
-    num_vals = len(vals)
-    fig, axs = plt.subplots(1, num_vals,
-                            figsize=mpl.rcParams['figure.figsize'],
-                            sharex=True, sharey=True,
-                            gridspec_kw={'top': fig_top}, squeeze=False)
-    axs = axs[0]
+        vals = ()
+        for level in levels:
+            i = values.index.names.index(level)
+            vals += (values.index.levels[i], )
+    assert len(levels) in [1,2]
 
-    for v, ax in zip(vals, axs):
-        value_bar_chart(values.xs(v, level=level), ax=ax,
-                        legend=False, relative=relative, **kwargs)
-        ax.set_title(v)
+    num_rows = 1 if len(levels) == 1 else len(vals[0])
+    num_cols = len(vals[-1])
+    height_ratios = [int(legend_height * 100)]
+    height_ratios += [int(100 * (1 - legend_height))] * num_rows
+    gs = gridspec.GridSpec(num_rows + 1, num_cols,
+                           height_ratios=height_ratios,
+                           hspace=vertical_pad)
+
+    fig = plt.figure()
+    legend_ax = fig.add_subplot(gs[0, :], frameon=False)
+    legend_ax.set_axis_off()
+
+    plot_axs = []
+    for i in range(0, num_rows):
+        plot_axs.append([])
+        for j in range(0, num_cols):
+            if i == 0 and j == 0:
+                ax = fig.add_subplot(gs[1, 0])
+            else:
+                ax = fig.add_subplot(gs[i + 1, j],
+                                     sharex=plot_axs[0][0],
+                                     sharey=plot_axs[0][0])
+            if len(levels) == 1:
+                df = values.xs(vals[0][j], level=levels[0])
+            else:
+                print((vals[0][i], vals[1][j]), levels)
+                df = values.xs((vals[0][i], vals[1][j]), level=levels)
+            value_bar_chart(df, ax=ax, legend=False,
+                            relative=relative, **kwargs)
+            if i == 0:
+                ax.set_title(vals[-1][j])
+            if len(levels) == 2 and j == num_cols - 1:
+                ax2 = ax.twinx()
+                ax2.tick_params(axis='y', right=False, labelright=False)
+                ax2.set_ylabel(vals[0][i], fontsize=12)
+            plot_axs[i].append(ax)
 
     handles, labels = ax.get_legend_handles_labels()
     if labels[0] == relative:
         # make relative label always go at the end
         labels = labels[1:] + [labels[0]]
         handles = handles[1:] + [handles[0]]
-    leftmost = axs[0].xaxis.get_minpos()
-    rightmost = axs[-1].get_position().xmax
-    max_width = rightmost - leftmost
-    x0 = leftmost + 0.025 * max_width
-    x1 = rightmost - 0.05 * max_width
     num_algos = len(values.columns)
-    fig.legend(handles, labels,
-               loc='lower left', bbox_to_anchor=(x0, 0.9, x1 - x0, legend_height),
-               mode='expand', ncol=num_algos, borderaxespad=0.)
+    legend_ax.legend(handles, labels, loc='lower left', mode='expand',
+                     ncol=num_algos, borderaxespad=0.)
 
     return fig
 
