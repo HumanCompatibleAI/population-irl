@@ -363,7 +363,8 @@ def value_bar_chart(values, alpha=0.05, relative=None, error=False,
 
 
 def value_multi_bar_chart(values, levels=('env',), vals=None, relative=None,
-                          legend_height=0.1, vertical_pad=0.5, **kwargs):
+                          ncol=None, legend_height=0.1, vertical_pad=0.5, 
+                          **kwargs):
     if vals is None:
         vals = ()
         for level in levels:
@@ -396,7 +397,6 @@ def value_multi_bar_chart(values, levels=('env',), vals=None, relative=None,
             if len(levels) == 1:
                 df = values.xs(vals[0][j], level=levels[0])
             else:
-                print((vals[0][i], vals[1][j]), levels)
                 df = values.xs((vals[0][i], vals[1][j]), level=levels)
             value_bar_chart(df, ax=ax, legend=False,
                             relative=relative, **kwargs)
@@ -413,9 +413,10 @@ def value_multi_bar_chart(values, levels=('env',), vals=None, relative=None,
         # make relative label always go at the end
         labels = labels[1:] + [labels[0]]
         handles = handles[1:] + [handles[0]]
-    num_algos = len(values.columns)
+    if ncol is None:
+        ncol = len(values.columns)
     legend_ax.legend(handles, labels, loc='lower left', mode='expand',
-                     ncol=num_algos, borderaxespad=0.)
+                     ncol=ncol, borderaxespad=0.)
 
     return fig
 
