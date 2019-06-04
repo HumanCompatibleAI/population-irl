@@ -6,7 +6,7 @@ Code accompanying the paper [Multi-task Maximum Entropy Inverse Reinforcement Le
 
 I use Anaconda for dependencies, you can create an environment with the prerequisite dependencies by running:
 	
-	conda env create name pirl
+	conda env create --name pirl
 	source activate pirl
 	conda env update --name pirl --file environment.yml 
 
